@@ -64,6 +64,17 @@ Esto se va a hacer a nuestro gusto en el archivo `./app/common/assistant_prompt.
 
 Una vez hecho todo lo anterior solo queda un paso: que entremos al siguiente link: <http://localhost:8080> para poder utilizar el RAG.
 
+## Selección de idioma
+
+La aplicación ahora soporta múltiples idiomas. Puedes cambiar el idioma de la interfaz utilizando el selector de idioma en la barra lateral. Los idiomas disponibles son:
+
+- Español (por defecto)
+- Inglés
+- Francés
+- Alemán
+
+El idioma seleccionado se mantendrá durante toda la sesión.
+
 ## ¿Como ejecutarlo posteriormente instalado y una vez lo cerremos?
 
 Tenemos que dejarnos en el escritorio el archivo de `open_rag.bat` si estamos en Windows y si estamos en Mac/Linux el `open_rag.sh`

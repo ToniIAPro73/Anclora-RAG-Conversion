@@ -29,6 +29,7 @@ try:
     from common.chroma_db_settings import get_unique_sources_df
     from common.ingest_file import ingest_file, delete_file_from_vectordb
     from common.streamlit_style import hide_streamlit_style
+    from common.translations import get_text
 except ImportError:
     print("Error: common modules not found. Make sure the modules exist and are in the Python path.")
     import sys
@@ -36,12 +37,31 @@ except ImportError:
 
 hide_streamlit_style()
 
+# Initialize language in session state if not already set
+if "language" not in st.session_state:
+    st.session_state.language = "es"  # Default to Spanish
+
+# Add language selector to sidebar
+with st.sidebar:
+    st.title(get_text("app_title", st.session_state.language))
+    selected_language = st.sidebar.selectbox(
+        get_text("language_selector", st.session_state.language),
+        options=["es", "en", "fr", "de"],
+        format_func=lambda x: get_text(f"language_{x}", st.session_state.language),
+        index=["es", "en", "fr", "de"].index(st.session_state.language)
+    )
+    
+    # Update language if changed
+    if selected_language != st.session_state.language:
+        st.session_state.language = selected_language
+        st.rerun()
+
 # Define the Chroma settings
 CHROMA_SETTINGS = chromadb.HttpClient(host="host.docker.internal", port = 8000, settings=Settings(allow_reset=True, anonymized_telemetry=False))
 collection = CHROMA_SETTINGS.get_or_create_collection(name='vectordb')
 embeddings = HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')
 
-st.title('Archivos')
+st.title(get_text("files_title", st.session_state.language))
 
 # Carpeta donde se guardarán los archivos en el contenedor del ingestor
 container_source_directory = 'documents'
@@ -57,10 +77,10 @@ def save_uploaded_file(uploaded_file):
     return os.path.join(container_source_directory, uploaded_file.name)
 
 # Widget para cargar archivos
-uploaded_files = st.file_uploader("Cargar archivo", type=['csv', 'doc', 'docx', 'enex', 'eml', 'epub', 'html', 'md', 'odt', 'pdf', 'ppt', 'pptx', 'txt'], accept_multiple_files=False)
+uploaded_files = st.file_uploader(get_text("upload_file", st.session_state.language), type=['csv', 'doc', 'docx', 'enex', 'eml', 'epub', 'html', 'md', 'odt', 'pdf', 'ppt', 'pptx', 'txt'], accept_multiple_files=False)
 
 # Botón para ejecutar el script de ingestión
-if st.button("Agregar archivo a la base de conocimiento"):
+if st.button(get_text("add_to_knowledge_base", st.session_state.language)):
     if uploaded_files:
         # Validar archivo antes de procesarlo
         from common.ingest_file import validate_uploaded_file
@@ -68,21 +88,21 @@ if st.button("Agregar archivo a la base de conocimiento"):
         is_valid, message = validate_uploaded_file(uploaded_files)
         if is_valid:
             file_name = uploaded_files.name
-            st.info(f"Procesando archivo: {file_name}")
+            st.info(get_text("processing_file", st.session_state.language, file_name=file_name))
             ingest_file(uploaded_files, file_name)
         else:
-            st.error(f"Error de validación: {message}")
+            st.error(get_text("validation_error", st.session_state.language, message=message))
     else:
-        st.warning("Por favor carga al menos un archivo antes de agregarlo a la base de conocimiento.")
+        st.warning(get_text("upload_warning", st.session_state.language))
 
-st.subheader('Archivos en la base de conocimiento:')
+st.subheader(get_text("files_in_knowledge_base", st.session_state.language))
 
 files = get_unique_sources_df(CHROMA_SETTINGS)
 files['Eliminar'] = False
 files_df = st.data_editor(files, use_container_width=True)
 if len(files_df.loc[files_df['Eliminar']]) == 1:
     st.divider()
-    st.subheader('Eliminar archivo')
+    st.subheader(get_text("delete_file", st.session_state.language))
     file_to_delete = files_df.loc[files_df['Eliminar'] == True]
     filename = file_to_delete.iloc[0, 0]
     st.write(filename)
@@ -91,16 +111,16 @@ if len(files_df.loc[files_df['Eliminar']]) == 1:
     col1, col2, col3 = st.columns(3)
                 
     with col2:
-        if st.button('Eliminar archivo de la base de conocimiento'):
+        if st.button(get_text("delete_from_knowledge_base", st.session_state.language)):
             try:
                 delete_file_from_vectordb(filename)
-                st.success('Archivo eliminado con éxito')
+                st.success(get_text("file_deleted", st.session_state.language))
                 st.rerun()
             except Exception as e:
-                st.error(f'Ocurrió un error al eliminar el archivo: {e}')
+                st.error(get_text("delete_error", st.session_state.language, error=str(e)))
     
 elif len(files_df.loc[files_df['Eliminar']]) > 1:
-    st.warning('Solo se permite eliminar un archivo a la vez.')
+    st.warning(get_text("one_file_at_a_time", st.session_state.language))
                 
 
 

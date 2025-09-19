@@ -6,6 +6,40 @@ from typing import Optional, Dict, Any, List, Callable, Union, Iterator, Context
 
 __version__: str = "1.49.1"
 
+class Sidebar:
+    """Streamlit sidebar context manager."""
+    def __enter__(self) -> 'Sidebar':
+        """Return self to enable use as a context manager with 'with' statements."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the context manager."""
+        pass
+    
+    def title(self, text: str) -> None:
+        """Display text in title formatting in the sidebar."""
+        pass
+    
+    def selectbox(
+        self,
+        label: str,
+        options: List[Any],
+        index: int = 0,
+        format_func: Optional[Callable[[Any], str]] = None,
+        key: Optional[str] = None,
+        help: Optional[str] = None,
+        on_change: Optional[Callable[[], None]] = None,
+        args: Optional[tuple] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
+        disabled: bool = False,
+        label_visibility: str = "visible",
+    ) -> Any:
+        """Display a selectbox widget in the sidebar."""
+        pass
+
+# Sidebar instance - can be used both as an object with methods and as a context manager
+sidebar: Sidebar = Sidebar()
+
 def set_page_config(
     page_title: Optional[str] = None,
     page_icon: Optional[str] = None,
@@ -156,4 +190,48 @@ def warning(body: str, icon: Optional[str] = None) -> None:
 
 def info(body: str, icon: Optional[str] = None) -> None:
     """Display an informational message."""
+    pass
+
+def spinner(text: str) -> ContextManager[None]:
+    """Display a spinner while executing a block of code.
+    
+    Args:
+        text (str): The message to display while the spinner is active.
+        
+    Returns:
+        ContextManager: A context manager that displays a spinner when entered and hides it when exited.
+    """
+    pass
+
+def selectbox(
+    label: str,
+    options: List[Any],
+    index: int = 0,
+    format_func: Optional[Callable[[Any], str]] = None,
+    key: Optional[str] = None,
+    help: Optional[str] = None,
+    on_change: Optional[Callable[[], None]] = None,
+    args: Optional[tuple] = None,
+    kwargs: Optional[Dict[str, Any]] = None,
+    disabled: bool = False,
+    label_visibility: str = "visible",
+) -> Any:
+    """Display a selectbox widget.
+    
+    Args:
+        label (str): A short label explaining to the user what this selectbox is for.
+        options (List[Any]): A list of options to choose from.
+        index (int): The index of the selected option.
+        format_func (Callable): Function to format the display of the options.
+        key (str): An optional string to use as the unique key for the widget.
+        help (str): An optional tooltip that gets displayed next to the selectbox.
+        on_change (Callable): An optional callback invoked when this selectbox's value changes.
+        args (tuple): Optional tuple of args to pass to the callback.
+        kwargs (Dict[str, Any]): Optional dict of kwargs to pass to the callback.
+        disabled (bool): An optional boolean, which disables the selectbox if set to True.
+        label_visibility (str): The visibility of the label. One of "visible", "hidden", or "collapsed".
+        
+    Returns:
+        Any: The selected option.
+    """
     pass
