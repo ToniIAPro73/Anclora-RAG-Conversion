@@ -40,6 +40,8 @@ services:
         - 8080:8080
       volumes:
         - ./app:/app
+      networks:
+        - net
       depends_on:
         - nvidia
         - ollama
@@ -48,6 +50,12 @@ services:
         - MODEL=llama3
         - EMBEDDINGS_MODEL_NAME=all-MiniLM-L6-v2
         - TARGET_SOURCE_CHUNKS=5
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:8080/_stcore/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+        start_period: 40s
 
 volumes:
   index_data:

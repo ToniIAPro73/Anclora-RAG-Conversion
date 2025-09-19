@@ -39,17 +39,24 @@ for message in st.session_state.messages:
 
 # React to user input
 if user_input := st.chat_input("Escribí tu mensaje 😎"):
-    # Display user message in chat message container
-    with st.chat_message("user"):
-        st.markdown(user_input)
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": user_input})
+    # Validar entrada del usuario
+    if len(user_input.strip()) == 0:
+        st.error("Por favor, escribe un mensaje válido.")
+    elif len(user_input) > 1000:
+        st.error("El mensaje es demasiado largo. Por favor, hazlo más conciso (máximo 1000 caracteres).")
+    else:
+        # Display user message in chat message container
+        with st.chat_message("user"):
+            st.markdown(user_input)
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": user_input})
 
-if user_input != None:
+if user_input is not None and len(user_input.strip()) > 0 and len(user_input) <= 1000:
     if st.session_state.messages and user_input.strip() != "":
-        response = response(user_input)
+        with st.spinner("Procesando tu consulta..."):
+            assistant_response = response(user_input)
         # Display assistant response in chat message container
         with st.chat_message("assistant"):
-            st.markdown(response)
+            st.markdown(assistant_response)
         # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.session_state.messages.append({"role": "assistant", "content": assistant_response})

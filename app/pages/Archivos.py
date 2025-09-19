@@ -1,7 +1,7 @@
 # Try to import streamlit, and if it fails, provide a helpful error message
 try:
     import streamlit as st
-    st.set_page_config(layout='wide', page_title='Archivos - Basdonax AI RAG', page_icon='📁')
+    st.set_page_config(layout='wide', page_title='Archivos - Anclora AI RAG', page_icon='📁')
 except ImportError:
     print("Error: streamlit is not installed. Please install it with 'pip install streamlit'")
     import sys
@@ -60,11 +60,20 @@ def save_uploaded_file(uploaded_file):
 uploaded_files = st.file_uploader("Cargar archivo", type=['csv', 'doc', 'docx', 'enex', 'eml', 'epub', 'html', 'md', 'odt', 'pdf', 'ppt', 'pptx', 'txt'], accept_multiple_files=False)
 
 # Botón para ejecutar el script de ingestión
-if st.button("Agregar archivo a la base de conocimiento") and uploaded_files:
-    file_name = uploaded_files.name
-    ingest_file(uploaded_files, file_name)
-elif not uploaded_files:
-    st.write("Por favor carga al menos un archivo antes agregar archivo a la base de conocimiento.")
+if st.button("Agregar archivo a la base de conocimiento"):
+    if uploaded_files:
+        # Validar archivo antes de procesarlo
+        from common.ingest_file import validate_uploaded_file
+
+        is_valid, message = validate_uploaded_file(uploaded_files)
+        if is_valid:
+            file_name = uploaded_files.name
+            st.info(f"Procesando archivo: {file_name}")
+            ingest_file(uploaded_files, file_name)
+        else:
+            st.error(f"Error de validación: {message}")
+    else:
+        st.warning("Por favor carga al menos un archivo antes de agregarlo a la base de conocimiento.")
 
 st.subheader('Archivos en la base de conocimiento:')
 

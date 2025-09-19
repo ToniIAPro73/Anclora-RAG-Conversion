@@ -1,7 +1,15 @@
 import os, tempfile, uuid
 import streamlit as st
 import pandas as pd
+import logging
 from typing import List
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 from langchain_community.document_loaders import (
     CSVLoader,
@@ -75,27 +83,76 @@ LOADER_MAPPING = {
 }
 
 
+def validate_uploaded_file(uploaded_file) -> tuple[bool, str]:
+    """
+    Valida el archivo subido por el usuario.
+
+    Args:
+        uploaded_file: Archivo subido por Streamlit
+
+    Returns:
+        tuple[bool, str]: (es_válido, mensaje)
+    """
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+    if uploaded_file.size > MAX_FILE_SIZE:
+        return False, "Archivo demasiado grande (máximo 10MB)"
+
+    allowed_extensions = ['.csv', '.doc', '.docx', '.enex', '.eml', '.epub',
+                         '.html', '.md', '.odt', '.pdf', '.ppt', '.pptx', '.txt']
+    file_ext = os.path.splitext(uploaded_file.name)[1].lower()
+
+    if file_ext not in allowed_extensions:
+        return False, f"Tipo de archivo no soportado: {file_ext}"
+
+    return True, "Válido"
+
+
 def load_single_document(uploaded_file) -> List[Document]:
-    ext = os.path.splitext(uploaded_file.name)[1].lower()
-    if ext in LOADER_MAPPING:
-        # Generar un nombre único para el archivo temporal
-        tmp_filename = f"{uploaded_file.name}"
-        tmp_path = os.path.join(tempfile.gettempdir(), tmp_filename)
+    """
+    Carga un documento desde un archivo subido.
 
-        # Guardar temporalmente el archivo cargado con el nombre único
-        with open(tmp_path, "wb") as tmp_file:
-            tmp_file.write(uploaded_file.getvalue())
-        
-        try:
-            # Crear una instancia del cargador correspondiente
-            loader_class, loader_args = LOADER_MAPPING[ext]
-            loader = loader_class(tmp_path, **loader_args)
-            return loader.load()
-        finally:
-            # Eliminar el archivo temporal después de usarlo
-            os.unlink(tmp_path)
+    Args:
+        uploaded_file: Archivo subido por Streamlit
 
-    raise ValueError(f"Unsupported file extension '{ext}'")
+    Returns:
+        List[Document]: Lista de documentos procesados
+
+    Raises:
+        ValueError: Si el tipo de archivo no es soportado
+    """
+    try:
+        # Validar archivo
+        is_valid, message = validate_uploaded_file(uploaded_file)
+        if not is_valid:
+            raise ValueError(message)
+
+        ext = os.path.splitext(uploaded_file.name)[1].lower()
+        if ext in LOADER_MAPPING:
+            # Generar un nombre único para el archivo temporal
+            tmp_filename = f"{uuid.uuid4()}_{uploaded_file.name}"
+            tmp_path = os.path.join(tempfile.gettempdir(), tmp_filename)
+
+            # Guardar temporalmente el archivo cargado con el nombre único
+            with open(tmp_path, "wb") as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+
+            try:
+                # Crear una instancia del cargador correspondiente
+                loader_class, loader_args = LOADER_MAPPING[ext]
+                loader = loader_class(tmp_path, **loader_args)
+                logger.info(f"Cargando documento: {uploaded_file.name}")
+                return loader.load()
+            finally:
+                # Eliminar el archivo temporal después de usarlo
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+
+        raise ValueError(f"Tipo de archivo no soportado: '{ext}'")
+
+    except Exception as e:
+        logger.error(f"Error al cargar documento {uploaded_file.name}: {str(e)}")
+        raise
 
 
 
@@ -137,22 +194,42 @@ def does_vectorstore_exist(settings) -> bool:
 
 
 def ingest_file(uploaded_file, file_name):
-    if does_vectorstore_exist(CHROMA_SETTINGS):
-        db = Chroma(embedding_function=embeddings, client=CHROMA_SETTINGS)
-        texts = process_file(uploaded_file, file_name)
-        if texts == None:
-            st.warning('Este archivo ya fue agregado anteriormente.')
+    """
+    Procesa e ingesta un archivo en la base de datos vectorial.
+
+    Args:
+        uploaded_file: Archivo subido por Streamlit
+        file_name (str): Nombre del archivo
+    """
+    try:
+        logger.info(f"Iniciando ingesta del archivo: {file_name}")
+
+        if does_vectorstore_exist(CHROMA_SETTINGS):
+            db = Chroma(embedding_function=embeddings, client=CHROMA_SETTINGS)
+            texts = process_file(uploaded_file, file_name)
+
+            if texts is None:
+                st.warning('Este archivo ya fue agregado anteriormente.')
+                logger.warning(f"Archivo duplicado: {file_name}")
+            else:
+                with st.spinner(f"Creando embeddings para {file_name}..."):
+                    db.add_documents(texts)
+                st.success(f"Se agregó el archivo '{file_name}' con éxito.")
+                logger.info(f"Archivo procesado exitosamente: {file_name}")
         else:
-            st.spinner(f"Creando embeddings.")
-            db.add_documents(texts)
-            st.success(f"Se agrego el archivo con éxito.")
-    else:
-        # Create and store locally vectorstore
-        st.success("Creating new vectorstore")
-        texts = process_file(uploaded_file, file_name)
-        st.spinner(f"Creating embeddings. May take some minutes...")
-        db = Chroma.from_documents(texts, embeddings, client=CHROMA_SETTINGS)
-        st.success(f"Se agrego el archivo con éxito.")
+            # Create and store locally vectorstore
+            st.info("Creando nueva base de datos vectorial...")
+            texts = process_file(uploaded_file, file_name)
+
+            with st.spinner(f"Creando embeddings. Esto puede tomar algunos minutos..."):
+                db = Chroma.from_documents(texts, embeddings, client=CHROMA_SETTINGS)
+            st.success(f"Se agregó el archivo '{file_name}' con éxito.")
+            logger.info(f"Nueva base de datos creada con archivo: {file_name}")
+
+    except Exception as e:
+        error_msg = f"Error al procesar el archivo '{file_name}': {str(e)}"
+        st.error(error_msg)
+        logger.error(error_msg)
 
 
 def delete_file_from_vectordb(filename:str):

@@ -33,6 +33,14 @@ except ImportError:
 
 import os
 import argparse
+import logging
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 model = os.environ.get("MODEL")
 # For embeddings model, the example uses a sentence-transformers model
@@ -57,32 +65,55 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def response(query:str) -> str:
-    # Parse the command line arguments
-    args = parse_arguments()
-    embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
+def response(query: str) -> str:
+    """
+    Genera una respuesta usando RAG (Retrieval-Augmented Generation).
 
-    db = Chroma(client=CHROMA_SETTINGS, embedding_function=embeddings)
+    Args:
+        query (str): La consulta del usuario
 
-    retriever = db.as_retriever(search_kwargs={"k": target_source_chunks})
-    # activate/deactivate the streaming StdOut callback for LLMs
-    callbacks = [] if args.mute_stream else [StreamingStdOutCallbackHandler()]
+    Returns:
+        str: La respuesta generada por el modelo
+    """
+    try:
+        # Validar entrada
+        if not query or len(query.strip()) == 0:
+            return "Por favor, proporciona una consulta válida."
 
-    llm = Ollama(model=model, callbacks=callbacks, temperature=0, base_url='http://ollama:11434')
-    
+        if len(query) > 1000:
+            return "La consulta es demasiado larga. Por favor, hazla más concisa."
 
-    prompt = assistant_prompt()
-    
+        # Parse the command line arguments
+        args = parse_arguments()
+        embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
 
-    def format_docs(docs):
-        return "\n\n".join(doc.page_content for doc in docs)
+        db = Chroma(client=CHROMA_SETTINGS, embedding_function=embeddings)
 
+        retriever = db.as_retriever(search_kwargs={"k": target_source_chunks})
+        # activate/deactivate the streaming StdOut callback for LLMs
+        callbacks = [] if args.mute_stream else [StreamingStdOutCallbackHandler()]
 
-    rag_chain = (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-    
-    return rag_chain.invoke(query)
+        llm = Ollama(model=model, callbacks=callbacks, temperature=0, base_url='http://ollama:11434')
+
+        prompt = assistant_prompt()
+
+        def format_docs(docs):
+            return "\n\n".join(doc.page_content for doc in docs)
+
+        rag_chain = (
+            {"context": retriever | format_docs, "question": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
+        )
+
+        logger.info(f"Procesando consulta: {query[:50]}...")
+        result = rag_chain.invoke(query)
+        logger.info("Consulta procesada exitosamente")
+
+        return result
+
+    except Exception as e:
+        error_msg = f"Error al procesar la consulta: {str(e)}"
+        logger.error(error_msg)
+        return "Lo siento, ocurrió un error al procesar tu consulta. Por favor, intenta nuevamente o contacta al administrador si el problema persiste."
