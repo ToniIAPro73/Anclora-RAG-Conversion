@@ -1,0 +1,9 @@
+{
+  "venvPath": ".",
+  "venv": ".",
+  "extraPaths": [
+    "C:\\Python313\\Lib\\site-packages",
+    "app/stubs"
+  ],
+  "typeCheckingMode": "basic"
+}

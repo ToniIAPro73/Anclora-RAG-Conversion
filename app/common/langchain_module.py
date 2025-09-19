@@ -1,11 +1,36 @@
-from langchain.chains import RetrievalQA
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain_community.llms import Ollama
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
-from common.chroma_db_settings import Chroma
-from common.assistant_prompt import assistant_prompt
+# Try to import the required modules, and if they fail, provide helpful error messages
+try:
+    from langchain.chains import RetrievalQA
+except ImportError:
+    print("Error: langchain module not found. Please install it with 'pip install langchain==0.1.16'")
+    import sys
+    sys.exit(1)
+
+try:
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+    from langchain_community.llms import Ollama
+except ImportError:
+    print("Error: langchain_community module not found. Please install it with 'pip install langchain-community==0.0.34'")
+    import sys
+    sys.exit(1)
+
+try:
+    from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+    from langchain_core.output_parsers import StrOutputParser
+    from langchain_core.runnables import RunnablePassthrough
+except ImportError:
+    print("Error: langchain_core module not found. Please install it with 'pip install langchain-core'")
+    import sys
+    sys.exit(1)
+
+try:
+    from common.chroma_db_settings import Chroma
+    from common.assistant_prompt import assistant_prompt
+except ImportError:
+    print("Error: common modules not found. Make sure the modules exist and are in the Python path.")
+    import sys
+    sys.exit(1)
+
 import os
 import argparse
 

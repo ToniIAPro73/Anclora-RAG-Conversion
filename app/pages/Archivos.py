@@ -1,13 +1,38 @@
-import streamlit as st
+# Try to import streamlit, and if it fails, provide a helpful error message
+try:
+    import streamlit as st
+    st.set_page_config(layout='wide', page_title='Archivos - Basdonax AI RAG', page_icon='📁')
+except ImportError:
+    print("Error: streamlit is not installed. Please install it with 'pip install streamlit'")
+    import sys
+    sys.exit(1)
 
-st.set_page_config(layout='wide', page_title='Archivos - Basdonax AI RAG', page_icon='📁')
+# Try to import the required modules, and if they fail, provide helpful error messages
+try:
+    import chromadb
+    from chromadb.config import Settings
+except ImportError:
+    print("Error: chromadb module not found. Please install it with 'pip install chromadb==0.4.7'")
+    import sys
+    sys.exit(1)
 
-import chromadb, os
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from chromadb.config import Settings
-from common.chroma_db_settings import get_unique_sources_df
-from common.ingest_file import ingest_file, delete_file_from_vectordb
-from common.streamlit_style import hide_streamlit_style
+try:
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+except ImportError:
+    print("Error: langchain_community module not found. Please install it with 'pip install langchain-community==0.0.34'")
+    import sys
+    sys.exit(1)
+
+import os
+
+try:
+    from common.chroma_db_settings import get_unique_sources_df
+    from common.ingest_file import ingest_file, delete_file_from_vectordb
+    from common.streamlit_style import hide_streamlit_style
+except ImportError:
+    print("Error: common modules not found. Make sure the modules exist and are in the Python path.")
+    import sys
+    sys.exit(1)
 
 hide_streamlit_style()
 

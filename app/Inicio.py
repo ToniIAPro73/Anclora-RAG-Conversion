@@ -1,14 +1,32 @@
-import streamlit as st
+# Try to import streamlit, and if it fails, provide a helpful error message
+try:
+    import streamlit as st
+    st.set_page_config(layout='wide', page_title='Inicio - Anclora AI RAG', page_icon='⌨️')
+except ImportError:
+    # This block will only execute if streamlit is not installed
+    print("Error: streamlit is not installed. Please install it with 'pip install streamlit'")
+    # Exit the script with an error code
+    import sys
+    sys.exit(1)
 
-st.set_page_config(layout='wide', page_title='Inicio - Basdonax AI RAG', page_icon='⌨️')
+# Try to import the required modules, and if they fail, provide helpful error messages
+try:
+    from common.langchain_module import response
+except ImportError:
+    print("Error: common.langchain_module module not found. Make sure the module exists and is in the Python path.")
+    import sys
+    sys.exit(1)
 
-from common.langchain_module import response
-from common.streamlit_style import hide_streamlit_style
-
-hide_streamlit_style()
+try:
+    from common.streamlit_style import hide_streamlit_style
+    hide_streamlit_style()
+except ImportError:
+    print("Error: common.streamlit_style module not found. Make sure the module exists and is in the Python path.")
+    import sys
+    sys.exit(1)
 
 # Título de la aplicación Streamlit
-st.title("Basdonax AI RAG")
+st.title("Anclora AI RAG")
 
 # Initialize chat history
 if "messages" not in st.session_state:
