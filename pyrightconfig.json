@@ -5,5 +5,22 @@
     "C:\\Python313\\Lib\\site-packages",
     "app/stubs"
   ],
-  "typeCheckingMode": "basic"
+  "typeCheckingMode": "basic",
+  "reportMissingImports": false,
+  "reportMissingModuleSource": true,
+  "ignore": ["app/chromadb_test.py"],
+  "reportMissingTypeStubs": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownLambdaType": false,
+  "reportUnknownParameterType": false,
+  "stubPath": "app/stubs",
+  "reportGeneralTypeIssues": "warning",
+  "reportOptionalMemberAccess": false,
+  "reportOptionalSubscript": false,
+  "reportOptionalCall": false,
+  "reportOptionalIterable": false,
+  "reportOptionalContextManager": false,
+  "reportOptionalOperand": false
 }

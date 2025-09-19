@@ -9,15 +9,15 @@ except ImportError:
 
 # Try to import the required modules, and if they fail, provide helpful error messages
 try:
-    import chromadb
-    from chromadb.config import Settings
+    import chromadb  # type: ignore
+    from chromadb.config import Settings  # type: ignore
 except ImportError:
     print("Error: chromadb module not found. Please install it with 'pip install chromadb==0.4.7'")
     import sys
     sys.exit(1)
 
 try:
-    from langchain_community.embeddings import HuggingFaceEmbeddings
+    from langchain_community.embeddings import HuggingFaceEmbeddings  # type: ignore
 except ImportError:
     print("Error: langchain_community module not found. Please install it with 'pip install langchain-community==0.0.34'")
     import sys

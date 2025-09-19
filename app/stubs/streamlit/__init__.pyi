@@ -20,6 +20,10 @@ def title(text: str) -> None:
     """Display text in title formatting."""
     pass
 
+def subheader(text: str) -> None:
+    """Display text in subheader formatting."""
+    pass
+
 def markdown(body: str) -> None:
     """Display string formatted as Markdown."""
     pass
@@ -62,3 +66,90 @@ class SessionState:
 
 # This is the session state that's accessed as st.session_state
 session_state: SessionState = SessionState()
+
+def file_uploader(
+    label: str,
+    type: Optional[Union[str, List[str]]] = None,
+    accept_multiple_files: bool = False,
+    key: Optional[str] = None,
+    help: Optional[str] = None,
+    on_change: Optional[Callable[[], None]] = None,
+    args: Optional[tuple] = None,
+    kwargs: Optional[Dict[str, Any]] = None,
+    disabled: bool = False,
+    label_visibility: str = "visible",
+) -> Any:
+    """Display a file uploader widget."""
+    pass
+
+def button(
+    label: str,
+    key: Optional[str] = None,
+    help: Optional[str] = None,
+    on_click: Optional[Callable[[], None]] = None,
+    args: Optional[tuple] = None,
+    kwargs: Optional[Dict[str, Any]] = None,
+    type: str = "secondary",
+    disabled: bool = False,
+    use_container_width: bool = False,
+) -> bool:
+    """Display a button widget."""
+    pass
+
+def write(*args, **kwargs) -> None:
+    """Write arguments to the app."""
+    pass
+
+def data_editor(
+    data: Any,
+    width: Optional[Union[int, str]] = None,
+    height: Optional[Union[int, str]] = None,
+    use_container_width: bool = False,
+    hide_index: Optional[bool] = None,
+    column_order: Optional[List[str]] = None,
+    column_config: Optional[Dict[str, Any]] = None,
+    num_rows: str = "fixed",
+    disabled: bool = False,
+    key: Optional[str] = None,
+    on_change: Optional[Callable[[], None]] = None,
+    args: Optional[tuple] = None,
+    kwargs: Optional[Dict[str, Any]] = None,
+) -> Any:
+    """Display a data editor widget."""
+    pass
+
+def divider() -> None:
+    """Display a horizontal divider."""
+    pass
+
+def dataframe(
+    data: Any,
+    width: Optional[Union[int, str]] = None,
+    height: Optional[Union[int, str]] = None,
+    use_container_width: bool = False,
+    hide_index: Optional[bool] = None,
+    column_order: Optional[List[str]] = None,
+    column_config: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Display a dataframe."""
+    pass
+
+def columns(spec: Union[int, List[Union[int, float]]], gap: Optional[str] = "small") -> List[Any]:
+    """Insert columns into the app."""
+    pass
+
+def success(body: str, icon: Optional[str] = None) -> None:
+    """Display a success message."""
+    pass
+
+def rerun() -> None:
+    """Rerun the app."""
+    pass
+
+def error(body: str, icon: Optional[str] = None) -> None:
+    """Display an error message."""
+    pass
+
+def warning(body: str, icon: Optional[str] = None) -> None:
+    """Display a warning message."""
+    pass
