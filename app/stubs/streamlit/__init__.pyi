@@ -153,3 +153,7 @@ def error(body: str, icon: Optional[str] = None) -> None:
 def warning(body: str, icon: Optional[str] = None) -> None:
     """Display a warning message."""
     pass
+
+def info(body: str, icon: Optional[str] = None) -> None:
+    """Display an informational message."""
+    pass
