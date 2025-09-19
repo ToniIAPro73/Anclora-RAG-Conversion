@@ -57,6 +57,30 @@ services:
         retries: 3
         start_period: 40s
 
+    api:
+      build: ./app
+      ports:
+        - 8081:8081
+      volumes:
+        - ./app:/app
+      networks:
+        - net
+      depends_on:
+        - nvidia
+        - ollama
+        - chroma
+      environment:
+        - MODEL=llama3
+        - EMBEDDINGS_MODEL_NAME=all-MiniLM-L6-v2
+        - TARGET_SOURCE_CHUNKS=5
+      command: ["python", "-m", "uvicorn", "api_endpoints:app", "--host", "0.0.0.0", "--port", "8081"]
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+        start_period: 40s
+
 volumes:
   index_data:
 
