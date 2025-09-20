@@ -10,7 +10,7 @@ translations = {
         "app_title": "Anclora AI RAG",
         
         # Inicio.py
-        "chat_placeholder": "Escribí tu mensaje 😎",
+        "chat_placeholder": "Escribe tu mensaje 😎",
         "empty_message_error": "Por favor, escribe un mensaje válido.",
         "long_message_error": "El mensaje es demasiado largo. Por favor, hazlo más conciso (máximo 1000 caracteres).",
         "processing_message": "Procesando tu consulta...",
