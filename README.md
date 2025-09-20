@@ -87,7 +87,7 @@ La aplicación se ejecuta en <http://localhost:8080> y proporciona:
 
 Antes de comenzar con la instalación, tenemos que analizar si tenemos o no una tarjeta gráfica capaz de utilizar Llama3-7b o no. Si tenemos una tarjeta gráfica capaz de utilizar este modelo de datos utilizaremos el archivo `docker-compose.yml`, si no contamos con esa posibilidad vamos a eliminar el `docker-compose.yml` y vamos a renombrar el archivo `docker-compose_sin_gpu.yml` por `docker-compose.yml`. La diferencia entre un archivo y otro es que el `docker-compose_sin_gpu.yml` utiliza el LLM `Phi3-4b`, que es mucho más ligero para correrlo en el procesador de tu PC, mientras que `Llama3-7b` es mucho más pesado y si bien puede correr en CPU, es más recomendable una gráfica. En el video voy a estar utilizando una RTX 4060 8GB.
 
-#### Docker
+#### Docker Installation
 
 Tenemos que tener Docker o Docker Desktop instalado, te recomiendo ver este video para instalar todo: <https://www.youtube.com/watch?v=ZyBBv1JmnWQ>
 
