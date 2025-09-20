@@ -58,7 +58,7 @@ def subheader(text: str) -> None:
     """Display text in subheader formatting."""
     pass
 
-def markdown(body: str) -> None:
+def markdown(body: str, unsafe_allow_html: bool = False) -> None:
     """Display string formatted as Markdown."""
     pass
 
@@ -97,6 +97,34 @@ class SessionState:
             super().__setattr__(name, value)
         else:
             self._dict[name] = value
+
+    def keys(self) -> List[str]:
+        """Return a list of all keys in the session state."""
+        return list(self._dict.keys())
+
+    def pop(self, key: str, default: Any = None) -> Any:
+        """Remove and return the value for the given key, or default if key not found."""
+        return self._dict.pop(key, default)
+
+    def __delitem__(self, key: str) -> None:
+        """Delete the item with the given key."""
+        del self._dict[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Return the value for the given key, or default if key not found."""
+        return self._dict.get(key, default)
+
+    def items(self) -> List[tuple]:
+        """Return a list of (key, value) pairs."""
+        return list(self._dict.items())
+
+    def values(self) -> List[Any]:
+        """Return a list of all values."""
+        return list(self._dict.values())
+
+    def clear(self) -> None:
+        """Remove all items from the session state."""
+        self._dict.clear()
 
 # This is the session state that's accessed as st.session_state
 session_state: SessionState = SessionState()
