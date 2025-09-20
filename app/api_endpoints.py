@@ -89,15 +89,15 @@ async def chat_with_rag(
         if not request.message or len(request.message.strip()) == 0:
             raise HTTPException(status_code=400, detail="Mensaje vacío")
         
-        if len(request.message) > request.max_length:
+        if request.max_length and len(request.message) > request.max_length:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail=f"Mensaje demasiado largo (máximo {request.max_length} caracteres)"
             )
         
         # Procesar consulta
         logger.info(f"Procesando consulta API: {request.message[:50]}...")
-        rag_response = response(request.message)
+        rag_response = response(request.message, "en")  # Default to English for API
         
         from datetime import datetime
         return ChatResponse(
