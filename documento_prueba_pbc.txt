@@ -1,0 +1,164 @@
+INFORMACIÓN CORPORATIVA - PBC CONSULTORA
+
+=== ACERCA DE PBC ===
+
+PBC es una consultora especializada en Ingeniería de Software e Inteligencia Artificial que opera en Latinoamérica. Nuestra misión es acelerar, escalar y mejorar los sistemas empresariales para facilitar el acceso a la información.
+
+Objetivo Principal: Transformar empresas tradicionales en organizaciones impulsadas por datos (Data Driven Culture), permitiéndoles aprovechar al máximo su información almacenada y tomar decisiones estratégicas basadas en análisis sólidos.
+
+=== PRODUCTOS PRINCIPALES ===
+
+1. CUBO DE DATOS
+Descripción: Plataforma que permite a las empresas centralizar toda su información relacionada con Business Intelligence en un cubo de datos que se mantiene actualizado en tiempo real.
+
+Beneficios:
+- Centralización automática de datos
+- Actualización en tiempo real
+- Modelado de datos automático
+- Generación de insights clave con un click
+- Facilita el trabajo de departamentos de BI
+
+Casos de uso:
+- Empresas con múltiples fuentes de datos
+- Organizaciones que necesitan reportes en tiempo real
+- Compañías que buscan automatizar su análisis de datos
+
+2. AVI (ASISTENTE VIRTUAL INTELIGENTE)
+Descripción: Asistente virtual que utiliza las últimas tecnologías de Inteligencia Artificial generativa. Puede conectarse a cualquier red social o plataforma web.
+
+Características:
+- Automatización de atención al cliente
+- Automatización de procesos de ventas
+- Dashboard con insights importantes
+- Análisis de TODOS los mensajes enviados
+- Integración con redes sociales y web
+
+Beneficios:
+- Reducción de costos operativos
+- Atención 24/7
+- Análisis automático de interacciones
+- Mejora en la experiencia del cliente
+
+3. PLATAFORMA BUSINESS INTELLIGENCE PBC
+Descripción: Plataforma diseñada para democratizar y facilitar el acceso a información e insights importantes para diferentes personas dentro de una empresa.
+
+Características:
+- Interfaz intuitiva para usuarios no técnicos
+- Complemento perfecto del Cubo de Datos
+- Visualizaciones automáticas
+- Reportes personalizables
+- Acceso controlado por roles
+
+Beneficios:
+- Democratización de la información
+- Facilita la toma de decisiones
+- Reduce dependencia del área de TI
+- Mejora la cultura data-driven
+
+=== SERVICIOS ADICIONALES ===
+
+Consultoría en Transformación Digital:
+- Evaluación de madurez digital
+- Diseño de estrategias de datos
+- Implementación de soluciones IA
+- Capacitación de equipos
+
+Desarrollo de Software Personalizado:
+- Aplicaciones web y móviles
+- Sistemas de gestión empresarial
+- Integraciones con sistemas existentes
+- APIs y microservicios
+
+Análisis de Datos y Machine Learning:
+- Modelos predictivos
+- Análisis de comportamiento
+- Optimización de procesos
+- Automatización inteligente
+
+=== METODOLOGÍA DE TRABAJO ===
+
+1. Diagnóstico Inicial
+- Evaluación de sistemas actuales
+- Identificación de necesidades
+- Análisis de datos disponibles
+
+2. Diseño de Solución
+- Arquitectura personalizada
+- Selección de tecnologías
+- Plan de implementación
+
+3. Desarrollo e Implementación
+- Desarrollo ágil
+- Pruebas continuas
+- Capacitación de usuarios
+
+4. Soporte y Mantenimiento
+- Monitoreo continuo
+- Actualizaciones regulares
+- Soporte técnico especializado
+
+=== CASOS DE ÉXITO ===
+
+Sector Retail:
+- Implementación de Cubo de Datos para cadena de tiendas
+- Centralización de datos de 50+ sucursales
+- Reducción del 70% en tiempo de generación de reportes
+
+Sector Financiero:
+- Desarrollo de AVI para atención al cliente
+- Automatización del 80% de consultas frecuentes
+- Mejora del 40% en satisfacción del cliente
+
+Sector Manufactura:
+- Plataforma BI para análisis de producción
+- Identificación de cuellos de botella
+- Optimización del 25% en eficiencia operativa
+
+=== TECNOLOGÍAS UTILIZADAS ===
+
+Inteligencia Artificial:
+- Machine Learning
+- Deep Learning
+- Natural Language Processing
+- Computer Vision
+
+Desarrollo:
+- Python, JavaScript, Java
+- React, Angular, Vue.js
+- Node.js, Django, Spring Boot
+
+Bases de Datos:
+- PostgreSQL, MySQL, MongoDB
+- Redis, Elasticsearch
+- Data Warehouses (Snowflake, BigQuery)
+
+Cloud y DevOps:
+- AWS, Azure, Google Cloud
+- Docker, Kubernetes
+- CI/CD pipelines
+
+=== CONTACTO Y UBICACIÓN ===
+
+Cobertura: Latinoamérica
+Modalidad: Remoto y presencial
+Idiomas: Español, Portugués, Inglés
+
+Especialidades:
+- Transformación digital
+- Business Intelligence
+- Inteligencia Artificial
+- Desarrollo de software
+- Consultoría estratégica
+
+=== FILOSOFÍA EMPRESARIAL ===
+
+Visión: Ser la consultora líder en transformación digital e IA en Latinoamérica.
+
+Misión: Empoderar a las empresas con tecnología de vanguardia para que tomen decisiones basadas en datos y mejoren su competitividad.
+
+Valores:
+- Innovación constante
+- Excelencia técnica
+- Compromiso con el cliente
+- Transparencia en procesos
+- Crecimiento sostenible

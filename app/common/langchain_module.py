@@ -83,11 +83,29 @@ def response(query: str) -> str:
         if len(query) > 1000:
             return "La consulta es demasiado larga. Por favor, hazla más concisa."
 
+        # Detectar saludos simples
+        simple_greetings = ["hola", "hello", "hi", "buenos días", "buenas tardes", "buenas noches", "hey"]
+        query_lower = query.lower().strip()
+
+        if any(greeting in query_lower for greeting in simple_greetings) and len(query.split()) <= 3:
+            return "¡Hola! Soy Bastet, tu asistente virtual de PBC. Estoy aquí para ayudarte con información sobre nuestros proyectos, productos y servicios. ¿En qué puedo asistirte hoy?"
+
         # Parse the command line arguments
         args = parse_arguments()
         embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
 
         db = Chroma(client=CHROMA_SETTINGS, embedding_function=embeddings)
+
+        # Verificar si hay documentos en la base de datos
+        try:
+            collection = CHROMA_SETTINGS.get_collection('vectordb')
+            doc_count = collection.count()
+            logger.info(f"Documentos en la base de conocimiento: {doc_count}")
+
+            if doc_count == 0:
+                return "Hola, soy Bastet de PBC. Actualmente no tengo documentos en mi base de conocimiento. Por favor, sube algunos documentos en la sección 'Archivos' para que pueda ayudarte con información específica. Mientras tanto, puedo contarte que PBC ofrece servicios de Ingeniería de Software e Inteligencia Artificial."
+        except Exception as e:
+            logger.warning(f"No se pudo verificar la cantidad de documentos: {e}")
 
         retriever = db.as_retriever(search_kwargs={"k": target_source_chunks})
         # activate/deactivate the streaming StdOut callback for LLMs
@@ -98,6 +116,8 @@ def response(query: str) -> str:
         prompt = assistant_prompt()
 
         def format_docs(docs):
+            if not docs:
+                return "No se encontró información específica en la base de conocimiento."
             return "\n\n".join(doc.page_content for doc in docs)
 
         rag_chain = (
