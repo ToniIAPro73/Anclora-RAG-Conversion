@@ -33,9 +33,17 @@ except ImportError:
     import sys
     sys.exit(1)
 
+try:
+    from langdetect import DetectorFactory, LangDetectException, detect
+except ImportError:
+    print("Error: langdetect module not found. Please install it with 'pip install langdetect==1.0.9'")
+    import sys
+    sys.exit(1)
+
 import os
 import argparse
 import logging
+from typing import Optional
 
 # Configurar logging
 logging.basicConfig(
@@ -54,6 +62,42 @@ target_source_chunks = int(os.environ.get('TARGET_SOURCE_CHUNKS',5))
 from common.constants import CHROMA_SETTINGS
 
 
+DetectorFactory.seed = 0
+
+SUPPORTED_LANGUAGES = {"es", "en"}
+SPANISH_HINT_CHARACTERS = set("áéíóúüñÁÉÍÓÚÜÑ¿¡")
+SPANISH_HINT_WORDS = {"hola", "buenos", "buenas", "gracias", "información", "informacion"}
+
+
+def detect_language(text: str) -> str:
+    """Detect the language of *text* returning ``es`` or ``en``."""
+
+    normalized_text = normalize_to_nfc(text or "")
+    stripped_text = normalized_text.strip()
+    if not stripped_text:
+        return "es"
+
+    normalized_lower = stripped_text.lower()
+    has_spanish_hint_char = any(char in SPANISH_HINT_CHARACTERS for char in stripped_text)
+    has_spanish_hint_word = any(word in normalized_lower for word in SPANISH_HINT_WORDS)
+
+    try:
+        detected = detect(stripped_text).lower()
+    except LangDetectException:
+        detected = ""
+
+    if has_spanish_hint_char or has_spanish_hint_word:
+        return "es"
+
+    if detected.startswith("es"):
+        return "es"
+
+    if detected.startswith("en"):
+        return "en"
+
+    return "es"
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description='privateGPT: Ask questions to your documents without an internet connection, '
                                                  'using the power of LLMs.')
@@ -67,34 +111,43 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def response(query: str, language: str = "es") -> str:
+def response(query: str, language: Optional[str] = None) -> str:
     """
     Genera una respuesta usando RAG (Retrieval-Augmented Generation).
 
     Args:
         query (str): La consulta del usuario
-        language (str): Codigo de idioma preferido ("es" o "en")
+        language (Optional[str]): Codigo de idioma preferido ("es" o "en").
+            Si es ``None`` o vacio se detecta automaticamente a partir de la consulta.
 
     Returns:
         str: La respuesta generada por el modelo
     """
+    language_code = "es"
+
     try:
-        language = (language or "es").lower()
-        if language not in {"es", "en"}:
-            language = "es"
+        detected_language = detect_language(query)
+        requested_language = (language or "").strip().lower()
+
+        if requested_language in SUPPORTED_LANGUAGES:
+            language_code = requested_language
+        elif requested_language:
+            language_code = "es"
+        else:
+            language_code = detected_language
 
         # Validar entrada
         if not query:
-            return get_text("invalid_query", language)
+            return get_text("invalid_query", language_code)
 
         normalized_query = normalize_to_nfc(query)
         stripped_query = normalized_query.strip()
 
         if len(stripped_query) == 0:
-            return get_text("invalid_query", language)
+            return get_text("invalid_query", language_code)
 
         if len(stripped_query) > 1000:
-            return get_text("long_query", language)
+            return get_text("long_query", language_code)
 
         # Detectar saludos simples segun idioma
         simple_greetings = {
@@ -103,8 +156,8 @@ def response(query: str, language: str = "es") -> str:
         }
         normalized_query_lower = stripped_query.lower()
 
-        if any(greeting in normalized_query_lower for greeting in simple_greetings[language]) and len(stripped_query.split()) <= 4:
-            return get_text("greeting_response", language)
+        if any(greeting in normalized_query_lower for greeting in simple_greetings[language_code]) and len(stripped_query.split()) <= 4:
+            return get_text("greeting_response", language_code)
 
         # Parse the command line arguments
         args = parse_arguments()
@@ -119,7 +172,7 @@ def response(query: str, language: str = "es") -> str:
             logger.info(f"Documentos en la base de conocimiento: {doc_count}")
 
             if doc_count == 0:
-                return get_text("no_documents", language)
+                return get_text("no_documents", language_code)
         except Exception as e:
             logger.warning(f"No se pudo verificar la cantidad de documentos: {e}")
 
@@ -129,11 +182,11 @@ def response(query: str, language: str = "es") -> str:
 
         llm = Ollama(model=model, callbacks=callbacks, temperature=0, base_url='http://ollama:11434')
 
-        prompt = assistant_prompt(language)
+        prompt = assistant_prompt(language_code)
 
         def format_docs(docs):
             if not docs:
-                return get_text("no_context", language)
+                return get_text("no_context", language_code)
             return "\n\n".join(doc.page_content for doc in docs)
 
         rag_chain = (
@@ -152,5 +205,5 @@ def response(query: str, language: str = "es") -> str:
     except Exception as e:
         error_msg = f"Error al procesar la consulta: {str(e)}"
         logger.error(error_msg)
-        return get_text("processing_error", language)
+        return get_text("processing_error", language_code)
 
