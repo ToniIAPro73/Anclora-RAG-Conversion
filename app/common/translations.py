@@ -1,7 +1,6 @@
-"""
-This module contains translations for the Anclora AI RAG application.
-It provides text in Spanish and English.
-"""
+"""Translation utilities for the Anclora AI RAG application."""
+
+from common.config import get_default_language, get_supported_languages
 
 # Dictionary of translations for different languages
 translations = {
@@ -83,7 +82,7 @@ translations = {
 }
 
 
-def get_text(key, lang="es", **kwargs):
+def get_text(key, lang=None, **kwargs):
     """
     Get the translated text for a given key and language.
 
@@ -95,12 +94,27 @@ def get_text(key, lang="es", **kwargs):
     Returns:
         str: The translated text
     """
-    # Default to Spanish if the language is not supported
-    if lang not in translations:
-        lang = "es"
+    default_language = get_default_language()
+    supported_languages = get_supported_languages()
 
-    # Get the translation for the key, or return the key itself if not found
-    text = translations[lang].get(key, key)
+    if not supported_languages:
+        supported_languages = [default_language]
+
+    if default_language not in translations:
+        translations.setdefault(default_language, {})
+
+    if lang is None or lang not in supported_languages:
+        lang = default_language
+
+    language_translations = translations.get(lang, {})
+    if not language_translations:
+        language_translations = translations.get(default_language, {})
+        lang = default_language
+
+    # Get the translation for the key, or fall back to the default language
+    text = language_translations.get(key)
+    if text is None:
+        text = translations.get(default_language, {}).get(key, key)
 
     # Format the text with the provided kwargs
     if kwargs:

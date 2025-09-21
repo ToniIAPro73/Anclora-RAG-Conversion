@@ -27,6 +27,7 @@ import os
 
 try:
     from common.chroma_db_settings import get_unique_sources_df
+    from common.config import get_default_language, get_supported_languages
     from common.ingest_file import ingest_file, delete_file_from_vectordb
     from common.streamlit_style import hide_streamlit_style
     from common.translations import get_text
@@ -38,14 +39,21 @@ except ImportError:
 hide_streamlit_style()
 
 # Initialize language in session state if not already set
-if "language" not in st.session_state:
-    st.session_state.language = "es"  # Default to Spanish
+default_language = get_default_language()
+available_languages = get_supported_languages()
 
-available_languages = ["es", "en"]
+if default_language not in available_languages:
+    available_languages.insert(0, default_language)
+
+if not available_languages:
+    available_languages = [default_language]
+
+if "language" not in st.session_state:
+    st.session_state.language = default_language
 
 # Reset to default if session stored an unsupported language from a previous version
 if st.session_state.language not in available_languages:
-    st.session_state.language = "es"
+    st.session_state.language = default_language
 
 # Add language selector to sidebar
 with st.sidebar:
