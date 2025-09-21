@@ -2,7 +2,45 @@
 
 import sys
 import types
+import typing
 from pathlib import Path
+
+
+def _patch_forward_ref_evaluate() -> None:
+    """Adapt ``typing.ForwardRef._evaluate`` for Python 3.12 + Pydantic v1."""
+
+    if sys.version_info < (3, 12):  # pragma: no cover - legacy behavior
+        return
+
+    original_evaluate = typing.ForwardRef._evaluate
+
+    def _evaluate(self, globalns, localns, *args, **kwargs):  # type: ignore[override]
+        type_params = kwargs.pop("type_params", None)
+        recursive_guard = kwargs.pop("recursive_guard", None)
+
+        remaining_args = list(args)
+        if type_params is None and remaining_args:
+            candidate = remaining_args.pop(0)
+            if isinstance(candidate, (set, frozenset)):
+                recursive_guard = candidate
+            else:
+                type_params = candidate
+
+        if recursive_guard is None and remaining_args:
+            recursive_guard = remaining_args.pop(0)
+
+        if recursive_guard is None:
+            recursive_guard = set()
+
+        return original_evaluate(
+            self,
+            globalns,
+            localns,
+            type_params,
+            recursive_guard=recursive_guard,
+        )
+
+    typing.ForwardRef._evaluate = _evaluate  # type: ignore[assignment]
 
 
 def _ensure_project_root_on_path() -> None:
@@ -146,8 +184,50 @@ def _install_common_stubs() -> None:
             Chroma=_StubChroma,
         )
 
+    if "common.ingest_file" not in sys.modules:
+        def _validate_uploaded_file(uploaded_file) -> tuple[bool, str]:  # type: ignore[override]
+            return True, "Válido"
 
+        def _ingest_file(*args: object, **kwargs: object) -> None:
+            return None
+
+        def _delete_file_from_vectordb(filename: str) -> None:
+            return None
+
+        _install_stub_submodule(
+            "common.ingest_file",
+            ingest_file=_ingest_file,
+            validate_uploaded_file=_validate_uploaded_file,
+            delete_file_from_vectordb=_delete_file_from_vectordb,
+        )
+
+
+def _install_langdetect_stub() -> None:
+    """Install a minimal stub for ``langdetect`` when the dependency is absent."""
+
+    try:  # pragma: no cover - prefer the actual dependency when available
+        import langdetect  # type: ignore  # noqa: F401
+    except Exception:  # pragma: no cover - stub path
+        class _DetectorFactory:
+            seed = 0
+
+        class _LangDetectException(Exception):
+            pass
+
+        def _detect(text: str) -> str:
+            return "es" if text else ""
+
+        _install_stub_submodule(
+            "langdetect",
+            DetectorFactory=_DetectorFactory,
+            LangDetectException=_LangDetectException,
+            detect=_detect,
+        )
+
+
+_patch_forward_ref_evaluate()
 _ensure_project_root_on_path()
 _ensure_app_dir_on_path()
 _install_langchain_stubs()
 _install_common_stubs()
+_install_langdetect_stub()
