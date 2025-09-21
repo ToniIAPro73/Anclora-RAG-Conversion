@@ -11,7 +11,7 @@ from typing import Any, List, Optional
 from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field
 from common.langchain_module import response
 from common.privacy import PrivacyManager
 
@@ -88,19 +88,13 @@ class ChatRequest(BaseModel):
         example="en"
     )
 
-    model_config = ConfigDict(
-        json_schema_extra={
+    class Config:
+        schema_extra = {
             "example": {
                 "message": "Provide a summary of the onboarding process.",
                 "max_length": 600,
                 "language": "en"
-            }
-        }
-    )
-
-
-    class Config:
-        schema_extra = {
+            },
             "examples": [
                 {
                     "message": "¿Cuál es el estado del informe trimestral?",
@@ -141,18 +135,13 @@ class ChatResponse(BaseModel):
         example="2024-05-12T14:32:10.456789"
     )
 
-    model_config = ConfigDict(
-        json_schema_extra={
+    class Config:
+        schema_extra = {
             "example": {
                 "response": "Las copias de seguridad se ejecutan automáticamente cada noche...",
                 "status": "success",
                 "timestamp": "2024-05-12T14:32:10.456789"
-            }
-        }
-    )
-
-    class Config:
-        schema_extra = {
+            },
             "examples": [
                 {
                     "response": "La base de conocimiento contiene 12 documentos y todo funciona correctamente.",
@@ -232,14 +221,13 @@ class FileInfo(BaseModel):
         example="indexed"
     )
 
-    model_config = ConfigDict(
-        json_schema_extra={
+    class Config:
+        schema_extra = {
             "example": {
                 "filename": "manual_instalacion.docx",
                 "status": "indexed"
             }
         }
-    )
 
 class HealthResponse(BaseModel):
     status: str = Field(
@@ -267,8 +255,8 @@ class HealthResponse(BaseModel):
         example={"chroma_db": "healthy", "ollama": "healthy"}
     )
 
-    model_config = ConfigDict(
-        json_schema_extra={
+    class Config:
+        schema_extra = {
             "example": {
                 "status": "healthy",
                 "version": "1.0.0",
@@ -279,7 +267,6 @@ class HealthResponse(BaseModel):
                 }
             }
         }
-    )
 
 try:  # pragma: no cover - la dependencia es opcional
     import jwt
