@@ -7,7 +7,9 @@ except ImportError:
     print("Error: streamlit is not installed. Please install it with 'pip install streamlit'")
     # Exit the script with an error code
     import sys
-    sys.exit(1)# Try to import the required modules, and if they fail, provide helpful error messages
+    sys.exit(1)
+
+# Try to import the required modules, and if they fail, provide helpful error messages
 try:
     from common.langchain_module import response
 except ImportError:
@@ -36,11 +38,7 @@ if "language" not in st.session_state:
 
 # Add language selector to sidebar
 with st.sidebar:
-    if st.button('Reset Session'):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
-    
+    st.title(get_text("app_title", st.session_state.language))
     selected_language = st.sidebar.selectbox(
         get_text("language_selector", st.session_state.language),
         options=["es", "en", "fr", "de"],
@@ -53,7 +51,7 @@ with st.sidebar:
         st.session_state.language = selected_language
         st.rerun()
 
-# Título de la aplicación Streamlit en el área principal
+# Título de la aplicación Streamlit
 st.title(get_text("app_title", st.session_state.language))
 
 # Initialize chat history
