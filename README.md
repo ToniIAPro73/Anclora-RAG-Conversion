@@ -113,6 +113,10 @@ build --no-cache` para los servicios `ui` y `api`.
 
 El detalle de fases, épicas y tareas priorizadas se encuentra en el [backlog del roadmap](docs/backlog.md). Allí se listan los módulos involucrados (`app/common/*`, `app/pages/*`, `docker-compose*.yml`, etc.), los criterios de aceptación y las dependencias principales para cada bloque de trabajo. Revísalo antes de abrir issues o Pull Requests para mantener el alineamiento con la hoja de ruta.
 
+### Documentación adicional
+
+- [Guía de Integración / Integration Guide](docs/integration-guide.md): Pasos para consumir la API, usar el cliente Python oficial y conectar agentes (LangChain, AutoGen) con recomendaciones de encoding y manejo de Unicode.
+
 ### Uso
 
 La aplicación se ejecuta en <http://localhost:8080> y la API REST está disponible en <http://localhost:8081>. Desde la UI y la API se ofrece:
@@ -122,6 +126,42 @@ La aplicación se ejecuta en <http://localhost:8080> y la API REST está disponi
 - Selección de idioma para la interfaz (ver nota más abajo)
 - Gestión de documentos (ver y eliminar)
 - Endpoints para integraciones externas (consultas, ingestión y listado de archivos)
+
+### Ejemplos de uso de la API REST
+
+Consulta en español preservando acentos:
+
+```bash
+curl -X POST "http://localhost:8081/chat" \
+  -H "Authorization: Bearer your-api-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "message": "¿Cuál es el estado del informe trimestral?",
+        "language": "es",
+        "max_length": 600
+      }'
+```
+
+Consulta en inglés con caracteres ñ/á:
+
+```bash
+curl -X POST "http://localhost:8081/chat" \
+  -H "Authorization: Bearer your-api-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "message": "Please summarize the jalapeño market update on Día 1",
+        "language": "en",
+        "max_length": 600
+      }'
+```
+
+Carga de archivos desde la terminal:
+
+```bash
+curl -X POST "http://localhost:8081/upload" \
+  -H "Authorization: Bearer your-api-key-here" \
+  -F "file=@revisión_técnica.pdf"
+```
 
 ## Requisitos previos
 
