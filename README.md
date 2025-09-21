@@ -127,6 +127,14 @@ La aplicación se ejecuta en <http://localhost:8080> y la API REST está disponi
 - Gestión de documentos (ver y eliminar)
 - Endpoints para integraciones externas (consultas, ingestión y listado de archivos)
 
+### Descripción textual de la interfaz principal
+
+![Diagrama textual de la vista de conversación](docs/images/conversor_page.svg)
+
+- **Barra lateral**: muestra el título de la aplicación y el selector de idioma. Al cambiar la opción se actualizan los textos y prompts en tiempo real.
+- **Panel de conversación**: conserva el historial de mensajes del usuario y del asistente, con indicadores de carga mientras se generan las respuestas.
+- **Entrada del chat**: campo fijado en la parte inferior que valida mensajes vacíos o con más de 1000 caracteres antes de enviarlos.
+
 ### Ejemplos de uso de la API REST
 
 Consulta en español preservando acentos:
