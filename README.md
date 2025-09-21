@@ -193,6 +193,12 @@ Ejecuta la batería de pruebas localmente con:
 pytest
 ```
 
+Para correr únicamente la nueva suite de regresión que valida los flujos del asistente utiliza:
+
+```bash
+pytest tests/regression
+```
+
 ## Selección de idioma
 
 Actualmente la interfaz y las respuestas del asistente están validadas para español (por defecto) e inglés. Puedes alternar entre ambos idiomas desde el selector de la barra lateral, y la preferencia se mantendrá durante toda la sesión.
