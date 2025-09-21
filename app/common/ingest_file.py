@@ -52,6 +52,7 @@ except ImportError:  # pragma: no cover - fallback for lightweight test doubles
         "multimedia_assets": _CollectionConfig(domain="multimedia"),
     }
 from common.text_normalization import Document, normalize_documents_nfc
+from common.privacy import PrivacyManager
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,23 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+
+@dataclass(slots=True)
+class ProcessedFile:
+    """Container holding the normalised documents and their ingestor."""
+
+    documents: List[Document]
+    ingestor: BaseFileIngestor
+
+    def __iter__(self):  # type: ignore[override]
+        return iter(self.documents)
+
+    def __len__(self) -> int:  # type: ignore[override]
+        return len(self.documents)
+
+    def __getitem__(self, item):  # type: ignore[override]
+        return self.documents[item]
 
 # Load environment variables
 embeddings_model_name = os.environ.get("EMBEDDINGS_MODEL_NAME", "all-MiniLM-L6-v2")
@@ -215,7 +233,6 @@ def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
     df = pd.DataFrame(records)
     return df.drop_duplicates(subset=["source", "collection"]).reset_index(drop=True)
 
-
 def process_file(uploaded_file, file_name: str) -> ProcessResult:
     documents, ingestor = load_single_document(uploaded_file, file_name)
     collection = CHROMA_SETTINGS.get_or_create_collection(ingestor.collection_name)
@@ -229,7 +246,6 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
     normalized = normalize_documents_nfc(texts)
     return ProcessResult(normalized, ingestor)
 
-
 def does_vectorstore_exist(settings, collection_name: str) -> bool:
     """Check if a vectorstore already contains data for *collection_name*."""
 
@@ -239,7 +255,6 @@ def does_vectorstore_exist(settings, collection_name: str) -> bool:
     except Exception:  # pragma: no cover - compatibility fallback
         response = collection.get(include=["ids"])
         return bool(response.get("ids"))
-
 
 def ingest_file(uploaded_file, file_name):
     """Process and ingest a file into the vector database."""
@@ -287,21 +302,22 @@ def ingest_file(uploaded_file, file_name):
         logger.error(error_msg)
 
 
-def delete_file_from_vectordb(filename: str):
-    """Remove *filename* from whichever collection contains it."""
+def delete_file_from_vectordb(filename: str) -> bool:
+    """Remove ``filename`` from the knowledge base and temporary storage."""
 
-    for collection_name in CHROMA_COLLECTIONS:
-        collection = CHROMA_SETTINGS.get_or_create_collection(collection_name)
-        try:
-            result = collection.get(where={"uploaded_file_name": filename})
-        except Exception:  # pragma: no cover - compatibility fallback
-            result = collection.get()
-        ids = result.get("ids", []) if isinstance(result, dict) else []
-        if ids:
-            collection.delete(ids=ids)
-            logger.info("Se eliminó el archivo: %s con éxito", filename)
-            return
-    logger.warning("Ocurrió un error al eliminar el archivo %s", filename)
+    manager = PrivacyManager()
+    summary = manager.forget_document(filename, requested_by="ingest_module")
+
+    if summary.status != "deleted":
+        logger.warning("No se encontraron coincidencias para eliminar el archivo %s", filename)
+        return False
+
+    logger.info(
+        "Se eliminó el archivo %s de las colecciones %s",
+        filename,
+        ", ".join(summary.removed_collections) or "-",
+    )
+    return True
 
 
 __all__ = [
@@ -310,6 +326,7 @@ __all__ = [
     "does_vectorstore_exist",
     "get_unique_sources_df",
     "ingest_file",
+    "ProcessedFile",
     "load_single_document",
     "process_file",
     "validate_uploaded_file",

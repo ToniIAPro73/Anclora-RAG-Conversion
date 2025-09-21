@@ -73,11 +73,13 @@ if st.session_state.language not in available_languages:
 # Add language selector to sidebar
 with st.sidebar:
     st.title(get_text("app_title", st.session_state.language))
+    st.caption(get_text("sidebar_navigation_hint", st.session_state.language))
     selected_language = st.selectbox(
         get_text("language_selector", st.session_state.language),
         options=available_languages,
         format_func=lambda code: _format_language_label(code, st.session_state.language, default_language),
-        index=available_languages.index(st.session_state.language)
+        index=available_languages.index(st.session_state.language),
+        help=get_text("language_selector_help", st.session_state.language)
     )
     
     # Update language if changed
@@ -90,6 +92,7 @@ collection = CHROMA_SETTINGS.get_or_create_collection(name='vectordb')
 embeddings = HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')
 
 st.title(get_text("files_title", st.session_state.language))
+st.caption(get_text("files_intro", st.session_state.language))
 
 # Carpeta donde se guardarán los archivos en el contenedor del ingestor
 container_source_directory = 'documents'
@@ -110,10 +113,15 @@ uploaded_files = st.file_uploader(
     get_text("upload_file", st.session_state.language),
     type=allowed_upload_types,
     accept_multiple_files=False,
+    help=get_text("file_uploader_help", st.session_state.language, extensions=", ".join(allowed_upload_types))
 )
+st.caption(get_text("file_uploader_caption", st.session_state.language))
 
 # Botón para ejecutar el script de ingestión
-if st.button(get_text("add_to_knowledge_base", st.session_state.language)):
+if st.button(
+    get_text("add_to_knowledge_base", st.session_state.language),
+    help=get_text("add_to_knowledge_base_help", st.session_state.language)
+):
     if uploaded_files:
         # Validar archivo antes de procesarlo
         from common.ingest_file import validate_uploaded_file
@@ -129,10 +137,15 @@ if st.button(get_text("add_to_knowledge_base", st.session_state.language)):
         st.warning(get_text("upload_warning", st.session_state.language))
 
 st.subheader(get_text("files_in_knowledge_base", st.session_state.language))
+st.caption(get_text("files_table_help", st.session_state.language))
 
 files = get_unique_sources_df(CHROMA_SETTINGS)
 files['Eliminar'] = False
-files_df = st.data_editor(files, use_container_width=True)
+files_df = st.data_editor(
+    files,
+    use_container_width=True,
+    help=get_text("files_table_help", st.session_state.language)
+)
 if len(files_df.loc[files_df['Eliminar']]) == 1:
     st.divider()
     st.subheader(get_text("delete_file", st.session_state.language))
@@ -140,11 +153,15 @@ if len(files_df.loc[files_df['Eliminar']]) == 1:
     filename = file_to_delete.iloc[0, 0]
     st.write(filename)
     st.dataframe(file_to_delete, use_container_width=True)
-    
+    st.caption(get_text("delete_file_help", st.session_state.language))
+
     col1, col2, col3 = st.columns(3)
-                
+
     with col2:
-        if st.button(get_text("delete_from_knowledge_base", st.session_state.language)):
+        if st.button(
+            get_text("delete_from_knowledge_base", st.session_state.language),
+            help=get_text("delete_confirmation_help", st.session_state.language)
+        ):
             try:
                 delete_file_from_vectordb(filename)
                 st.success(get_text("file_deleted", st.session_state.language))

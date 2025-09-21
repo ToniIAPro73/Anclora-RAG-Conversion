@@ -1,16 +1,13 @@
-"""Base utilities for file ingestion agents."""
+"""Shared building blocks for RAG agents and ingestors."""
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Type
-
 from common.observability import record_ingestion
 from common.text_normalization import Document
 
-
 LoaderConfig = Tuple[Type[object], Dict[str, object]]
-
 
 @dataclass(frozen=True)
 class AgentTask:
@@ -46,7 +43,6 @@ class BaseAgent:
 
     def handle(self, task: AgentTask) -> AgentResponse:  # pragma: no cover - abstract behaviour
         raise NotImplementedError
-
 
 @dataclass
 class BaseFileIngestor:
@@ -99,7 +95,6 @@ class BaseFileIngestor:
         )
 
         return documents
-
 
 __all__ = [
     "AgentResponse",

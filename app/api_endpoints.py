@@ -6,13 +6,14 @@ import json
 import logging
 import os
 import secrets
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field
 from common.langchain_module import response
+from common.privacy import PrivacyManager
 
 try:  # pragma: no cover - compatibilidad con httpx 0.28+
     import httpx
@@ -58,6 +59,7 @@ app = FastAPI(
 
 # Seguridad básica
 security = HTTPBearer()
+privacy_manager = PrivacyManager()
 
 # Modelos Pydantic
 class ChatRequest(BaseModel):
@@ -86,19 +88,13 @@ class ChatRequest(BaseModel):
         example="en"
     )
 
-    model_config = ConfigDict(
-        json_schema_extra={
+    class Config:
+        schema_extra = {
             "example": {
                 "message": "Provide a summary of the onboarding process.",
                 "max_length": 600,
                 "language": "en"
-            }
-        }
-    )
-
-
-    class Config:
-        schema_extra = {
+            },
             "examples": [
                 {
                     "message": "¿Cuál es el estado del informe trimestral?",
@@ -139,18 +135,13 @@ class ChatResponse(BaseModel):
         example="2024-05-12T14:32:10.456789"
     )
 
-    model_config = ConfigDict(
-        json_schema_extra={
+    class Config:
+        schema_extra = {
             "example": {
                 "response": "Las copias de seguridad se ejecutan automáticamente cada noche...",
                 "status": "success",
                 "timestamp": "2024-05-12T14:32:10.456789"
-            }
-        }
-    )
-
-    class Config:
-        schema_extra = {
+            },
             "examples": [
                 {
                     "response": "La base de conocimiento contiene 12 documentos y todo funciona correctamente.",
@@ -164,6 +155,53 @@ class ChatResponse(BaseModel):
                 },
             ]
         }
+
+
+class ForgetRequest(BaseModel):
+    filename: str = Field(
+        ...,
+        description="Nombre exacto del archivo que debe eliminarse de la base de conocimiento.",
+        example="informe_trimestral.pdf",
+    )
+    subject_id: Optional[str] = Field(
+        default=None,
+        description="Identificador del titular de los datos que solicita el borrado.",
+        example="cliente-123",
+    )
+    reason: Optional[str] = Field(
+        default=None,
+        description="Motivo o referencia interna asociada a la solicitud del derecho al olvido.",
+        example="Solicitud formal recibida el 2024-05-20",
+    )
+    metadata: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Metadatos adicionales que deban registrarse en la auditoría (se anonimizarán automáticamente).",
+        example={"canal": "portal_privacidad", "ticket": "GDPR-77"},
+    )
+
+
+class ForgetResponse(BaseModel):
+    status: str = Field(..., description="Resultado general de la operación.")
+    message: str = Field(..., description="Detalle resumido del resultado del proceso.")
+    audit_id: str = Field(..., description="Identificador único del registro de auditoría generado.")
+    removed_collections: List[str] = Field(
+        default_factory=list,
+        description="Colecciones de ChromaDB donde se localizaron y eliminaron referencias al archivo.",
+    )
+    removed_files: List[str] = Field(
+        default_factory=list,
+        description="Rutas de artefactos temporales eliminados durante la solicitud.",
+    )
+
+
+def _model_to_dict(model: BaseModel) -> dict[str, Any]:
+    """Compatibility helper to serialise Pydantic models across versions."""
+
+    dump_method = getattr(model, "model_dump", None)
+    if callable(dump_method):
+        return dump_method()
+    return model.dict()
+
 
 class FileInfo(BaseModel):
     filename: str = Field(
@@ -183,14 +221,13 @@ class FileInfo(BaseModel):
         example="indexed"
     )
 
-    model_config = ConfigDict(
-        json_schema_extra={
+    class Config:
+        schema_extra = {
             "example": {
                 "filename": "manual_instalacion.docx",
                 "status": "indexed"
             }
         }
-    )
 
 class HealthResponse(BaseModel):
     status: str = Field(
@@ -218,8 +255,8 @@ class HealthResponse(BaseModel):
         example={"chroma_db": "healthy", "ollama": "healthy"}
     )
 
-    model_config = ConfigDict(
-        json_schema_extra={
+    class Config:
+        schema_extra = {
             "example": {
                 "status": "healthy",
                 "version": "1.0.0",
@@ -230,7 +267,6 @@ class HealthResponse(BaseModel):
                 }
             }
         }
-    )
 
 try:  # pragma: no cover - la dependencia es opcional
     import jwt
@@ -505,17 +541,81 @@ async def delete_document(
 ):
     """Elimina un documento indexado / Delete an indexed document."""
     try:
-        from common.ingest_file import delete_file_from_vectordb
-        delete_file_from_vectordb(filename)
-        
-        return {
-            "status": "success",
-            "message": f"Documento '{filename}' eliminado exitosamente"
-        }
-        
+        summary = privacy_manager.forget_document(
+            filename,
+            requested_by=token,
+            reason="delete_document_endpoint",
+        )
+
+        payload = ForgetResponse(
+            status="success" if summary.status == "deleted" else "not_found",
+            message=summary.message,
+            audit_id=summary.audit_id,
+            removed_collections=list(summary.removed_collections),
+            removed_files=[str(path) for path in summary.removed_files],
+        )
+
+        if summary.status != "deleted":
+            logger.warning("No se encontraron coincidencias para eliminar el documento %s", filename)
+
+        return _model_to_dict(payload)
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error al eliminar documento: {str(e)}")
         raise HTTPException(status_code=500, detail="Error al eliminar documento")
+
+
+@app.post(
+    "/privacy/forget",
+    response_model=ForgetResponse,
+    summary="Derecho al olvido / Right to be forgotten",
+    description=(
+        "Ejecuta el proceso completo de derecho al olvido, eliminando registros del RAG y "
+        "dejando constancia de la auditoría correspondiente.\n\n"
+        "Executes the full right-to-be-forgotten workflow, purging RAG data and registering the audit trail."
+    ),
+)
+async def execute_right_to_be_forgotten(
+    payload: ForgetRequest,
+    token: str = Depends(verify_token),
+):
+    """Procesa una solicitud formal del derecho al olvido / Process a right-to-be-forgotten request."""
+
+    try:
+        summary = privacy_manager.forget_document(
+            payload.filename,
+            requested_by=token,
+            subject_id=payload.subject_id,
+            reason=payload.reason,
+            extra_metadata=payload.metadata or {},
+        )
+
+        response = ForgetResponse(
+            status="success" if summary.status == "deleted" else "not_found",
+            message=summary.message,
+            audit_id=summary.audit_id,
+            removed_collections=list(summary.removed_collections),
+            removed_files=[str(path) for path in summary.removed_files],
+        )
+
+        if summary.status != "deleted":
+            logger.info(
+                "Solicitud de olvido procesada sin coincidencias para el archivo %s",
+                payload.filename,
+            )
+
+        return _model_to_dict(response)
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Error al ejecutar el derecho al olvido: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail="No fue posible completar la solicitud de olvido",
+        )
 
 # Middleware para CORS (si es necesario)
 from fastapi.middleware.cors import CORSMiddleware

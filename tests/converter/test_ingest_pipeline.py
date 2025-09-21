@@ -34,6 +34,7 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
 
     for module_name in [
         "app.common.ingest_file",
+        "app.agents.documents",
         "common.constants",
         "common.chroma_db_settings",
     ]:
@@ -107,6 +108,10 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     constants_module = types.ModuleType("common.constants")
     stub_client = _StubChromaClient()
     constants_module.CHROMA_SETTINGS = stub_client
+    constants_module.CHROMA_COLLECTIONS = {
+        "vectordb": SimpleNamespace(domain="documents", description="stub"),
+    }
+    constants_module.DOMAIN_TO_COLLECTION = {"documents": "vectordb"}
     monkeypatch.setitem(sys.modules, "common.constants", constants_module)
     monkeypatch.setattr(common_pkg, "constants", constants_module, raising=False)
 
@@ -132,8 +137,8 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
                         collection.existing_sources.append(Path(source).name)
 
         @classmethod
-        def from_documents(cls, documents, embeddings, client):  # noqa: D401 - parity
-            instance = cls(client=client, embedding_function=embeddings)
+        def from_documents(cls, documents, embeddings, client, **kwargs):  # noqa: D401 - parity
+            instance = cls(client=client, embedding_function=embeddings, **kwargs)
             instance.add_documents(documents)
             return instance
 
@@ -170,7 +175,18 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
                 }
                 return [Document(page_content=raw_text, metadata=metadata)]
 
+        _Loader.__name__ = name
         return _Loader
+
+    langchain_pkg = sys.modules.get("langchain_community")
+    if langchain_pkg is None:
+        langchain_pkg = types.ModuleType("langchain_community")
+        langchain_pkg.__path__ = []  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "langchain_community", langchain_pkg)
+    elif not hasattr(langchain_pkg, "__path__"):
+        langchain_pkg.__path__ = []  # type: ignore[attr-defined]
+
+    sys.modules.pop("langchain_community.document_loaders", None)
 
     for loader_name in [
         "CSVLoader",
@@ -190,6 +206,8 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setitem(
         sys.modules, "langchain_community.document_loaders", docloaders_module
     )
+
+    sys.modules.pop("langchain_community.embeddings", None)
 
     embeddings_module = types.ModuleType("langchain_community.embeddings")
 
@@ -225,6 +243,20 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setitem(sys.modules, "langchain.text_splitter", text_splitter_module)
 
     module = importlib.import_module("app.common.ingest_file")
+
+    doc_module = importlib.import_module("app.agents.documents")
+    for ext, (loader_cls, loader_kwargs) in list(doc_module.DOCUMENT_LOADERS.items()):
+        doc_module.DOCUMENT_LOADERS[ext] = (_make_loader(loader_cls.__name__), loader_kwargs)
+    doc_module.DocumentIngestor = doc_module.create_document_ingestor()
+
+    module.INGESTORS = (
+        doc_module.DocumentIngestor,
+        module.INGESTORS[1],
+        module.INGESTORS[2],
+    )
+    module.SUPPORTED_EXTENSIONS = sorted(
+        {ext for ingestor in module.INGESTORS for ext in ingestor.extensions}
+    )
 
     return SimpleNamespace(
         module=module,

@@ -117,6 +117,11 @@ El detalle de fases, épicas y tareas priorizadas se encuentra en el [backlog de
 
 - [Guía de Integración / Integration Guide](docs/integration-guide.md): Pasos para consumir la API, usar el cliente Python oficial y conectar agentes (LangChain, AutoGen) con recomendaciones de encoding y manejo de Unicode.
 
+### Información legal y cumplimiento
+
+- [Términos y Condiciones de Uso](docs/legal/terms.md): reglas de uso de la plataforma, política de consentimiento y proceso de verificación de derechos antes de cada conversión.
+- [Política de Privacidad](docs/legal/privacy.md): tratamiento de datos personales, conservación de evidencias de consentimiento y medidas de seguridad recomendadas.
+
 ### Uso
 
 La aplicación se ejecuta en <http://localhost:8080> y la API REST está disponible en <http://localhost:8081>. Desde la UI y la API se ofrece:
@@ -126,6 +131,14 @@ La aplicación se ejecuta en <http://localhost:8080> y la API REST está disponi
 - Selección de idioma para la interfaz (ver nota más abajo)
 - Gestión de documentos (ver y eliminar)
 - Endpoints para integraciones externas (consultas, ingestión y listado de archivos)
+
+### Descripción textual de la interfaz principal
+
+![Diagrama textual de la vista de conversación](docs/images/conversor_page.svg)
+
+- **Barra lateral**: muestra el título de la aplicación y el selector de idioma. Al cambiar la opción se actualizan los textos y prompts en tiempo real.
+- **Panel de conversación**: conserva el historial de mensajes del usuario y del asistente, con indicadores de carga mientras se generan las respuestas.
+- **Entrada del chat**: campo fijado en la parte inferior que valida mensajes vacíos o con más de 1000 caracteres antes de enviarlos.
 
 ### Ejemplos de uso de la API REST
 
