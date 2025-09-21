@@ -67,11 +67,13 @@ if st.session_state.language not in available_languages:
 # Add language selector to sidebar
 with st.sidebar:
     st.title(get_text("app_title", st.session_state.language))
+    st.caption(get_text("sidebar_navigation_hint", st.session_state.language))
     selected_language = st.selectbox(
         get_text("language_selector", st.session_state.language),
         options=available_languages,
         format_func=lambda code: _format_language_label(code, st.session_state.language, default_language),
-        index=available_languages.index(st.session_state.language)
+        index=available_languages.index(st.session_state.language),
+        help=get_text("language_selector_help", st.session_state.language)
     )
     
     # Update language if changed
@@ -80,6 +82,9 @@ with st.sidebar:
         st.rerun()
 # Título de la aplicación Streamlit
 st.title(get_text("app_title", st.session_state.language))
+st.caption(get_text("home_intro", st.session_state.language))
+st.markdown(get_text("chat_accessibility_hint", st.session_state.language))
+st.caption(get_text("chat_history_instructions", st.session_state.language))
 
 # Initialize chat history
 if "messages" not in st.session_state:
@@ -87,10 +92,14 @@ if "messages" not in st.session_state:
 
 # Display chat messages from history on app rerun
 for message in st.session_state.messages:
+    speaker_key = "chat_user_label" if message["role"] == "user" else "chat_assistant_label"
+    speaker_label = get_text(speaker_key, st.session_state.language)
     with st.chat_message(message["role"]):
+        st.markdown(f"**{speaker_label}**")
         st.markdown(message["content"])
 
 # React to user input
+st.caption(get_text("chat_input_instructions", st.session_state.language))
 if user_input := st.chat_input(get_text("chat_placeholder", st.session_state.language)):
     # Validar entrada del usuario
     if len(user_input.strip()) == 0:
@@ -100,6 +109,7 @@ if user_input := st.chat_input(get_text("chat_placeholder", st.session_state.lan
     else:
         # Display user message in chat message container
         with st.chat_message("user"):
+            st.markdown(f"**{get_text('chat_user_label', st.session_state.language)}**")
             st.markdown(user_input)
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": user_input})
@@ -113,6 +123,7 @@ if user_input is not None and len(user_input.strip()) > 0 and len(user_input) <=
                 assistant_response = response(user_input)
         # Display assistant response in chat message container
         with st.chat_message("assistant"):
+            st.markdown(f"**{get_text('chat_assistant_label', st.session_state.language)}**")
             st.markdown(assistant_response)
         # Add assistant response to chat history
         st.session_state.messages.append({"role": "assistant", "content": assistant_response})
