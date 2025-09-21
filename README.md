@@ -6,7 +6,7 @@ Este repositorio contiene todo lo necesario para poder crear tu propia secretari
 
 ### Resumen
 
-Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) que permite a los usuarios subir documentos y realizar consultas sobre ellos utilizando modelos de lenguaje de código abierto como Llama3-7b y Phi3-4b. La aplicación proporciona una interfaz multilingüe (Español, Inglés, Francés, Alemán) y utiliza Docker para la contenerización.
+Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) que permite a los usuarios subir documentos y realizar consultas sobre ellos utilizando modelos de lenguaje de código abierto como Llama3-7b y Phi3-4b. Actualmente la experiencia está optimizada para trabajar en español e inglés, y se ha iniciado un plan de expansión para incorporar más idiomas en próximas versiones. La solución utiliza Docker para la contenerización.
 
 ### Estructura
 
@@ -15,6 +15,12 @@ Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) qu
 - **.vscode/**: Configuración de VS Code
 - **docker-compose.yml**: Configuración Docker para setup con GPU (Llama3)
 - **docker-compose_sin_gpu.yml**: Configuración Docker para setup sin GPU (Phi3)
+
+### Componentes principales del repositorio
+
+- **Interfaz Streamlit (`app/Inicio.py` y `app/pages/`)**: Proporciona el chat principal y la gestión de archivos para la base de conocimiento a través del puerto `8080`. Aquí se orquestan las llamadas al módulo RAG, se gestionan los estados de sesión y se aplican los estilos personalizados.
+- **API FastAPI (`app/api_endpoints.py`)**: Expone endpoints REST para integraciones externas en el puerto `8081`, reutilizando la misma lógica de recuperación y generación que la interfaz. Incluye operaciones de consulta, ingesta y administración de documentos.
+- **Scripts de arranque (`open_rag.sh` y `open_rag.bat`)**: Automatizan el levantamiento del stack Docker desde distintas plataformas. Solo requieren actualizar la ruta del proyecto antes de ejecutar `docker-compose up -d`.
 
 ### Lenguaje y Entorno
 
@@ -27,12 +33,16 @@ Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) qu
 
 **Dependencias Principales**:
 
-- langchain (0.1.16)
-- langchain-community (0.0.34)
-- chromadb (0.4.7)
+- langchain==0.1.16
+- langchain-community==0.0.34
+- chromadb==0.4.7
 - streamlit
 - sentence_transformers
-- PyMuPDF (1.23.5)
+- PyMuPDF==1.23.5
+- fastapi
+- uvicorn[standard]
+- python-multipart
+- pydantic==1.10.13
 - ollama (vía Docker)
 
 **Servicios Externos**:
@@ -48,7 +58,7 @@ Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) qu
 - ollama/ollama:latest (servicio LLM)
 - chromadb/chroma:0.5.1.dev111 (Base de datos vectorial)
 - nvidia/cuda:12.3.1-base-ubuntu20.04 (Soporte GPU)
-- Imagen UI personalizada construida desde ./app
+- Imagen UI/API personalizada construida desde `./app`
 
 **Configuración**:
 
@@ -59,22 +69,24 @@ Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) qu
 
 ### Archivos Principales
 
-**Punto de Entrada**: app/Inicio.py  
+**Punto de Entrada de la UI**: app/Inicio.py
 **Módulos Clave**:
 
 - app/common/langchain_module.py: Implementación RAG
 - app/common/ingest_file.py: Procesamiento de documentos
 - app/common/assistant_prompt.py: Plantilla de prompt para LLM
 - app/pages/Archivos.py: Interfaz de gestión de archivos
+- app/api_endpoints.py: API REST para agentes y automatizaciones
 
 ### Uso
 
-La aplicación se ejecuta en <http://localhost:8080> y proporciona:
+La aplicación se ejecuta en <http://localhost:8080> y la API REST está disponible en <http://localhost:8081>. Desde la UI y la API se ofrece:
 
 - Interfaz de chat para consultar documentos
 - Interfaz de carga de archivos para añadir documentos a la base de conocimiento
-- Selección de idioma para la interfaz
+- Selección de idioma para la interfaz (ver nota más abajo)
 - Gestión de documentos (ver y eliminar)
+- Endpoints para integraciones externas (consultas, ingestión y listado de archivos)
 
 ## Requisitos previos
 
@@ -140,14 +152,15 @@ Una vez hecho todo lo anterior solo queda un paso: que entremos al siguiente lin
 
 ## Selección de idioma
 
-La aplicación ahora soporta múltiples idiomas. Puedes cambiar el idioma de la interfaz utilizando el selector de idioma en la barra lateral. Los idiomas disponibles son:
+Actualmente la interfaz y las respuestas del asistente están validadas para español (por defecto) e inglés. Puedes alternar entre ambos idiomas desde el selector de la barra lateral, y la preferencia se mantendrá durante toda la sesión.
 
-- Español (por defecto)
-- Inglés
-- Francés
-- Alemán
+### Roadmap de soporte multilingüe
 
-El idioma seleccionado se mantendrá durante toda la sesión.
+El equipo está trabajando para ampliar progresivamente la cobertura lingüística:
+
+1. **Portugués**: previsto para la siguiente iteración, incluyendo traducciones de UI y prompts especializados.
+2. **Francés y Alemán**: planeados tras estabilizar portugués, con validación de métricas de calidad antes de lanzamiento.
+3. **Otros idiomas**: se evaluarán según demanda, priorizando documentación y prompts específicos para cada caso.
 
 ## ¿Como ejecutarlo posteriormente instalado y una vez lo cerremos?
 

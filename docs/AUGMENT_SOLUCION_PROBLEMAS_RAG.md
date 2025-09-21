@@ -1,5 +1,13 @@
 # Solución de Problemas - Anclora RAG
 
+> **Nota de idioma:** Las interfaces y respuestas están certificadas en español e inglés. Si utilizas otro idioma podrías recibir mensajes mixtos mientras se completa la localización.
+
+### Roadmap de soporte lingüístico
+
+1. **Portugués**: validación en curso para interfaz y respuestas automáticas.
+2. **Francés y Alemán**: se incorporarán tras cerrar la fase de pruebas de portugués.
+3. **Otros idiomas**: se priorizarán según demanda y siempre junto con documentación y pruebas específicas.
+
 ## 🚨 Problema: "El RAG no responde a 'Hola'"
 
 ### ✅ **SOLUCIÓN IMPLEMENTADA**
@@ -21,6 +29,12 @@ Este script verificará automáticamente:
 - ✅ ChromaDB (puerto 8000)
 - ✅ Ollama y modelos LLM
 - ✅ Documentos en la base de conocimiento
+
+Para comprobar la API expuesta en FastAPI puedes ejecutar manualmente:
+
+```bash
+curl http://localhost:8081/health
+```
 
 ---
 
