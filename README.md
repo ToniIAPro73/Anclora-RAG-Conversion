@@ -69,7 +69,7 @@ Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) qu
 
 ### Archivos Principales
 
-**Punto de Entrada de la UI**: app/Inicio.py
+**Punto de Entrada**: app/Inicio.py
 **Módulos Clave**:
 
 - app/common/langchain_module.py: Implementación RAG
@@ -77,6 +77,10 @@ Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) qu
 - app/common/assistant_prompt.py: Plantilla de prompt para LLM
 - app/pages/Archivos.py: Interfaz de gestión de archivos
 - app/api_endpoints.py: API REST para agentes y automatizaciones
+
+## Roadmap y contribución
+
+El detalle de fases, épicas y tareas priorizadas se encuentra en el [backlog del roadmap](docs/backlog.md). Allí se listan los módulos involucrados (`app/common/*`, `app/pages/*`, `docker-compose*.yml`, etc.), los criterios de aceptación y las dependencias principales para cada bloque de trabajo. Revísalo antes de abrir issues o Pull Requests para mantener el alineamiento con la hoja de ruta.
 
 ### Uso
 
