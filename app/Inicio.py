@@ -38,7 +38,7 @@ if "language" not in st.session_state:
 with st.sidebar:
     if st.button('Reset Session'):
         for key in list(st.session_state.keys()):
-            st.session_state.pop(key)
+            del st.session_state[key]
         st.rerun()
     
     selected_language = st.sidebar.selectbox(
@@ -53,13 +53,8 @@ with st.sidebar:
         st.session_state.language = selected_language
         st.rerun()
 
-# Título de la aplicación centrado en la pantalla
-st.markdown(f"""
-<div class="main-title-container">
-    <h1 class="main-title">{get_text("app_title", st.session_state.language)}</h1>
-    <p class="main-subtitle">AI RAG Assistant</p>
-</div>
-""", unsafe_allow_html=True)
+# Título de la aplicación Streamlit en el área principal
+st.title(get_text("app_title", st.session_state.language))
 
 # Initialize chat history
 if "messages" not in st.session_state:
