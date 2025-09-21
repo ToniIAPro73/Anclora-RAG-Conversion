@@ -6,6 +6,7 @@ import importlib
 import sys
 import types
 from typing import Callable
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -50,6 +51,35 @@ def api_client_factory(monkeypatch: pytest.MonkeyPatch) -> Callable[[str], TestC
         monkeypatch.setitem(sys.modules, "common.ingest_file", ingest_stub)
         setattr(common_pkg, "ingest_file", ingest_stub)
 
+        privacy_stub = types.ModuleType("common.privacy")
+
+        class _StubSummary:
+            def __init__(self, status: str = "deleted") -> None:
+                self.status = status
+                self.message = (
+                    "Documento eliminado de la base de conocimiento y del almacenamiento temporal / "
+                    "Document removed from the knowledge base and temporary storage"
+                )
+                self.audit_id = "audit-123"
+                self.removed_collections = ["stub_collection"]
+                self.removed_files: list[str] = []
+                self.metadata = {}
+
+        class _StubManager:
+            instances: list["_StubManager"] = []
+
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                self.calls: list[SimpleNamespace] = []
+                _StubManager.instances.append(self)
+
+            def forget_document(self, filename: str, **kwargs: object) -> _StubSummary:
+                self.calls.append(SimpleNamespace(filename=filename, kwargs=kwargs))
+                return _StubSummary()
+
+        privacy_stub.PrivacyManager = _StubManager
+        monkeypatch.setitem(sys.modules, "common.privacy", privacy_stub)
+        setattr(common_pkg, "privacy", privacy_stub)
+
         class _StubSeries:
             def tolist(self) -> list[str]:
                 return []
@@ -74,7 +104,9 @@ def api_client_factory(monkeypatch: pytest.MonkeyPatch) -> Callable[[str], TestC
 
         sys.modules.pop("app.api_endpoints", None)
         module = importlib.import_module("app.api_endpoints")
-        return TestClient(module.app)
+        client = TestClient(module.app)
+        client.privacy_manager = module.privacy_manager  # type: ignore[attr-defined]
+        return client
 
     return _factory
 
@@ -109,3 +141,26 @@ def test_chat_with_invalid_token(api_client_factory: Callable[[str], TestClient]
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Token inválido"
+
+
+def test_right_to_be_forgotten_endpoint(api_client_factory: Callable[[str], TestClient]) -> None:
+    """The privacy endpoint should invoke the manager and return an audit id."""
+
+    client = api_client_factory("valid-token")
+
+    response = client.post(
+        "/privacy/forget",
+        json={"filename": "doc.txt", "subject_id": "user-1", "metadata": {"ticket": "GDPR-1"}},
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "success"
+    assert payload["audit_id"] == "audit-123"
+
+    manager = getattr(client, "privacy_manager")
+    assert manager.calls, "Se esperaba que PrivacyManager olvidara el documento"
+    last_call = manager.calls[-1]
+    assert last_call.filename == "doc.txt"
+    assert last_call.kwargs["requested_by"] == "valid-token"

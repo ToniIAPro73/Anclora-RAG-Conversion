@@ -6,6 +6,7 @@ import os
 import tempfile
 import uuid
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Iterator, List, Tuple
 
 import pandas as pd
@@ -29,6 +30,7 @@ from ..agents import BaseFileIngestor, CodeIngestor, DocumentIngestor, Multimedi
 from common.chroma_db_settings import Chroma
 from common.constants import CHROMA_COLLECTIONS, CHROMA_SETTINGS
 from common.text_normalization import Document, normalize_documents_nfc
+from common.privacy import PrivacyManager
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,23 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+
+@dataclass(slots=True)
+class ProcessedFile:
+    """Container holding the normalised documents and their ingestor."""
+
+    documents: List[Document]
+    ingestor: BaseFileIngestor
+
+    def __iter__(self):  # type: ignore[override]
+        return iter(self.documents)
+
+    def __len__(self) -> int:  # type: ignore[override]
+        return len(self.documents)
+
+    def __getitem__(self, item):  # type: ignore[override]
+        return self.documents[item]
 
 # Load environment variables
 embeddings_model_name = os.environ.get("EMBEDDINGS_MODEL_NAME", "all-MiniLM-L6-v2")
@@ -166,17 +185,18 @@ def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
     return df.drop_duplicates(subset=["source", "collection"]).reset_index(drop=True)
 
 
-def process_file(uploaded_file, file_name: str):
+def process_file(uploaded_file, file_name: str) -> ProcessedFile | None:
     documents, ingestor = load_single_document(uploaded_file, file_name)
     collection = CHROMA_SETTINGS.get_or_create_collection(ingestor.collection_name)
     if _collection_contains_file(collection, file_name):
-        return None, ingestor
+        return None
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
     )
     texts = text_splitter.split_documents(documents)
-    return normalize_documents_nfc(texts), ingestor
+    normalised = normalize_documents_nfc(texts)
+    return ProcessedFile(documents=normalised, ingestor=ingestor)
 
 
 def does_vectorstore_exist(settings, collection_name: str) -> bool:
@@ -195,12 +215,15 @@ def ingest_file(uploaded_file, file_name):
 
     try:
         logger.info("Iniciando ingesta del archivo: %s", file_name)
-        texts, ingestor = process_file(uploaded_file, file_name)
+        processed = process_file(uploaded_file, file_name)
 
-        if texts is None:
+        if processed is None:
             st.warning("Este archivo ya fue agregado anteriormente.")
             logger.warning("Archivo duplicado: %s", file_name)
             return
+
+        texts = processed.documents
+        ingestor = processed.ingestor
 
         spinner_message = f"Creando embeddings para {file_name}..."
         if does_vectorstore_exist(CHROMA_SETTINGS, ingestor.collection_name):
@@ -229,21 +252,22 @@ def ingest_file(uploaded_file, file_name):
         logger.error(error_msg)
 
 
-def delete_file_from_vectordb(filename: str):
-    """Remove *filename* from whichever collection contains it."""
+def delete_file_from_vectordb(filename: str) -> bool:
+    """Remove ``filename`` from the knowledge base and temporary storage."""
 
-    for collection_name in CHROMA_COLLECTIONS:
-        collection = CHROMA_SETTINGS.get_or_create_collection(collection_name)
-        try:
-            result = collection.get(where={"uploaded_file_name": filename})
-        except Exception:  # pragma: no cover - compatibility fallback
-            result = collection.get()
-        ids = result.get("ids", []) if isinstance(result, dict) else []
-        if ids:
-            collection.delete(ids=ids)
-            logger.info("Se eliminó el archivo: %s con éxito", filename)
-            return
-    logger.warning("Ocurrió un error al eliminar el archivo %s", filename)
+    manager = PrivacyManager()
+    summary = manager.forget_document(filename, requested_by="ingest_module")
+
+    if summary.status != "deleted":
+        logger.warning("No se encontraron coincidencias para eliminar el archivo %s", filename)
+        return False
+
+    logger.info(
+        "Se eliminó el archivo %s de las colecciones %s",
+        filename,
+        ", ".join(summary.removed_collections) or "-",
+    )
+    return True
 
 
 __all__ = [
@@ -252,6 +276,7 @@ __all__ = [
     "does_vectorstore_exist",
     "get_unique_sources_df",
     "ingest_file",
+    "ProcessedFile",
     "load_single_document",
     "process_file",
     "validate_uploaded_file",

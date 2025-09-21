@@ -1,5 +1,8 @@
 db
 __pycache__
 documents
+.pytest_cache
+.mypy_cache
+logs
 .venv
 tests.ipynb
