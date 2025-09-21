@@ -3,6 +3,16 @@
 import sys
 import types
 
+ACCENTED_CHARACTERS = set("áéíóúÁÉÍÓÚñÑ¡¿")
+
+
+def contains_accented_character(value: str) -> bool:
+    """Return True if the given value includes at least one accented character."""
+
+    return any(character in ACCENTED_CHARACTERS for character in value)
+
+
+# Ensure langchain_core.prompts is available before importing translations
 
 def _install_langchain_stub() -> None:
     """Provide a minimal stub for ``langchain_core.prompts`` if needed."""
@@ -30,19 +40,10 @@ _install_langchain_stub()
 
 from app.common import assistant_prompt, translations
 
-ACCENTED_CHARACTERS = set("áéíóúÁÉÍÓÚñÑ¡¿")
-
-
-def contains_accented_character(value: str) -> bool:
-    """Return True if the given value includes at least one accented character."""
-
-    return any(character in ACCENTED_CHARACTERS for character in value)
-
 
 def test_spanish_translations_have_accented_characters():
     """Critical Spanish translations must include accented characters."""
 
-    spanish = translations.translations["es"]
     keys_with_expected_accents = (
         "language_es",
         "empty_message_error",
@@ -52,7 +53,7 @@ def test_spanish_translations_have_accented_characters():
     )
 
     for key in keys_with_expected_accents:
-        value = spanish[key]
+        value = translations.get_text(key, "es")
         assert contains_accented_character(
             value
         ), f"El valor de '{key}' debe contener tildes o eñes."

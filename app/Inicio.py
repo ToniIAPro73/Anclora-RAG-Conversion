@@ -36,6 +36,17 @@ except ImportError:
     import sys
     sys.exit(1)
 
+# Helper to provide readable labels for the language selector
+def _format_language_label(language_code: str, active_language: str, default_language: str) -> str:
+    label = get_text(f"language_{language_code}", active_language)
+    if label == f"language_{language_code}":
+        fallback_label = get_text(f"language_{language_code}", default_language)
+        if fallback_label == f"language_{language_code}":
+            return language_code.upper()
+        return fallback_label
+    return label
+
+
 # Initialize language in session state if not already set
 default_language = get_default_language()
 available_languages = get_supported_languages()
@@ -59,7 +70,7 @@ with st.sidebar:
     selected_language = st.selectbox(
         get_text("language_selector", st.session_state.language),
         options=available_languages,
-        format_func=lambda x: get_text(f"language_{x}", st.session_state.language),
+        format_func=lambda code: _format_language_label(code, st.session_state.language, default_language),
         index=available_languages.index(st.session_state.language)
     )
     

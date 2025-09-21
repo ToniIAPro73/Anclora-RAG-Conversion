@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from common.text_normalization import (
+from app.common.text_normalization import (
     NORMALIZATION_FORM,
     normalize_documents_nfc,
     normalize_to_nfc,
