@@ -30,7 +30,8 @@ services:
         - chroma
       environment:
         - MODEL=phi3
-        - EMBEDDINGS_MODEL_NAME=all-MiniLM-L6-v2
+        # Embedding model used for document ingestion and retrieval
+        - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
         - TARGET_SOURCE_CHUNKS=5
       healthcheck:
         test: ["CMD", "curl", "-f", "http://localhost:8080/_stcore/health"]
