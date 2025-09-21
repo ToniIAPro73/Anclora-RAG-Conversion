@@ -2,7 +2,7 @@
 API REST para acceso de agentes IA al sistema Anclora RAG
 """
 
-import json
+import json  # Used by UTF8JSONResponse.render for proper UTF-8 output
 import logging
 import os
 import secrets
