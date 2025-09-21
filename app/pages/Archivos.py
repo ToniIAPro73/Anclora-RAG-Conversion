@@ -28,7 +28,11 @@ import os
 try:
     from common.chroma_db_settings import get_unique_sources_df
     from common.config import get_default_language, get_supported_languages
-    from common.ingest_file import ingest_file, delete_file_from_vectordb
+    from common.ingest_file import (
+        SUPPORTED_EXTENSIONS,
+        delete_file_from_vectordb,
+        ingest_file,
+    )
     from common.streamlit_style import hide_streamlit_style
     from common.translations import get_text
 except ImportError:
@@ -101,7 +105,12 @@ def save_uploaded_file(uploaded_file):
     return os.path.join(container_source_directory, uploaded_file.name)
 
 # Widget para cargar archivos
-uploaded_files = st.file_uploader(get_text("upload_file", st.session_state.language), type=['csv', 'doc', 'docx', 'enex', 'eml', 'epub', 'html', 'md', 'odt', 'pdf', 'ppt', 'pptx', 'txt'], accept_multiple_files=False)
+allowed_upload_types = [extension.lstrip('.') for extension in SUPPORTED_EXTENSIONS]
+uploaded_files = st.file_uploader(
+    get_text("upload_file", st.session_state.language),
+    type=allowed_upload_types,
+    accept_multiple_files=False,
+)
 
 # Botón para ejecutar el script de ingestión
 if st.button(get_text("add_to_knowledge_base", st.session_state.language)):

@@ -10,8 +10,8 @@ from typing import List, Optional
 
 from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
+from pydantic.config import ConfigDict
 from common.langchain_module import response
 
 # Configurar logging
@@ -98,7 +98,6 @@ class ChatRequest(BaseModel):
             ]
         }
 
-
 class ChatResponse(BaseModel):
     response: str = Field(
         ...,
@@ -134,7 +133,6 @@ class ChatResponse(BaseModel):
             }
         }
     )
-
 
     class Config:
         schema_extra = {
@@ -178,7 +176,6 @@ class FileInfo(BaseModel):
             }
         }
     )
-
 
 class HealthResponse(BaseModel):
     status: str = Field(

@@ -1,56 +1,43 @@
-"""Shared contracts for agent collaboration within the RAG platform."""
-
+"""Base utilities for file ingestion agents."""
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Optional
+from dataclasses import dataclass
+from typing import Dict, Iterable, List, Mapping, Tuple, Type
+
+from common.text_normalization import Document
 
 
-@dataclass(frozen=True)
-class AgentTask:
-    """Describe una tarea que puede ser delegada a un agente especializado."""
-
-    task_type: str
-    payload: Mapping[str, Any] = field(default_factory=dict)
-    context: Mapping[str, Any] = field(default_factory=dict)
-
-    def get(self, key: str, default: Any | None = None) -> Any | None:
-        """Utility helper to read values from payload or context."""
-
-        if key in self.payload:
-            return self.payload.get(key, default)
-        if key in self.context:
-            return self.context.get(key, default)
-        return default
+LoaderConfig = Tuple[Type[object], Dict[str, object]]
 
 
-@dataclass(slots=True)
-class AgentResponse:
-    """Resultado estandarizado de la ejecución de una tarea."""
+@dataclass
+class BaseFileIngestor:
+    """Base class shared by domain specific ingestors."""
 
-    success: bool
-    data: Optional[Any] = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    domain: str
+    collection_name: str
+    loader_mapping: Mapping[str, LoaderConfig]
 
+    def supports_extension(self, extension: str) -> bool:
+        """Return ``True`` if *extension* can be processed by this ingestor."""
 
-class BaseAgent(ABC):
-    """Interfaz base que todos los agentes deben implementar."""
-
-    def __init__(self, name: str) -> None:
-        self._name = name
+        return extension in self.loader_mapping
 
     @property
-    def name(self) -> str:
-        """Nombre descriptivo del agente."""
+    def extensions(self) -> Iterable[str]:
+        """Iterable view of supported file extensions."""
 
-        return self._name
+        return self.loader_mapping.keys()
 
-    @abstractmethod
-    def can_handle(self, task: AgentTask) -> bool:
-        """Indica si el agente puede gestionar la tarea solicitada."""
+    def load(self, file_path: str, extension: str) -> List[Document]:
+        """Load ``Document`` instances from *file_path* using the proper loader."""
 
-    @abstractmethod
-    def handle(self, task: AgentTask) -> AgentResponse:
-        """Procesa la tarea delegada y devuelve un :class:`AgentResponse`."""
+        if extension not in self.loader_mapping:
+            raise ValueError(f"Extension '{extension}' not supported by {self.domain} ingestor")
+
+        loader_class, loader_kwargs = self.loader_mapping[extension]
+        loader = loader_class(file_path, **loader_kwargs)
+        return loader.load()
+
+
+__all__ = ["BaseFileIngestor", "LoaderConfig"]

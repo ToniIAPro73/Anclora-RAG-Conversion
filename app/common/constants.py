@@ -1,8 +1,51 @@
+"""Shared application constants."""
+from __future__ import annotations
+
 import logging
+from dataclasses import dataclass
+from typing import Mapping
+
 import chromadb
 from chromadb.config import Settings
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class CollectionConfig:
+    """Metadata describing a Chroma collection."""
+
+    domain: str
+    description: str
+
+
+CHROMA_COLLECTIONS: Mapping[str, CollectionConfig] = {
+    "conversion_rules": CollectionConfig(
+        domain="documents",
+        description=(
+            "Colección orientada a manuales, guías y documentación de referencia "
+            "utilizada durante los procesos de conversión y capacitación."
+        ),
+    ),
+    "troubleshooting": CollectionConfig(
+        domain="code",
+        description=(
+            "Snippets de código, ejemplos y procedimientos de diagnóstico para "
+            "dar soporte en escenarios de troubleshooting."
+        ),
+    ),
+    "multimedia_assets": CollectionConfig(
+        domain="multimedia",
+        description=(
+            "Material audiovisual transcrito como subtítulos o descripciones "
+            "para enriquecer respuestas con contenido multimedia."
+        ),
+    ),
+}
+
+DOMAIN_TO_COLLECTION: Mapping[str, str] = {
+    config.domain: name for name, config in CHROMA_COLLECTIONS.items()
+}
 
 
 def _create_chroma_client() -> chromadb.api.ClientAPI:
@@ -30,3 +73,10 @@ def _create_chroma_client() -> chromadb.api.ClientAPI:
 
 
 CHROMA_SETTINGS = _create_chroma_client()
+
+__all__ = [
+    "CHROMA_COLLECTIONS",
+    "CHROMA_SETTINGS",
+    "CollectionConfig",
+    "DOMAIN_TO_COLLECTION",
+]
