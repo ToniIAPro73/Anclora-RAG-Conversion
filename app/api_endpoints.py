@@ -113,7 +113,6 @@ class ChatRequest(BaseModel):
             ]
         }
 
-
 class ChatResponse(BaseModel):
     response: str = Field(
         ...,
@@ -149,7 +148,6 @@ class ChatResponse(BaseModel):
             }
         }
     )
-
 
     class Config:
         schema_extra = {
@@ -193,7 +191,6 @@ class FileInfo(BaseModel):
             }
         }
     )
-
 
 class HealthResponse(BaseModel):
     status: str = Field(
