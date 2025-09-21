@@ -21,6 +21,7 @@ services:
       build: ./app
       ports:
         - 8080:8080
+        - 9000:9000
       volumes:
         - ./app:/app
       networks:
@@ -33,6 +34,8 @@ services:
         # Embedding model used for document ingestion and retrieval
         - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
         - TARGET_SOURCE_CHUNKS=5
+        - PROMETHEUS_METRICS_PORT=9000
+        - PROMETHEUS_METRICS_HOST=0.0.0.0
       healthcheck:
         test: ["CMD", "curl", "-f", "http://localhost:8080/_stcore/health"]
         interval: 30s
@@ -44,6 +47,7 @@ services:
       build: ./app
       ports:
         - 8081:8081
+        - 9001:9001
       volumes:
         - ./app:/app
       networks:
@@ -62,6 +66,8 @@ services:
         - ANCLORA_JWT_ALGORITHMS=${ANCLORA_JWT_ALGORITHMS:-HS256}
         - ANCLORA_JWT_AUDIENCE=${ANCLORA_JWT_AUDIENCE:-}
         - ANCLORA_JWT_ISSUER=${ANCLORA_JWT_ISSUER:-}
+        - PROMETHEUS_METRICS_PORT=9001
+        - PROMETHEUS_METRICS_HOST=0.0.0.0
       command: ["python", "-m", "uvicorn", "api_endpoints:app", "--host", "0.0.0.0", "--port", "8081"]
       healthcheck:
         test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
@@ -69,6 +75,33 @@ services:
         timeout: 10s
         retries: 3
         start_period: 40s
+
+    prometheus:
+      image: prom/prometheus:latest
+      ports:
+        - 9090:9090
+      volumes:
+        - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      networks:
+        - net
+      depends_on:
+        - ui
+        - api
+
+    grafana:
+      image: grafana/grafana:10.4.3
+      ports:
+        - 3000:3000
+      environment:
+        - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+        - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+        - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      volumes:
+        - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      networks:
+        - net
+      depends_on:
+        - prometheus
 
 volumes:
   index_data:

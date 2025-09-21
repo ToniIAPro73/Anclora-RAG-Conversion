@@ -1,8 +1,8 @@
 """Domain specific ingestion helpers."""
 
 from .base import BaseFileIngestor
-from .documents import DocumentIngestor
 from .code import CodeIngestor
+from .documents import DocumentIngestor, refresh_document_loaders
 from .multimedia import MultimediaIngestor
 
 __all__ = [
@@ -10,4 +10,5 @@ __all__ = [
     "DocumentIngestor",
     "CodeIngestor",
     "MultimediaIngestor",
+    "refresh_document_loaders",
 ]

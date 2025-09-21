@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import time
+
 from app.agents.base import AgentResponse, AgentTask, BaseAgent
+from common.observability import record_agent_invocation
 
 
 class MediaAgent(BaseAgent):
@@ -18,8 +21,23 @@ class MediaAgent(BaseAgent):
 
     def handle(self, task: AgentTask) -> AgentResponse:
         media_ref = task.get("media")
+        start_time = time.perf_counter()
+
         if not media_ref:
+            record_agent_invocation(
+                self.name,
+                task.task_type,
+                "invalid",
+                duration_seconds=time.perf_counter() - start_time,
+            )
             return AgentResponse(success=False, error="media_reference_missing")
+
+        record_agent_invocation(
+            self.name,
+            task.task_type,
+            "success",
+            duration_seconds=time.perf_counter() - start_time,
+        )
 
         return AgentResponse(
             success=True,

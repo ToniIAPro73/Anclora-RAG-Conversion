@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'anclora-ui'
+    static_configs:
+      - targets: ['ui:9000']
+        labels:
+          service: 'ui'
+  - job_name: 'anclora-api'
+    static_configs:
+      - targets: ['api:9001']
+        labels:
+          service: 'api'
