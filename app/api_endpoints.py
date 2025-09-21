@@ -2,12 +2,14 @@
 API REST para acceso de agentes IA al sistema Anclora RAG
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Body
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
 import logging
-import json
+import os
+import secrets
+from typing import List, Optional
+
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel
 from common.langchain_module import response
 
 # Configurar logging
@@ -216,15 +218,95 @@ class HealthResponse(BaseModel):
         }
     )
 
-# Función de autenticación simple
+try:  # pragma: no cover - la dependencia es opcional
+    import jwt
+    from jwt import PyJWTError
+except Exception:  # pragma: no cover - entorno sin PyJWT
+    jwt = None
+    PyJWTError = Exception
+
+
+def _get_allowed_tokens() -> List[str]:
+    """Obtener los tokens válidos definidos en variables de entorno."""
+
+    tokens: List[str] = []
+    raw_tokens = os.getenv("ANCLORA_API_TOKENS")
+    if raw_tokens:
+        tokens.extend(
+            token.strip() for token in raw_tokens.split(",") if token.strip()
+        )
+
+    single_token = os.getenv("ANCLORA_API_TOKEN")
+    if single_token and single_token.strip():
+        tokens.append(single_token.strip())
+
+    # Mantener el orden pero eliminar duplicados
+    seen = set()
+    ordered_tokens: List[str] = []
+    for token in tokens:
+        if token not in seen:
+            seen.add(token)
+            ordered_tokens.append(token)
+
+    return ordered_tokens
+
+
+def _verify_jwt_token(token: str, secret: str) -> None:
+    """Validar un JWT empleando la configuración del entorno."""
+
+    if jwt is None:
+        logger.error(
+            "ANCLORA_JWT_SECRET está configurado pero PyJWT no está instalado"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Configuración de autenticación inválida",
+        )
+
+    algorithms_env = os.getenv("ANCLORA_JWT_ALGORITHMS", "HS256")
+    algorithms = [alg.strip() for alg in algorithms_env.split(",") if alg.strip()]
+    if not algorithms:
+        algorithms = ["HS256"]
+
+    audience = os.getenv("ANCLORA_JWT_AUDIENCE")
+    issuer = os.getenv("ANCLORA_JWT_ISSUER")
+
+    decode_kwargs = {
+        "algorithms": algorithms,
+        "audience": audience or None,
+        "issuer": issuer or None,
+        "options": {"verify_aud": bool(audience)},
+    }
+
+    try:
+        jwt.decode(token, secret, **decode_kwargs)
+    except PyJWTError as exc:  # pragma: no cover - depende del contenido del token
+        logger.warning("JWT inválido: %s", exc)
+        raise HTTPException(status_code=401, detail="Token inválido") from exc
+
+
+# Función de autenticación basada en variables de entorno / JWT
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """
-    Verificar token de acceso (implementar según necesidades)
-    """
-    # TODO: Implementar verificación real de tokens
-    if credentials.credentials != "your-api-key-here":
+    """Verificar que el token recibido coincide con la configuración del entorno."""
+
+    provided_token = credentials.credentials
+    allowed_tokens = _get_allowed_tokens()
+
+    for allowed in allowed_tokens:
+        if secrets.compare_digest(provided_token, allowed):
+            return provided_token
+
+    jwt_secret = os.getenv("ANCLORA_JWT_SECRET")
+    if jwt_secret:
+        _verify_jwt_token(provided_token, jwt_secret)
+        return provided_token
+
+    if allowed_tokens:
+        logger.warning("Intento de acceso con token no autorizado")
         raise HTTPException(status_code=401, detail="Token inválido")
-    return credentials.credentials
+
+    logger.error("No se configuraron credenciales de acceso para la API")
+    raise HTTPException(status_code=500, detail="Autenticación no configurada")
 
 @app.get(
     "/health",
