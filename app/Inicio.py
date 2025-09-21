@@ -1,7 +1,7 @@
 # Try to import streamlit, and if it fails, provide a helpful error message
 try:
     import streamlit as st
-    st.set_page_config(layout='wide', page_icon='⌨️')
+    st.set_page_config(layout='wide', page_title='Inicio - Anclora AI RAG', page_icon='⌨️')
 except ImportError:
     # This block will only execute if streamlit is not installed
     print("Error: streamlit is not installed. Please install it with 'pip install streamlit'")
@@ -36,16 +36,16 @@ if "language" not in st.session_state:
 
 # Add language selector to sidebar
 with st.sidebar:
-    if st.button(get_text("reset_session", st.session_state.language)):
+    if st.button('Reset Session'):
         for key in list(st.session_state.keys()):
             st.session_state.pop(key)
         st.rerun()
     
     selected_language = st.sidebar.selectbox(
         get_text("language_selector", st.session_state.language),
-        options=["es", "en"],
+        options=["es", "en", "fr", "de"],
         format_func=lambda x: get_text(f"language_{x}", st.session_state.language),
-        index=["es", "en"].index(st.session_state.language)
+        index=["es", "en", "fr", "de"].index(st.session_state.language)
     )
     
     # Update language if changed
@@ -53,7 +53,13 @@ with st.sidebar:
         st.session_state.language = selected_language
         st.rerun()
 
-
+# Título de la aplicación centrado en la pantalla
+st.markdown(f"""
+<div class="main-title-container">
+    <h1 class="main-title">{get_text("app_title", st.session_state.language)}</h1>
+    <p class="main-subtitle">AI RAG Assistant</p>
+</div>
+""", unsafe_allow_html=True)
 
 # Initialize chat history
 if "messages" not in st.session_state:
@@ -81,7 +87,7 @@ if user_input := st.chat_input(get_text("chat_placeholder", st.session_state.lan
 if user_input is not None and len(user_input.strip()) > 0 and len(user_input) <= 1000:
     if st.session_state.messages and user_input.strip() != "":
         with st.spinner(get_text("processing_message", st.session_state.language)):
-            assistant_response = response(user_input, st.session_state.language)
+            assistant_response = response(user_input)
         # Display assistant response in chat message container
         with st.chat_message("assistant"):
             st.markdown(assistant_response)

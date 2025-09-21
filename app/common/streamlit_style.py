@@ -25,8 +25,8 @@ def hide_streamlit_style():
             st.warning(f"Could not load background image {image_path}: {e}. Using gradient fallback.")
             return None
 
-    # Intentar cargar la imagen bg4.png
-    image_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'bg4.png')
+    # Intentar cargar la imagen bg2.png
+    image_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'bg2.png')
     base64_image = get_base64_image(image_path)
 
     if base64_image:
@@ -40,10 +40,8 @@ def hide_streamlit_style():
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         """
 
-
     hide_st_style = f"""
         <style>
-
             /* Modern Streamlit selectors */
             .stMainMenu {{visibility: hidden;}}
             .stDeployButton {{display:none;}}
@@ -88,14 +86,61 @@ def hide_streamlit_style():
                 }}
             }}
 
+            /* Estilos para el título centrado */
+            .main-title-container {{
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+                z-index: 1000;
+                width: 100%;
+                max-width: 800px;
+                padding: 0 20px;
+            }}
 
+            .main-title {{
+                font-size: 4rem !important;
+                font-weight: 700 !important;
+                color: #ffffff !important;
+                text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.7) !important;
+                margin-bottom: 1rem !important;
+                letter-spacing: 2px !important;
+                line-height: 1.2 !important;
+            }}
+
+            .main-subtitle {{
+                font-size: 1.2rem !important;
+                font-weight: 300 !important;
+                color: #ffffff !important;
+                text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.5) !important;
+                margin-top: 0.5rem !important;
+                letter-spacing: 1px !important;
+            }}
 
             /* Ocultar el título original de Streamlit */
             .stTitle {{
                 display: none !important;
             }}
 
+            /* Responsive para el título */
+            @media (max-width: 768px) {{
+                .main-title {{
+                    font-size: 2.5rem !important;
+                }}
+                .main-subtitle {{
+                    font-size: 1rem !important;
+                }}
+            }}
 
+            @media (max-width: 480px) {{
+                .main-title {{
+                    font-size: 2rem !important;
+                }}
+                .main-subtitle {{
+                    font-size: 0.9rem !important;
+                }}
+            }}
         </style>
     """
     st.markdown(hide_st_style, unsafe_allow_html=True)
