@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from rag_core.conversion_advisor import ConversionAdvisor, FormatRecommendation
+
 class AncloraRAGClient:
     """
     Cliente para interactuar con el sistema Anclora RAG desde agentes IA.
@@ -50,6 +52,8 @@ class AncloraRAGClient:
         self.api_key: Optional[str] = None
         if api_key:
             self.set_auth_token(api_key, auth_scheme=self.auth_scheme)
+
+        self._conversion_advisor = ConversionAdvisor()
 
     @staticmethod
     def _normalize_languages(languages: Optional[List[str]]) -> Optional[List[str]]:
@@ -245,10 +249,10 @@ class AncloraRAGClient:
     def delete_document(self, filename: str) -> Dict[str, Any]:
         """
         Eliminar documento de la base de conocimiento
-        
+
         Args:
             filename (str): Nombre del archivo a eliminar
-            
+
         Returns:
             Dict con resultado de la operación
         """
@@ -283,6 +287,17 @@ class AncloraRAGClient:
             results.append(result)
         return results
 
+    def plan_conversion(
+        self,
+        *,
+        source_format: str,
+        intended_use: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> FormatRecommendation:
+        """Consultar el asesor de conversión para obtener el formato recomendado."""
+
+        return self._conversion_advisor.recommend(source_format, intended_use, metadata)
+
 
 # Ejemplo de uso para agentes IA
 class AIAgentRAGInterface:
@@ -310,6 +325,7 @@ class AIAgentRAGInterface:
             supported_languages=supported_languages,
         )
         self.logger = logging.getLogger(__name__)
+        self._last_conversion_plan: Optional[FormatRecommendation] = None
 
     def set_auth_token(self, token: str, auth_scheme: Optional[str] = None) -> None:
         """Actualizar el token de autenticación utilizado por el agente."""
@@ -338,18 +354,99 @@ class AIAgentRAGInterface:
         else:
             return f"Error: {result.get('message', 'Error desconocido')}"
     
-    def add_knowledge(self, file_path: str) -> bool:
+    def plan_conversion(
+        self,
+        *,
+        file_path: Optional[str] = None,
+        source_format: Optional[str] = None,
+        intended_use: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> FormatRecommendation:
+        """Consultar la recomendación de conversión según reglas y metadatos."""
+
+        if not intended_use or not intended_use.strip():
+            raise ValueError("El uso previsto no puede estar vacío.")
+
+        normalized_format = (source_format or "").strip().lower()
+        if not normalized_format:
+            if not file_path:
+                raise ValueError("Debe especificar `file_path` o `source_format` para obtener la recomendación.")
+            normalized_format = Path(file_path).suffix.lstrip(".")
+
+        normalized_format = normalized_format or "bin"
+
+        plan = self.client.plan_conversion(
+            source_format=normalized_format,
+            intended_use=intended_use,
+            metadata=metadata,
+        )
+        self._last_conversion_plan = plan
+        return plan
+
+    @property
+    def last_conversion_plan(self) -> Optional[FormatRecommendation]:
+        """Última recomendación calculada por el asesor de conversión."""
+
+        return self._last_conversion_plan
+
+    def add_knowledge(
+        self,
+        file_path: str,
+        *,
+        intended_use: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        allow_non_recommended_format: bool = True,
+    ) -> bool:
         """
         Agregar conocimiento al RAG
-        
+
         Args:
             file_path (str): Ruta al archivo
-            
+            intended_use (Optional[str]): Uso previsto que guiará el formato recomendado.
+            metadata (Optional[Dict[str, Any]]): Metadatos adicionales para evaluar reglas.
+            allow_non_recommended_format (bool): Si ``False`` y el archivo no coincide con la recomendación,
+                se genera un error antes de subir el documento.
+
         Returns:
             bool: True si fue exitoso
         """
+
+        plan: Optional[FormatRecommendation] = None
+        if intended_use:
+            plan = self.plan_conversion(
+                file_path=file_path,
+                intended_use=intended_use,
+                metadata=metadata,
+            )
+
+            extension = Path(file_path).suffix
+            if extension and not plan.matches_extension(extension):
+                message = (
+                    f"El archivo '{file_path}' está en formato '{extension.lstrip('.')}'; "
+                    f"se recomienda convertirlo a {plan.profile} ({plan.recommended_format})."
+                )
+                if allow_non_recommended_format:
+                    self.logger.warning(message)
+                else:
+                    raise ValueError(message)
+
+            for contextual_warning in plan.warnings:
+                self.logger.warning(contextual_warning)
+
         result = self.client.upload_document(file_path)
-        return result.get("status") == "success"
+        success = result.get("status") == "success"
+
+        if success and plan:
+            self.logger.info(
+                "Documento %s preparado para el uso '%s' siguiendo la recomendación %s.",
+                file_path,
+                intended_use,
+                plan.profile,
+            )
+        elif not success:
+            self.logger.error("Error al agregar conocimiento: %s", result.get("message"))
+
+        return success
     
     def get_available_documents(self) -> List[str]:
         """

@@ -2,15 +2,32 @@
 API REST para acceso de agentes IA al sistema Anclora RAG
 """
 
+import json
 import logging
 import os
 import secrets
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from common.langchain_module import response
+
+try:  # pragma: no cover - compatibilidad con httpx 0.28+
+    import httpx
+    from inspect import signature
+
+    _original_httpx_init = httpx.Client.__init__
+
+    if "app" not in signature(httpx.Client.__init__).parameters:
+        def _patched_httpx_init(self, *args, **kwargs):  # type: ignore[override]
+            kwargs.pop("app", None)
+            return _original_httpx_init(self, *args, **kwargs)
+
+        httpx.Client.__init__ = _patched_httpx_init  # type: ignore[assignment]
+except Exception:  # pragma: no cover - si httpx no está disponible
+    httpx = None
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -239,6 +256,11 @@ def _get_allowed_tokens() -> List[str]:
     single_token = os.getenv("ANCLORA_API_TOKEN")
     if single_token and single_token.strip():
         tokens.append(single_token.strip())
+
+    if not tokens:
+        default_token = os.getenv("ANCLORA_DEFAULT_API_TOKEN", "your-api-key-here")
+        if default_token:
+            tokens.append(default_token)
 
     # Mantener el orden pero eliminar duplicados
     seen = set()
