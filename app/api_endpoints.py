@@ -2,14 +2,16 @@
 API REST para acceso de agentes IA al sistema Anclora RAG
 """
 
+import json
 import logging
 import os
 import secrets
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from common.langchain_module import response
 
 # Configurar logging
