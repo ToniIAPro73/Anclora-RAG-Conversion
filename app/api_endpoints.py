@@ -2,11 +2,13 @@
 API REST para acceso de agentes IA al sistema Anclora RAG
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 import logging
+import json
 from common.langchain_module import response
 from common.ingest_file import ingest_file, validate_uploaded_file
 from common.chroma_db_settings import get_unique_sources_df
@@ -15,11 +17,26 @@ from common.constants import CHROMA_SETTINGS
 # Configurar logging
 logger = logging.getLogger(__name__)
 
+
+class UTF8JSONResponse(JSONResponse):
+    """JSONResponse que mantiene caracteres multilingües sin escapar."""
+
+    def render(self, content) -> bytes:  # type: ignore[override]
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=None,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+
 # Configurar FastAPI
 app = FastAPI(
     title="Anclora RAG API",
     description="API para acceso de agentes IA al sistema RAG",
-    version="1.0.0"
+    version="1.0.0",
+    default_response_class=UTF8JSONResponse
 )
 
 # Seguridad básica
@@ -31,10 +48,43 @@ class ChatRequest(BaseModel):
     max_length: Optional[int] = 1000
     language: Optional[str] = 'es'
 
+    class Config:
+        schema_extra = {
+            "examples": [
+                {
+                    "message": "¿Cuál es el estado del informe trimestral?",
+                    "max_length": 800,
+                    "language": "es",
+                },
+                {
+                    "message": "What's the status of the quarterly report?",
+                    "max_length": 800,
+                    "language": "en",
+                },
+            ]
+        }
+
+
 class ChatResponse(BaseModel):
     response: str
     status: str
     timestamp: str
+
+    class Config:
+        schema_extra = {
+            "examples": [
+                {
+                    "response": "La base de conocimiento contiene 12 documentos y todo funciona correctamente.",
+                    "status": "success",
+                    "timestamp": "2024-05-04T12:00:00",
+                },
+                {
+                    "response": "The knowledge base contains 12 documents and everything is running smoothly.",
+                    "status": "success",
+                    "timestamp": "2024-05-04T12:00:00",
+                },
+            ]
+        }
 
 class FileInfo(BaseModel):
     filename: str
@@ -79,11 +129,47 @@ async def health_check():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_with_rag(
-    request: ChatRequest,
+    request: ChatRequest = Body(
+        ...,
+        examples={
+            "consulta_es": {
+                "summary": "Consulta en español",
+                "description": "Solicitud con caracteres acentuados para validar soporte UTF-8.",
+                "value": {
+                    "message": "¿Cuál es el estado del informe trimestral?",
+                    "language": "es",
+                    "max_length": 600,
+                },
+            },
+            "query_en": {
+                "summary": "Request in English",
+                "description": "English request that showcases ñ/accents in the payload.",
+                "value": {
+                    "message": "Please summarize the jalapeño market update.",
+                    "language": "en",
+                    "max_length": 600,
+                },
+            },
+        },
+    ),
     token: str = Depends(verify_token)
 ):
     """
-    Endpoint principal para consultas al RAG
+    Endpoint principal para consultas al RAG.
+
+    Ejemplo de solicitud (ES):
+        {
+            "message": "¿Cuál es el estado del informe trimestral?",
+            "language": "es",
+            "max_length": 600
+        }
+
+    Example request (EN):
+        {
+            "message": "Please summarize the jalapeño market update.",
+            "language": "en",
+            "max_length": 600
+        }
     """
     try:
         # Validar entrada
@@ -126,7 +212,17 @@ async def upload_document(
     token: str = Depends(verify_token)
 ):
     """
-    Endpoint para subir documentos al RAG
+    Endpoint para subir documentos al RAG.
+
+    Ejemplo de carga (ES):
+        curl -X POST "http://localhost:8081/upload" \
+            -H "Authorization: Bearer your-api-key-here" \
+            -F "file=@revisión_técnica.pdf"
+
+    Upload example (EN):
+        curl -X POST "http://localhost:8081/upload" \
+            -H "Authorization: Bearer your-api-key-here" \
+            -F "file=@technical_review.pdf"
     """
     try:
         # Validar archivo

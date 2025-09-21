@@ -123,6 +123,42 @@ La aplicación se ejecuta en <http://localhost:8080> y la API REST está disponi
 - Gestión de documentos (ver y eliminar)
 - Endpoints para integraciones externas (consultas, ingestión y listado de archivos)
 
+### Ejemplos de uso de la API REST
+
+Consulta en español preservando acentos:
+
+```bash
+curl -X POST "http://localhost:8081/chat" \
+  -H "Authorization: Bearer your-api-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "message": "¿Cuál es el estado del informe trimestral?",
+        "language": "es",
+        "max_length": 600
+      }'
+```
+
+Consulta en inglés con caracteres ñ/á:
+
+```bash
+curl -X POST "http://localhost:8081/chat" \
+  -H "Authorization: Bearer your-api-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "message": "Please summarize the jalapeño market update on Día 1",
+        "language": "en",
+        "max_length": 600
+      }'
+```
+
+Carga de archivos desde la terminal:
+
+```bash
+curl -X POST "http://localhost:8081/upload" \
+  -H "Authorization: Bearer your-api-key-here" \
+  -F "file=@revisión_técnica.pdf"
+```
+
 ## Requisitos previos
 
 - Docker o Docker desktop: <https://www.docker.com/products/docker-desktop/>
