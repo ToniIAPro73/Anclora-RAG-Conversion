@@ -4,6 +4,14 @@
 
 Esta guía explica las diferentes formas en que un agente de inteligencia artificial puede acceder e interactuar con el sistema Anclora RAG.
 
+> **Nota de idioma:** Las respuestas de la API y los mensajes del asistente están validadas actualmente para español e inglés. Otros idiomas siguen en desarrollo y pueden presentar inconsistencias.
+
+### Idiomas soportados y roadmap
+
+- **Disponibles hoy:** Español (predeterminado) e Inglés.
+- **En preparación:** Portugués (siguiente iteración), seguido por Francés y Alemán tras la fase de validación.
+- **Evaluación continua:** Se priorizarán nuevos idiomas según la demanda, documentando prompts y casos de prueba específicos antes de habilitarlos en la API.
+
 ---
 
 ## 🚀 Opciones de Acceso
