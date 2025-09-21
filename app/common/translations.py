@@ -11,8 +11,8 @@ translations = {
 
         # Inicio.py
         "chat_placeholder": "Escribe tu mensaje :)",
-        "empty_message_error": "Por favor, escribe un mensaje valido.",
-        "long_message_error": "El mensaje es demasiado largo. Por favor, hazlo mas conciso (maximo 1000 caracteres).",
+        "empty_message_error": "Por favor, escribe un mensaje válido.",
+        "long_message_error": "El mensaje es demasiado largo. Por favor, hazlo más conciso (máximo 1000 caracteres).",
         "processing_message": "Procesando tu consulta...",
 
         # Archivos.py
@@ -20,27 +20,27 @@ translations = {
         "upload_file": "Cargar archivo",
         "add_to_knowledge_base": "Agregar archivo a la base de conocimiento",
         "processing_file": "Procesando archivo: {file_name}",
-        "validation_error": "Error de validacion: {message}",
-        "upload_warning": "Por favor carga al menos un archivo antes de agregarlo a la base de conocimiento.",
+        "validation_error": "Error de validación: {message}",
+        "upload_warning": "Por favor, carga al menos un archivo antes de agregarlo a la base de conocimiento.",
         "files_in_knowledge_base": "Archivos en la base de conocimiento:",
         "delete_file": "Eliminar archivo",
         "delete_from_knowledge_base": "Eliminar archivo de la base de conocimiento",
-        "file_deleted": "Archivo eliminado con exito",
-        "delete_error": "Ocurrio un error al eliminar el archivo: {error}",
+        "file_deleted": "Archivo eliminado con éxito",
+        "delete_error": "Ocurrió un error al eliminar el archivo: {error}",
         "one_file_at_a_time": "Solo se permite eliminar un archivo a la vez.",
 
         # Language selector
         "language_selector": "Idioma",
-        "language_es": "Espanol",
-        "language_en": "Ingles",
+        "language_es": "Español",
+        "language_en": "Inglés",
 
         # RAG responses
-        "invalid_query": "Por favor, proporciona una consulta valida.",
-        "long_query": "La consulta es demasiado larga. Por favor, hazla mas concisa.",
-        "greeting_response": "Hola! Soy Bastet, tu asistente virtual de PBC. Estoy aqui para ayudarte con informacion sobre nuestros proyectos, productos y servicios. En que puedo asistirte hoy?",
-        "no_documents": "Hola, soy Bastet de PBC. Actualmente no tengo documentos en mi base de conocimiento. Por favor, sube algunos documentos en la seccion 'Archivos' para que pueda ayudarte con informacion especifica. Mientras tanto, puedo contarte que PBC ofrece servicios de Ingenieria de Software e Inteligencia Artificial.",
-        "no_context": "No se encontro informacion especifica en la base de conocimiento.",
-        "processing_error": "Lo siento, ocurrio un error al procesar tu consulta. Por favor, intenta nuevamente o contacta al administrador si el problema persiste."
+        "invalid_query": "Por favor, proporciona una consulta válida.",
+        "long_query": "La consulta es demasiado larga. Por favor, hazla más concisa.",
+        "greeting_response": "¡Hola! Soy Bastet, tu asistente virtual de PBC. Estoy aquí para ayudarte con información sobre nuestros proyectos, productos y servicios. ¿En qué puedo asistirte hoy?",
+        "no_documents": "Hola, soy Bastet de PBC. Actualmente no tengo documentos en mi base de conocimiento. Por favor, sube algunos documentos en la sección 'Archivos' para que pueda ayudarte con información específica. Mientras tanto, puedo contarte que PBC ofrece servicios de Ingeniería de Software e Inteligencia Artificial.",
+        "no_context": "No se encontró información específica en la base de conocimiento.",
+        "processing_error": "Lo siento, ocurrió un error al procesar tu consulta. Por favor, intenta nuevamente o contacta al administrador si el problema persiste."
     },
 
     "en": {  # English
