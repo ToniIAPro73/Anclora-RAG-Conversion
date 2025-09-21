@@ -1,2 +1,5 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: pruebas que ejecutan pipelines simulados o wrappers de herramientas reales",
+]
