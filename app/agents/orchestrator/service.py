@@ -8,6 +8,7 @@ from typing import List, Sequence
 from app.agents.base import AgentResponse, AgentTask, BaseAgent
 from app.agents.document_agent import DocumentAgent
 from app.agents.media_agent import MediaAgent
+from common.observability import record_orchestrator_decision
 
 
 class OrchestratorService:
@@ -34,8 +35,10 @@ class OrchestratorService:
 
         for agent in self._agents.values():
             if agent.can_handle(task):
+                record_orchestrator_decision(task.task_type, agent.name)
                 return agent.handle(task)
 
+        record_orchestrator_decision(task.task_type, "unhandled")
         return AgentResponse(success=False, error=f"no_agent_for_{task.task_type}")
 
 

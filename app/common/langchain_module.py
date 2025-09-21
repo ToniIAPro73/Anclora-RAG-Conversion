@@ -53,6 +53,7 @@ import os
 import re
 import argparse
 import logging
+import time
 from typing import Optional
 
 # Configurar logging
@@ -70,6 +71,7 @@ embeddings_model_name = os.environ.get("EMBEDDINGS_MODEL_NAME", "all-MiniLM-L6-v
 target_source_chunks = int(os.environ.get('TARGET_SOURCE_CHUNKS',5))
 
 from common.constants import CHROMA_SETTINGS
+from common.observability import record_rag_response
 
 
 DetectorFactory.seed = 0
@@ -148,6 +150,12 @@ def response(query: str, language: Optional[str] = None) -> str:
     """
     language_code = "es"
 
+    start_time = time.perf_counter()
+    rag_started = False
+    status = "error"
+    context_document_count = 0
+    available_documents: Optional[int] = None
+
     try:
         detected_language = detect_language(query)
         requested_language = (language or "").strip().lower()
@@ -191,6 +199,8 @@ def response(query: str, language: Optional[str] = None) -> str:
 
         # Parse the command line arguments
         args = parse_arguments()
+        rag_started = True
+
         embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
 
         db = Chroma(client=CHROMA_SETTINGS, embedding_function=embeddings)
@@ -199,9 +209,11 @@ def response(query: str, language: Optional[str] = None) -> str:
         try:
             collection = CHROMA_SETTINGS.get_collection('vectordb')
             doc_count = collection.count()
+            available_documents = doc_count
             logger.info(f"Documentos en la base de conocimiento: {doc_count}")
 
             if doc_count == 0:
+                status = "empty"
                 return _translate("no_documents", language_code)
         except Exception as e:
             logger.warning(f"No se pudo verificar la cantidad de documentos: {e}")
@@ -215,8 +227,12 @@ def response(query: str, language: Optional[str] = None) -> str:
         prompt = assistant_prompt(language_code)
 
         def format_docs(docs):
+            nonlocal context_document_count
             if not docs:
+                context_document_count = 0
                 return _translate("no_context", language_code)
+
+            context_document_count = len(docs)
             return "\n\n".join(doc.page_content for doc in docs)
 
         rag_chain = (
@@ -230,10 +246,22 @@ def response(query: str, language: Optional[str] = None) -> str:
         result = rag_chain.invoke(stripped_query)
         logger.info("Consulta procesada exitosamente")
 
+        status = "success"
+
         return result
 
     except Exception as e:
         error_msg = f"Error al procesar la consulta: {str(e)}"
         logger.error(error_msg)
         return _translate("processing_error", language_code)
+    finally:
+        if rag_started:
+            duration = time.perf_counter() - start_time
+            record_rag_response(
+                language_code,
+                status,
+                duration_seconds=duration,
+                context_documents=context_document_count,
+                collection_documents=available_documents,
+            )
 

@@ -34,3 +34,4 @@ uvicorn[standard]
 python-multipart
 langdetect==1.0.9
 PyJWT
+prometheus-client

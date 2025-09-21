@@ -1,72 +1,48 @@
 """Shared building blocks for RAG agents and ingestors."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Mapping, Tuple, Type
-
+import time
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Type
+from common.observability import record_ingestion
 from common.text_normalization import Document
-
 
 LoaderConfig = Tuple[Type[object], Dict[str, object]]
 
-
-@dataclass(slots=True)
-class AgentResponse:
-    """Standard response format for agent interactions."""
-
-    success: bool
-    data: Dict[str, Any] = field(default_factory=dict)
-    error: str | None = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
+@dataclass(frozen=True)
 class AgentTask:
-    """Encapsulates the payload that an agent receives."""
+    """Payload that describes a task delegated to an agent."""
 
     task_type: str
-    payload: Dict[str, Any] | None = None
+    payload: Mapping[str, Any]
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.task_type, str) or not self.task_type.strip():
-            raise ValueError("task_type must be a non-empty string")
-        self.task_type = self.task_type.strip()
-        if self.payload is None:
-            self.payload = {}
-        elif not isinstance(self.payload, dict):
-            self.payload = dict(self.payload)
+    def get(self, key: str, default: Any | None = None) -> Any | None:
+        """Expose the underlying payload like a dictionary."""
 
-    def get(self, key: str, default: Any = None) -> Any:
-        """Retrieve an item from the payload with ``default`` fallback."""
+        return self.payload.get(key, default)
 
-        return self.payload.get(key, default) if self.payload is not None else default
 
-    def __getitem__(self, key: str) -> Any:
-        if self.payload is None:
-            raise KeyError(key)
-        return self.payload[key]
+@dataclass
+class AgentResponse:
+    """Standard structure returned by all agents."""
+
+    success: bool
+    data: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
 
 
 class BaseAgent:
-    """Interface that all orchestrated agents must implement."""
-
-    name: str
+    """Common interface for all specialised agents."""
 
     def __init__(self, name: str) -> None:
-        if not name:
-            raise ValueError("Agent name must be provided")
         self.name = name
 
-    def can_handle(self, task: AgentTask) -> bool:
-        """Return ``True`` if the agent can process *task*."""
-
+    def can_handle(self, task: AgentTask) -> bool:  # pragma: no cover - abstract behaviour
         raise NotImplementedError
 
-    def handle(self, task: AgentTask) -> AgentResponse:
-        """Process *task* and return a standardised response."""
-
+    def handle(self, task: AgentTask) -> AgentResponse:  # pragma: no cover - abstract behaviour
         raise NotImplementedError
-
 
 @dataclass
 class BaseFileIngestor:
@@ -91,12 +67,34 @@ class BaseFileIngestor:
         """Load ``Document`` instances from *file_path* using the proper loader."""
 
         if extension not in self.loader_mapping:
+            record_ingestion(self.domain, extension, "unsupported_extension")
             raise ValueError(f"Extension '{extension}' not supported by {self.domain} ingestor")
 
         loader_class, loader_kwargs = self.loader_mapping[extension]
         loader = loader_class(file_path, **loader_kwargs)
-        return loader.load()
 
+        start_time = time.perf_counter()
+
+        try:
+            documents = loader.load()
+        except Exception:
+            record_ingestion(
+                self.domain,
+                extension,
+                "error",
+                duration_seconds=time.perf_counter() - start_time,
+            )
+            raise
+
+        record_ingestion(
+            self.domain,
+            extension,
+            "success",
+            duration_seconds=time.perf_counter() - start_time,
+            document_count=len(documents) if isinstance(documents, list) else None,
+        )
+
+        return documents
 
 __all__ = [
     "AgentResponse",
@@ -105,4 +103,3 @@ __all__ = [
     "BaseFileIngestor",
     "LoaderConfig",
 ]
-
