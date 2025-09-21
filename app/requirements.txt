@@ -4,6 +4,7 @@ python-dotenv
 numexpr
 langchainhub
 db-dtypes
+PyYAML
 langchain
 pydantic==1.10.13
 pymysql
