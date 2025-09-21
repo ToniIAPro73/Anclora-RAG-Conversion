@@ -1,0 +1,15 @@
+{
+  "language": "es",
+  "items": [
+    {
+      "question": "¿Qué es Anclora RAG?",
+      "reference": "Anclora RAG es un sistema de recuperación aumentada que combina búsqueda semántica con generación para responder preguntas empresariales.",
+      "candidate": "Anclora RAG es una plataforma de recuperación aumentada que mezcla búsqueda semántica y generación para contestar preguntas de negocio."
+    },
+    {
+      "question": "¿Cómo se actualiza la base de conocimiento?",
+      "reference": "La base de conocimiento se actualiza agregando nuevos documentos al índice y reejecutando el proceso de ingestión.",
+      "candidate": "Se actualiza añadiendo documentos al índice y ejecutando nuevamente la ingestión de datos."
+    }
+  ]
+}
