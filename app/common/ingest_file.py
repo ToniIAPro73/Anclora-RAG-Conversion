@@ -27,9 +27,9 @@ from langchain_community.document_loaders import (
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain.docstore.document import Document
 from common.chroma_db_settings import Chroma
 from common.constants import CHROMA_SETTINGS
+from common.text_normalization import Document, normalize_documents_nfc
 
 
 # Load environment variables
@@ -182,7 +182,7 @@ def process_file(uploaded_file, file_name):
         documents = load_single_document(uploaded_file)
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         texts = text_splitter.split_documents(documents)
-        return texts
+        return normalize_documents_nfc(texts)
 
 
 def does_vectorstore_exist(settings) -> bool:
