@@ -51,6 +51,12 @@ services:
         # Embedding model used for document ingestion and retrieval
         - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
         - TARGET_SOURCE_CHUNKS=5
+        - ANCLORA_API_TOKENS=${ANCLORA_API_TOKENS:-}
+        - ANCLORA_API_TOKEN=${ANCLORA_API_TOKEN:-}
+        - ANCLORA_JWT_SECRET=${ANCLORA_JWT_SECRET:-}
+        - ANCLORA_JWT_ALGORITHMS=${ANCLORA_JWT_ALGORITHMS:-HS256}
+        - ANCLORA_JWT_AUDIENCE=${ANCLORA_JWT_AUDIENCE:-}
+        - ANCLORA_JWT_ISSUER=${ANCLORA_JWT_ISSUER:-}
       healthcheck:
         test: ["CMD", "curl", "-f", "http://localhost:8080/_stcore/health"]
         interval: 30s

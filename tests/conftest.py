@@ -46,12 +46,7 @@ def _install_stub_submodule(fullname: str, **attributes: object) -> None:
 def _install_langchain_stubs() -> None:
     """Provide minimal stand-ins for optional langchain dependencies."""
 
-    try:  # pragma: no cover - only exercised when dependency is missing
-        import langchain  # type: ignore  # noqa: F401
-        import langchain_community  # type: ignore  # noqa: F401
-        import langchain_core  # type: ignore  # noqa: F401
-        import langchain.callbacks.streaming_stdout  # type: ignore  # noqa: F401
-    except Exception:  # pragma: no cover - stub path
+    def _install_stubbed_dependencies() -> None:
         _install_stub_submodule("langchain.chains", RetrievalQA=type("RetrievalQA", (), {}))
 
         class _HuggingFaceEmbeddings:
@@ -108,6 +103,8 @@ def _install_langchain_stubs() -> None:
             "langchain_core.prompts",
             ChatPromptTemplate=_ChatPromptTemplate,
         )
+
+    _install_stubbed_dependencies()
 
 
 def _install_common_stubs() -> None:
