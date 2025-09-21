@@ -50,6 +50,37 @@ Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) qu
 - ChromaDB (base de datos vectorial)
 - Ollama (servicio LLM)
 
+#### Modelos de embeddings
+
+Puedes elegir qué modelo de embeddings utilizar fijando la variable de entorno `EMBEDDINGS_MODEL_NAME`. La aplicación detecta
+este valor tanto al ingerir documentos como al realizar consultas, por lo que no se requiere ningún cambio adicional en el
+código. Algunas opciones probadas:
+
+- `sentence-transformers/all-mpnet-base-v2`: equilibrio entre calidad y desempeño en inglés/español.
+- `intfloat/multilingual-e5-large`: recomendado para escenarios multilingües con más de dos idiomas.
+- `all-MiniLM-L6-v2`: alternativa ligera para equipos con recursos limitados.
+
+Ejemplo de configuración en `docker-compose.yml`:
+
+```yaml
+environment:
+  - MODEL=llama3
+  - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
+```
+
+Para comparar rápidamente el rendimiento de distintos modelos se incluye el script `scripts/eval_embeddings.py`:
+
+```bash
+# Usa los valores definidos en EMBEDDINGS_MODEL_NAME
+python scripts/eval_embeddings.py
+
+# Compara múltiples modelos en una sola corrida
+python scripts/eval_embeddings.py --models sentence-transformers/all-mpnet-base-v2 intfloat/multilingual-e5-large
+```
+
+Si cambias el modelo de embeddings o las dependencias relacionadas, recuerda regenerar las imágenes ejecutando `docker compose
+build --no-cache` para los servicios `ui` y `api`.
+
 ### Docker
 
 **Dockerfile**: app/Dockerfile  
