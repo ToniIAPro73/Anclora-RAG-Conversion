@@ -172,6 +172,8 @@ Ahora tenemos que abrirlo y modificarlo, tenemos que agregar la ruta donde hicim
 C:\Users\fcore\OneDrive\Desktop\Basdonax\basdonax-rag>
 ```
 
+> 💡 Consulta la [guía detallada en `docs/guia_open_rag.md`](docs/guia_open_rag.md) para revisar prerrequisitos, pasos de ejecución y soluciones a errores comunes al usar `open_rag.sh` y `open_rag.bat`.
+
 Entonces en mi caso va a ser así el `open_rag.bat` (el .sh es lo mismo):
 
 ```batch
