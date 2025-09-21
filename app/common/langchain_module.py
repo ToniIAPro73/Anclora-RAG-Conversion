@@ -3,15 +3,16 @@ try:
     from langchain.chains import RetrievalQA
 except ImportError:
     print("Error: langchain module not found. Please install it with 'pip install langchain==0.1.16'")
-    RetrievalQA = None
+    import sys
+    sys.exit(1)
 
 try:
     from langchain_community.embeddings import HuggingFaceEmbeddings
     from langchain_community.llms import Ollama
 except ImportError:
     print("Error: langchain_community module not found. Please install it with 'pip install langchain-community==0.0.34'")
-    HuggingFaceEmbeddings = None
-    Ollama = None
+    import sys
+    sys.exit(1)
 
 try:
     from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
@@ -19,17 +20,16 @@ try:
     from langchain_core.runnables import RunnablePassthrough
 except ImportError:
     print("Error: langchain_core module not found. Please install it with 'pip install langchain-core'")
-    StreamingStdOutCallbackHandler = None
-    StrOutputParser = None
-    RunnablePassthrough = None
+    import sys
+    sys.exit(1)
 
 try:
     from common.chroma_db_settings import Chroma
     from common.assistant_prompt import assistant_prompt
 except ImportError:
     print("Error: common modules not found. Make sure the modules exist and are in the Python path.")
-    Chroma = None
-    assistant_prompt = None
+    import sys
+    sys.exit(1)
 
 import os
 import argparse
@@ -79,10 +79,6 @@ def response(query: str, language: str = "es") -> str:
     Returns:
         str: La respuesta generada por el modelo
     """
-    # Check if required modules are available
-    if any(x is None for x in [HuggingFaceEmbeddings, Ollama, Chroma, assistant_prompt]):
-        return "Lo siento, el sistema RAG no está disponible en este momento debido a dependencias faltantes. Por favor, contacta al administrador." if language == "es" else "Sorry, the RAG system is not available at the moment due to missing dependencies. Please contact the administrator."
-
     try:
         # Validar entrada
         if not query or len(query.strip()) == 0:
@@ -108,12 +104,6 @@ def response(query: str, language: str = "es") -> str:
         db = Chroma(client=CHROMA_SETTINGS, embedding_function=embeddings)
 
         # Verificar si hay documentos en la base de datos
-        if CHROMA_SETTINGS is None:
-            if language == "es":
-                return "Hola, soy Bastet de PBC. Actualmente no tengo documentos en mi base de conocimiento. Por favor, suba algunos documentos en la sección 'Archivos' para que pueda ayudarte con información específica. Mientras tanto, puedo contarte que PBC ofrece servicios de Ingeniería de Software e Inteligencia Artificial."
-            else:
-                return "Hello, I'm Bastet from PBC. I currently don't have any documents in my knowledge base. Please upload some documents in the 'Files' section so I can help you with specific information. In the meantime, I can tell you that PBC offers Software Engineering and Artificial Intelligence services."
-
         try:
             collection = CHROMA_SETTINGS.get_collection('vectordb')
             doc_count = collection.count()

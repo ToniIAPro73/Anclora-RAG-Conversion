@@ -97,11 +97,7 @@ async def chat_with_rag(
         
         # Procesar consulta
         logger.info(f"Procesando consulta API: {request.message[:50]}...")
-        try:
-            rag_response = response(request.message, "en")  # Default to English for API
-        except Exception as e:
-            logger.error(f"Error calling response function: {e}")
-            raise HTTPException(status_code=500, detail="RAG system not available")
+        rag_response = response(request.message, "en")  # Default to English for API
         
         from datetime import datetime
         return ChatResponse(
