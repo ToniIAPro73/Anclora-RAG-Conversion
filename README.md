@@ -154,6 +154,14 @@ Esto se va a hacer a nuestro gusto en el archivo `./app/common/assistant_prompt.
 
 Una vez hecho todo lo anterior solo queda un paso: que entremos al siguiente link: <http://localhost:8080> para poder utilizar el RAG.
 
+## Pruebas automatizadas
+
+Ejecuta la batería de pruebas localmente con:
+
+```bash
+pytest
+```
+
 ## Selección de idioma
 
 Actualmente la interfaz y las respuestas del asistente están validadas para español (por defecto) e inglés. Puedes alternar entre ambos idiomas desde el selector de la barra lateral, y la preferencia se mantendrá durante toda la sesión.
