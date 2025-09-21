@@ -1,0 +1,15 @@
+{
+  "language": "en",
+  "items": [
+    {
+      "question": "What is retrieval augmented generation?",
+      "reference": "Retrieval augmented generation combines search over external knowledge with text generation to produce grounded answers.",
+      "candidate": "Retrieval augmented generation combines search over external knowledge with text generation to produce grounded answers."
+    },
+    {
+      "question": "Why monitor data quality?",
+      "reference": "Monitoring data quality helps catch drifting sources early and prevents the assistant from returning outdated facts.",
+      "candidate": "Monitoring data quality helps detect drifting sources early and prevents the assistant from returning outdated facts."
+    }
+  ]
+}
