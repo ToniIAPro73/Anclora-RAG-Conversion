@@ -29,6 +29,7 @@ security = HTTPBearer()
 class ChatRequest(BaseModel):
     message: str
     max_length: Optional[int] = 1000
+    language: Optional[str] = 'es'
 
 class ChatResponse(BaseModel):
     response: str
@@ -97,7 +98,14 @@ async def chat_with_rag(
         
         # Procesar consulta
         logger.info(f"Procesando consulta API: {request.message[:50]}...")
-        rag_response = response(request.message)
+        language = (request.language or "es").lower()
+        if language not in {"es", "en"}:
+            language = "es"
+
+        try:
+            rag_response = response(request.message, language)
+        except TypeError:
+            rag_response = response(request.message)
         
         from datetime import datetime
         return ChatResponse(
@@ -196,3 +204,4 @@ app.add_middleware(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8081)
+

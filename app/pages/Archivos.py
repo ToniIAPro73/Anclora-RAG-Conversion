@@ -41,21 +41,26 @@ hide_streamlit_style()
 if "language" not in st.session_state:
     st.session_state.language = "es"  # Default to Spanish
 
+available_languages = ["es", "en"]
+
+# Reset to default if session stored an unsupported language from a previous version
+if st.session_state.language not in available_languages:
+    st.session_state.language = "es"
+
 # Add language selector to sidebar
 with st.sidebar:
     st.title(get_text("app_title", st.session_state.language))
-    selected_language = st.sidebar.selectbox(
+    selected_language = st.selectbox(
         get_text("language_selector", st.session_state.language),
-        options=["es", "en", "fr", "de"],
+        options=available_languages,
         format_func=lambda x: get_text(f"language_{x}", st.session_state.language),
-        index=["es", "en", "fr", "de"].index(st.session_state.language)
+        index=available_languages.index(st.session_state.language)
     )
     
     # Update language if changed
     if selected_language != st.session_state.language:
         st.session_state.language = selected_language
         st.rerun()
-
 # Define the Chroma settings
 CHROMA_SETTINGS = chromadb.HttpClient(host="host.docker.internal", port = 8000, settings=Settings(allow_reset=True, anonymized_telemetry=False))
 collection = CHROMA_SETTINGS.get_or_create_collection(name='vectordb')
@@ -122,5 +127,6 @@ if len(files_df.loc[files_df['Eliminar']]) == 1:
 elif len(files_df.loc[files_df['Eliminar']]) > 1:
     st.warning(get_text("one_file_at_a_time", st.session_state.language))
                 
+
 
 

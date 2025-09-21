@@ -25,6 +25,7 @@ except ImportError:
 
 try:
     from common.chroma_db_settings import Chroma
+    from common.translations import get_text
     from common.assistant_prompt import assistant_prompt
 except ImportError:
     print("Error: common modules not found. Make sure the modules exist and are in the Python path.")
@@ -65,30 +66,38 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def response(query: str) -> str:
+def response(query: str, language: str = "es") -> str:
     """
     Genera una respuesta usando RAG (Retrieval-Augmented Generation).
 
     Args:
         query (str): La consulta del usuario
+        language (str): Codigo de idioma preferido ("es" o "en")
 
     Returns:
         str: La respuesta generada por el modelo
     """
     try:
+        language = (language or "es").lower()
+        if language not in {"es", "en"}:
+            language = "es"
+
         # Validar entrada
         if not query or len(query.strip()) == 0:
-            return "Por favor, proporciona una consulta válida."
+            return get_text("invalid_query", language)
 
         if len(query) > 1000:
-            return "La consulta es demasiado larga. Por favor, hazla más concisa."
+            return get_text("long_query", language)
 
-        # Detectar saludos simples
-        simple_greetings = ["hola", "hello", "hi", "buenos días", "buenas tardes", "buenas noches", "hey"]
-        query_lower = query.lower().strip()
+        # Detectar saludos simples segun idioma
+        simple_greetings = {
+            "es": ["hola", "buenos dias", "buenas tardes", "buenas noches", "buenas", "hey"],
+            "en": ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"]
+        }
+        normalized_query = query.lower().strip()
 
-        if any(greeting in query_lower for greeting in simple_greetings) and len(query.split()) <= 3:
-            return "¡Hola! Soy Bastet, tu asistente virtual de PBC. Estoy aquí para ayudarte con información sobre nuestros proyectos, productos y servicios. ¿En qué puedo asistirte hoy?"
+        if any(greeting in normalized_query for greeting in simple_greetings[language]) and len(query.split()) <= 4:
+            return get_text("greeting_response", language)
 
         # Parse the command line arguments
         args = parse_arguments()
@@ -103,7 +112,7 @@ def response(query: str) -> str:
             logger.info(f"Documentos en la base de conocimiento: {doc_count}")
 
             if doc_count == 0:
-                return "Hola, soy Bastet de PBC. Actualmente no tengo documentos en mi base de conocimiento. Por favor, sube algunos documentos en la sección 'Archivos' para que pueda ayudarte con información específica. Mientras tanto, puedo contarte que PBC ofrece servicios de Ingeniería de Software e Inteligencia Artificial."
+                return get_text("no_documents", language)
         except Exception as e:
             logger.warning(f"No se pudo verificar la cantidad de documentos: {e}")
 
@@ -113,11 +122,11 @@ def response(query: str) -> str:
 
         llm = Ollama(model=model, callbacks=callbacks, temperature=0, base_url='http://ollama:11434')
 
-        prompt = assistant_prompt()
+        prompt = assistant_prompt(language)
 
         def format_docs(docs):
             if not docs:
-                return "No se encontró información específica en la base de conocimiento."
+                return get_text("no_context", language)
             return "\n\n".join(doc.page_content for doc in docs)
 
         rag_chain = (
@@ -136,4 +145,5 @@ def response(query: str) -> str:
     except Exception as e:
         error_msg = f"Error al procesar la consulta: {str(e)}"
         logger.error(error_msg)
-        return "Lo siento, ocurrió un error al procesar tu consulta. Por favor, intenta nuevamente o contacta al administrador si el problema persiste."
+        return get_text("processing_error", language)
+

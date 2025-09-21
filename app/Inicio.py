@@ -11,7 +11,10 @@ except ImportError:
 
 # Try to import the required modules, and if they fail, provide helpful error messages
 try:
-    from common.langchain_module import response
+    import importlib
+    import common.langchain_module as langchain_module
+    langchain_module = importlib.reload(langchain_module)
+    response = langchain_module.response
 except ImportError:
     print("Error: common.langchain_module module not found. Make sure the module exists and is in the Python path.")
     import sys
@@ -36,21 +39,26 @@ except ImportError:
 if "language" not in st.session_state:
     st.session_state.language = "es"  # Default to Spanish
 
+available_languages = ["es", "en"]
+
+# Reset to default if session stored an unsupported language from a previous version
+if st.session_state.language not in available_languages:
+    st.session_state.language = "es"
+
 # Add language selector to sidebar
 with st.sidebar:
     st.title(get_text("app_title", st.session_state.language))
-    selected_language = st.sidebar.selectbox(
+    selected_language = st.selectbox(
         get_text("language_selector", st.session_state.language),
-        options=["es", "en", "fr", "de"],
+        options=available_languages,
         format_func=lambda x: get_text(f"language_{x}", st.session_state.language),
-        index=["es", "en", "fr", "de"].index(st.session_state.language)
+        index=available_languages.index(st.session_state.language)
     )
     
     # Update language if changed
     if selected_language != st.session_state.language:
         st.session_state.language = selected_language
         st.rerun()
-
 # Título de la aplicación Streamlit
 st.title(get_text("app_title", st.session_state.language))
 
@@ -80,9 +88,13 @@ if user_input := st.chat_input(get_text("chat_placeholder", st.session_state.lan
 if user_input is not None and len(user_input.strip()) > 0 and len(user_input) <= 1000:
     if st.session_state.messages and user_input.strip() != "":
         with st.spinner(get_text("processing_message", st.session_state.language)):
-            assistant_response = response(user_input)
+            try:
+                assistant_response = response(user_input, st.session_state.language)
+            except TypeError:
+                assistant_response = response(user_input)
         # Display assistant response in chat message container
         with st.chat_message("assistant"):
             st.markdown(assistant_response)
         # Add assistant response to chat history
         st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+
