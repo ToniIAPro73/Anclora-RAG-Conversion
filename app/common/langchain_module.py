@@ -27,6 +27,7 @@ try:
     from common.chroma_db_settings import Chroma
     from common.translations import get_text
     from common.assistant_prompt import assistant_prompt
+    from common.text_normalization import normalize_to_nfc
 except ImportError:
     print("Error: common modules not found. Make sure the modules exist and are in the Python path.")
     import sys
@@ -83,10 +84,16 @@ def response(query: str, language: str = "es") -> str:
             language = "es"
 
         # Validar entrada
-        if not query or len(query.strip()) == 0:
+        if not query:
             return get_text("invalid_query", language)
 
-        if len(query) > 1000:
+        normalized_query = normalize_to_nfc(query)
+        stripped_query = normalized_query.strip()
+
+        if len(stripped_query) == 0:
+            return get_text("invalid_query", language)
+
+        if len(stripped_query) > 1000:
             return get_text("long_query", language)
 
         # Detectar saludos simples segun idioma
@@ -94,9 +101,9 @@ def response(query: str, language: str = "es") -> str:
             "es": ["hola", "buenos dias", "buenas tardes", "buenas noches", "buenas", "hey"],
             "en": ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"]
         }
-        normalized_query = query.lower().strip()
+        normalized_query_lower = stripped_query.lower()
 
-        if any(greeting in normalized_query for greeting in simple_greetings[language]) and len(query.split()) <= 4:
+        if any(greeting in normalized_query_lower for greeting in simple_greetings[language]) and len(stripped_query.split()) <= 4:
             return get_text("greeting_response", language)
 
         # Parse the command line arguments
@@ -136,8 +143,8 @@ def response(query: str, language: str = "es") -> str:
             | StrOutputParser()
         )
 
-        logger.info(f"Procesando consulta: {query[:50]}...")
-        result = rag_chain.invoke(query)
+        logger.info(f"Procesando consulta: {stripped_query[:50]}...")
+        result = rag_chain.invoke(stripped_query)
         logger.info("Consulta procesada exitosamente")
 
         return result
