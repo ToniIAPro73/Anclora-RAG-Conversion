@@ -113,6 +113,10 @@ build --no-cache` para los servicios `ui` y `api`.
 
 El detalle de fases, épicas y tareas priorizadas se encuentra en el [backlog del roadmap](docs/backlog.md). Allí se listan los módulos involucrados (`app/common/*`, `app/pages/*`, `docker-compose*.yml`, etc.), los criterios de aceptación y las dependencias principales para cada bloque de trabajo. Revísalo antes de abrir issues o Pull Requests para mantener el alineamiento con la hoja de ruta.
 
+### Documentación adicional
+
+- [Guía de Integración / Integration Guide](docs/integration-guide.md): Pasos para consumir la API, usar el cliente Python oficial y conectar agentes (LangChain, AutoGen) con recomendaciones de encoding y manejo de Unicode.
+
 ### Uso
 
 La aplicación se ejecuta en <http://localhost:8080> y la API REST está disponible en <http://localhost:8081>. Desde la UI y la API se ofrece:
