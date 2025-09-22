@@ -34,3 +34,10 @@ pytest -m slow
 ```
 
 Si deseas excluirlas durante desarrollos rápidos puedes usar `pytest -m "not slow"`.
+
+## Historial de pruebas
+
+- Se añadió una prueba unitaria que verifica que importar la página `Inicio`
+  en Streamlit no reinicia la caché de embeddings: el objeto
+  `_embeddings_instance` de `common.langchain_module` se conserva entre
+  interacciones.

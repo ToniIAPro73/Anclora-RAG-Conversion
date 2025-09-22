@@ -11,10 +11,7 @@ except ImportError:
 
 # Try to import the required modules, and if they fail, provide helpful error messages
 try:
-    import importlib
-    import common.langchain_module as langchain_module
-    langchain_module = importlib.reload(langchain_module)
-    response = langchain_module.response
+    from common.langchain_module import response
 except ImportError:
     print("Error: common.langchain_module module not found. Make sure the module exists and is in the Python path.")
     import sys
