@@ -118,6 +118,7 @@ Objetivo: extender capacidades y preparar el terreno para escenarios empresarial
 - **Criterios de aceptación:**
   - Se habilita la combinación de recuperación densa y basada en palabras clave configurables.
   - Se documenta cómo añadir nuevos modelos en Ollama (p. ej. `mistral`, `nomic-embed`) y se automatiza su descarga inicial.
+  - Se reutiliza el `EmbeddingsManager` para orquestar modelos por dominio (MiniLM/mpnet/e5) y registrar su desempeño.
   - Pruebas exploratorias confirman que la selección de modelo puede cambiarse sin reiniciar todo el stack.
 - **Dependencias principales:**
   - Requiere la limpieza de dependencias (Tarea 1.3) y la externalización de configuración (Tarea 1.1).
