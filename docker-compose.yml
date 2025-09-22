@@ -1,129 +1,372 @@
-version: '3.6'
+# =============================================================================
+# Anclora RAG - Docker Compose Configuration
+# =============================================================================
+# Multi-service RAG (Retrieval-Augmented Generation) system with:
+# - Ollama for LLM inference
+# - ChromaDB for vector storage
+# - Streamlit UI for document interaction
+# - FastAPI for REST endpoints
+# - Prometheus + Grafana for monitoring
+# =============================================================================
+
+#version: '3.8'
+
+# Environment variables loaded from .env file
+x-environment: &default-environment
+  MODEL: llama3
+  EMBEDDINGS_MODEL_NAME: sentence-transformers/all-mpnet-base-v2
+  TARGET_SOURCE_CHUNKS: 5
+  PROMETHEUS_METRICS_HOST: 0.0.0.0
+
+# Resource limits for production services
+x-resource-limits: &resource-limits
+  deploy:
+    resources:
+      limits:
+        cpus: '2.0'
+        memory: 4G
+      reservations:
+        cpus: '0.5'
+        memory: 512M
+
+# Health check configuration
+x-healthcheck: &default-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+
+# Restart policy for critical services
+x-restart-policy: &restart-policy
+  restart: unless-stopped
+
+# Logging configuration
+x-logging: &logging-config
+  logging:
+    driver: json-file
+    options:
+      max-size: 100m
+      max-file: "3"
 
 services:
-    ollama: 
-      image: ollama/ollama:latest
-      volumes:
-        - /ollama/models:/home/models
-      environment:
-        - OLLAMA_MODELS=/home/models
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                capabilities: [gpu]
-    
-    chroma:
-      image: chromadb/chroma:0.5.1.dev111
-      volumes:
-        - index_data:/chroma/.chroma/index
-      ports:
-        - 8000:8000
-      networks:
-        - net
-    
-    nvidia:
-      image: nvidia/cuda:12.3.1-base-ubuntu20.04
-      command: nvidia-smi
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
-    
-    ui:
-      build: ./app
-      ports:
-        - 8080:8080
-        - 9000:9000
-      volumes:
-        - ./app:/app
-      networks:
-        - net
-      depends_on:
-        - nvidia
-        - ollama
-        - chroma
-      environment:
-        - MODEL=llama3
-        # Embedding model used for document ingestion and retrieval
-        - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
-        - TARGET_SOURCE_CHUNKS=5
-        - ANCLORA_API_TOKENS=${ANCLORA_API_TOKENS:-}
-        - ANCLORA_API_TOKEN=${ANCLORA_API_TOKEN:-}
-        - ANCLORA_JWT_SECRET=${ANCLORA_JWT_SECRET:-}
-        - ANCLORA_JWT_ALGORITHMS=${ANCLORA_JWT_ALGORITHMS:-HS256}
-        - ANCLORA_JWT_AUDIENCE=${ANCLORA_JWT_AUDIENCE:-}
-        - ANCLORA_JWT_ISSUER=${ANCLORA_JWT_ISSUER:-}
-        - PROMETHEUS_METRICS_PORT=9000
-        - PROMETHEUS_METRICS_HOST=0.0.0.0
-      healthcheck:
-        test: ["CMD", "curl", "-f", "http://localhost:8080/_stcore/health"]
-        interval: 30s
-        timeout: 10s
-        retries: 3
-        start_period: 40s
+  # =============================================================================
+  # Language Model Service - Ollama
+  # =============================================================================
+  ollama:
+    <<: *restart-policy
+    image: ollama/ollama:latest
+    container_name: anclora-ollama
+    volumes:
+      - ollama_models:/ollama/models
+    environment:
+      <<: *default-environment
+      OLLAMA_MODELS: /ollama/models
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-    api:
-      build: ./app
-      ports:
-        - 8081:8081
-        - 9001:9001
-      volumes:
-        - ./app:/app
-      networks:
-        - net
-      depends_on:
-        - nvidia
-        - ollama
-        - chroma
-      environment:
-        - MODEL=llama3
-        # Embedding model used for document ingestion and retrieval
-        - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
-        - TARGET_SOURCE_CHUNKS=5
-        - PROMETHEUS_METRICS_PORT=9001
-        - PROMETHEUS_METRICS_HOST=0.0.0.0
-      command: ["python", "-m", "uvicorn", "api_endpoints:app", "--host", "0.0.0.0", "--port", "8081"]
-      healthcheck:
-        test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
-        interval: 30s
-        timeout: 10s
-        retries: 3
-        start_period: 40s
+  # =============================================================================
+  # Vector Database - ChromaDB
+  # =============================================================================
+  chroma:
+    <<: *restart-policy
+    image: chromadb/chroma:0.5.1.dev111
+    container_name: anclora-chroma
+    volumes:
+      - chroma_data:/chroma/.chroma/index
+    ports:
+      - 8000:8000
+    networks:
+      - anclora-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-    prometheus:
-      image: prom/prometheus:latest
-      ports:
-        - 9090:9090
-      volumes:
-        - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      networks:
-        - net
-      depends_on:
-        - ui
-        - api
+  # =============================================================================
+  # GPU Validation Service
+  # =============================================================================
+  nvidia:
+    image: nvidia/cuda:12.3.1-base-ubuntu20.04
+    container_name: anclora-nvidia-check
+    command: nvidia-smi
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles: [gpu-only]
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "2"
 
-    grafana:
-      image: grafana/grafana:10.4.3
-      ports:
-        - 3000:3000
-      environment:
-        - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
-        - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-        - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
-      volumes:
-        - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      networks:
-        - net
-      depends_on:
-        - prometheus
+  # =============================================================================
+  # User Interface - Streamlit Application
+  # =============================================================================
+  ui:
+    <<: *restart-policy
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: anclora-ui
+    ports:
+      - 8080:8080
+      - 9000:9000
+    volumes:
+      - ./app:/app
+      - /app/__pycache__
+    networks:
+      - anclora-network
+    depends_on:
+      nvidia:
+        condition: service_completed_successfully
+      ollama:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+    environment:
+      <<: *default-environment
+      ANCLORA_API_TOKENS: ${ANCLORA_API_TOKENS:-}
+      ANCLORA_API_TOKEN: ${ANCLORA_API_TOKEN:-}
+      ANCLORA_JWT_SECRET: ${ANCLORA_JWT_SECRET:-}
+      ANCLORA_JWT_ALGORITHMS: ${ANCLORA_JWT_ALGORITHMS:-HS256}
+      ANCLORA_JWT_AUDIENCE: ${ANCLORA_JWT_AUDIENCE:-}
+      ANCLORA_JWT_ISSUER: ${ANCLORA_JWT_ISSUER:-}
+      PROMETHEUS_METRICS_PORT: 9000
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
+  # =============================================================================
+  # REST API Service - FastAPI Application
+  # =============================================================================
+  api:
+    <<: *restart-policy
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: anclora-api
+    ports:
+      - 8081:8081
+      - 9001:9001
+    volumes:
+      - ./app:/app
+      - /app/__pycache__
+    networks:
+      - anclora-network
+    depends_on:
+      nvidia:
+        condition: service_completed_successfully
+      ollama:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+    environment:
+      <<: *default-environment
+      PROMETHEUS_METRICS_PORT: 9001
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "3"
+    command: ["python", "-m", "uvicorn", "api_endpoints:app", "--host", "0.0.0.0", "--port", "8081"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # =============================================================================
+  # Monitoring - Prometheus
+  # =============================================================================
+  prometheus:
+    <<: *restart-policy
+    image: prom/prometheus:latest
+    container_name: anclora-prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - anclora-network
+    depends_on:
+      ui:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "3"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+
+  # =============================================================================
+  # Visualization - Grafana
+  # =============================================================================
+  grafana:
+    <<: *restart-policy
+    image: grafana/grafana:10.4.3
+    container_name: anclora-grafana
+    ports:
+      - 3000:3000
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - anclora-network
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# =============================================================================
+# Volumes Configuration
+# =============================================================================
 volumes:
-  index_data:
+  # Ollama models storage
+  ollama_models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /ollama/models
 
+  # ChromaDB vector database storage
+  chroma_data:
+    driver: local
+
+  # Prometheus metrics storage
+  prometheus_data:
+    driver: local
+
+  # Grafana dashboards and data
+  grafana_data:
+    driver: local
+
+# =============================================================================
+# Networks Configuration
+# =============================================================================
 networks:
-  net:
+  anclora-network:
+    driver: bridge
+    name: anclora-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+
+# =============================================================================
+# Service Profiles
+# =============================================================================
+# Development profile - includes volume mounts for live reloading
+x-dev-overrides: &dev-overrides
+  volumes:
+    - ./app:/app
+    - /app/__pycache__
+  environment:
+    - ENV=development
+    - LOG_LEVEL=DEBUG
+
+# Production profile - optimized for production deployment
+x-prod-overrides: &prod-overrides
+  environment:
+    - ENV=production
+    - LOG_LEVEL=INFO
+  deploy:
+    resources:
+      limits:
+        cpus: '2.0'
+        memory: 4G
+      reservations:
+        cpus: '1.0'
+        memory: 1G
+
+# Apply development overrides to existing services
