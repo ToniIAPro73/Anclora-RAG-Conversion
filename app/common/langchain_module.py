@@ -79,6 +79,7 @@ def _translate(key: str, language: str, **kwargs) -> str:
         raise RuntimeError("El sistema de traducciones no está disponible")
     return translator(key, language, **kwargs)
 
+
 try:
     from langdetect import DetectorFactory, LangDetectException, detect
 except ImportError:
@@ -93,7 +94,7 @@ import logging
 import time
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 # Configurar logging
 logging.basicConfig(
@@ -101,6 +102,26 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+class LegalComplianceGuardError(RuntimeError):
+    """Raised when legal compliance guardrails prevent answering a query."""
+
+    def __init__(self, message_key: str, *, context: Mapping[str, Any] | None = None) -> None:
+        super().__init__(message_key)
+        self.message_key = message_key
+        self.context: Dict[str, Any] = dict(context or {})
+
+    def render_message(self, language: str) -> str:
+        """Return a localised message describing the guardrail violation."""
+
+        formatted: Dict[str, Any] = {}
+        for key, value in self.context.items():
+            if isinstance(value, (list, tuple, set)):
+                formatted[key] = ", ".join(sorted(str(item) for item in value))
+            else:
+                formatted[key] = value
+        return _translate(self.message_key, language, **formatted)
 
 model = os.environ.get("MODEL")
 # For embeddings model, the example uses a sentence-transformers model
@@ -120,46 +141,23 @@ SPANISH_HINT_CHARACTERS = set("áéíóúüñÁÉÍÓÚÜÑ¿¡")
 SPANISH_HINT_WORDS = {"hola", "buenos", "buenas", "gracias", "información", "informacion"}
 ENGLISH_HINT_WORDS = {"hello", "hi", "please", "summary", "status", "report", "what", "when", "where", "why", "how", "update", "overview", "there"}
 
-DEFAULT_PROMPT_VARIANT = "documental"
-PROMPT_BUILDERS: Dict[str, Callable[[str], Any]] = {
-    "documental": assistant_prompt,
-    "multimedia": assistant_prompt,
-    "legal": assistant_prompt,
-}
-
-_PROMPT_VARIANT_ALIASES = {
-    "documental": "documental",
-    "document": "documental",
-    "documents": "documental",
-    "docs": "documental",
-    "knowledge": "documental",
-    "multimedia": "multimedia",
-    "media": "multimedia",
-    "video": "multimedia",
-    "audio": "multimedia",
-    "legal": "legal",
-    "compliance": "legal",
-    "regulation": "legal",
-}
-
-_DOMAIN_ALIASES = {
-    "documents": "documents",
-    "documentos": "documents",
-    "documental": "documents",
-    "doc": "documents",
-    "docs": "documents",
-    "code": "code",
-    "codigo": "code",
-    "engineering": "code",
-    "multimedia": "multimedia",
-    "media": "multimedia",
-    "video": "multimedia",
-    "audio": "multimedia",
-    "legal": "legal",
-    "compliance": "legal",
-    "regulation": "legal",
-}
-
+LEGAL_COMPLIANCE_COLLECTION = "legal_compliance"
+LEGAL_COMPLIANCE_ALLOWED_METADATA_KEYS = frozenset(
+    {
+        "collection",
+        "distance",
+        "similarity",
+        "score",
+        "source",
+        "uploaded_file_name",
+        "policy_id",
+        "policy_version",
+        "jurisdiction",
+        "section",
+        "chunk_id",
+    }
+)
+LEGAL_COMPLIANCE_REQUIRED_METADATA_KEYS = frozenset({"policy_id", "policy_version"})
 
 def detect_language(text: str) -> str:
     """Detect the language of *text* returning ``es`` or ``en``."""
@@ -196,6 +194,67 @@ def detect_language(text: str) -> str:
         return "en"
 
     return "es"
+
+
+def _extract_legal_metadata(document: Any) -> Mapping[str, Any] | None:
+    """Return metadata for legal compliance documents if applicable."""
+
+    metadata = getattr(document, "metadata", None)
+    if not isinstance(metadata, Mapping):
+        return None
+
+    if metadata.get("collection") == LEGAL_COMPLIANCE_COLLECTION:
+        return metadata
+    return None
+
+
+def _enforce_legal_compliance_guardrails(documents: Sequence[Any]) -> None:
+    """Validate metadata constraints for legal compliance documents."""
+
+    legal_metadatas: List[Mapping[str, Any]] = []
+    for document in documents:
+        metadata = _extract_legal_metadata(document)
+        if metadata is not None:
+            legal_metadatas.append(metadata)
+
+    if not legal_metadatas:
+        return
+
+    unexpected_fields: List[str] = []
+    for metadata in legal_metadatas:
+        invalid = sorted(set(metadata) - LEGAL_COMPLIANCE_ALLOWED_METADATA_KEYS)
+        if invalid:
+            unexpected_fields.extend(str(field) for field in invalid)
+
+    if unexpected_fields:
+        raise LegalComplianceGuardError(
+            "legal_compliance_fields_not_allowed",
+            context={"fields": sorted(set(unexpected_fields))},
+        )
+
+    missing_fields: List[str] = []
+    for metadata in legal_metadatas:
+        for field in LEGAL_COMPLIANCE_REQUIRED_METADATA_KEYS:
+            value = metadata.get(field)
+            if not isinstance(value, str) or not value.strip():
+                missing_fields.append(field)
+
+    if missing_fields:
+        raise LegalComplianceGuardError(
+            "legal_compliance_missing_metadata",
+            context={"fields": sorted(set(missing_fields))},
+        )
+
+    policy_ids = {
+        str(metadata.get("policy_id")).strip()
+        for metadata in legal_metadatas
+        if str(metadata.get("policy_id"))
+    }
+    if len(policy_ids) > 1:
+        raise LegalComplianceGuardError(
+            "legal_compliance_policy_conflict",
+            context={"policies": sorted(policy_ids)},
+        )
 
 
 def parse_arguments():
@@ -894,7 +953,9 @@ def response(
             ]
 
             scored_docs.sort(key=lambda item: (item[2][0], item[2][1], item[0]))
-            return [doc for _, doc, _ in scored_docs[:target_source_chunks]]
+            selected_docs = [doc for _, doc, _ in scored_docs[:target_source_chunks]]
+            _enforce_legal_compliance_guardrails(selected_docs)
+            return selected_docs
 
         callbacks = [] if args.mute_stream else [StreamingStdOutCallbackHandler()]
 
@@ -926,6 +987,13 @@ def response(
 
         return result
 
+    except LegalComplianceGuardError as guard_exc:
+        status = "guardrail"
+        logger.warning(
+            "Consulta bloqueada por guardrails de cumplimiento legal: %s",
+            guard_exc.message_key,
+        )
+        raise
     except Exception as e:
         error_msg = f"Error al procesar la consulta: {str(e)}"
         logger.error(error_msg)

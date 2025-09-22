@@ -30,7 +30,8 @@ if "langdetect" not in sys.modules:  # pragma: no cover - testing stub path
     sys.modules["langdetect"] = langdetect_stub
 
 from app import api_endpoints
-from app.agents.base import AgentResponse, AgentTask
+from common.langchain_module import LegalComplianceGuardError
+from common.privacy import SensitiveCitationReport
 
 AUTH_HEADERS = {"Authorization": "Bearer your-api-key-here"}
 
@@ -124,48 +125,66 @@ def test_chat_returns_utf8_characters_for_english_queries(monkeypatch) -> None:
     assert "Día 1" in response.text
     assert response.headers["content-type"].startswith("application/json")
 
+def test_chat_returns_guardrail_message_for_legal_conflicts(monkeypatch) -> None:
+    """Guardrail violations should produce a translated warning response."""
 
-def test_chat_maps_agent_errors_to_http_status(monkeypatch) -> None:
-    """Agent errors must translate into coherent HTTP status codes."""
+    client = _build_client(monkeypatch)
 
-    def _handler(task: AgentTask) -> AgentResponse:  # noqa: ARG001 - invoked by orchestrator
-        return AgentResponse(success=False, error="question_missing")
-
-    client, _ = _build_client(monkeypatch, _handler)
-    payload = {"message": "Activar error controlado", "language": "es"}
-
-    response = client.post("/chat", json=payload, headers=AUTH_HEADERS)
-
-    assert response.status_code == 400
-    data = response.json()
-    assert data["success"] is False
-    assert data["error"] == "question_missing"
-    assert data["metadata"]["task_type"] == "document_query"
-
-
-def test_media_transcription_delegates_to_orchestrator(monkeypatch) -> None:
-    """The media endpoint should delegate to the orchestrator service."""
-
-    media_reference = "s3://bucket/audio.wav"
-
-    def _handler(task: AgentTask) -> AgentResponse:
-        assert task.task_type == "media_transcription"
-        assert task.get("media") == media_reference
-        return AgentResponse(
-            success=True,
-            data={"message": "Media acknowledged"},
-            metadata={"task_type": task.task_type},
+    def _guarded_response(message: str, language: str = "es") -> str:
+        raise LegalComplianceGuardError(
+            "legal_compliance_policy_conflict",
+            context={"policies": ["RET", "ACC"]},
         )
 
-    client, orchestrator = _build_client(monkeypatch, _handler)
-    payload = {"media": media_reference, "language": "en", "metadata": {"speaker": "alice"}}
+    monkeypatch.setattr(api_endpoints, "response", _guarded_response)
 
-    response = client.post("/media/transcription", json=payload, headers=AUTH_HEADERS)
+    payload = {"message": "Consulta legal", "language": "es"}
+    response = client.post("/chat", json=payload, headers=AUTH_HEADERS)
 
     assert response.status_code == 200
     data = response.json()
-    assert data["success"] is True
-    assert data["data"]["message"] == "Media acknowledged"
-    assert data["metadata"]["task_type"] == "media_transcription"
-    assert len(orchestrator.calls) == 1
-    assert orchestrator.calls[0].task_type == "media_transcription"
+    assert data["status"] == "guardrail"
+    assert "políticas legales" in data["response"].lower()
+
+
+def test_chat_appends_sensitive_warning_and_audit(monkeypatch) -> None:
+    """Sensitive citations should append a warning and record an audit trail."""
+
+    client = _build_client(monkeypatch)
+
+    report = SensitiveCitationReport(
+        citations=("policy-x",),
+        sensitive_citations=("policy-x",),
+        flagged_terms=("confidencial",),
+        message_key="sensitive_citation_warning",
+        context={"citations": "policy-x"},
+    )
+
+    monkeypatch.setattr(
+        api_endpoints.privacy_manager,
+        "inspect_response_citations",
+        lambda _: report,
+    )
+
+    recorded: dict[str, object] = {}
+
+    def _record_sensitive_audit(**kwargs):
+        recorded["called"] = True
+        recorded["citations"] = tuple(kwargs.get("citations", ()))
+
+    monkeypatch.setattr(
+        api_endpoints.privacy_manager,
+        "record_sensitive_audit",
+        _record_sensitive_audit,
+    )
+
+    payload = {"message": "Consulta de cumplimiento", "language": "es"}
+    response = client.post("/chat", json=payload, headers=AUTH_HEADERS)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "warning"
+    assert "⚠️" in data["response"]
+    assert "Respuesta eco" in data["response"]
+    assert recorded["called"] is True
+    assert recorded["citations"] == ("policy-x",)

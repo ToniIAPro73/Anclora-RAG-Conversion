@@ -82,6 +82,13 @@ CHROMA_COLLECTIONS: Mapping[str, CollectionConfig] = {
         ),
         prompt_type="documental",
     ),
+    "legal_compliance": CollectionConfig(
+        domain="legal",
+        description=(
+            "Políticas legales, lineamientos regulatorios y criterios de cumplimiento "
+            "que requieren controles adicionales antes de compartirse."
+        ),
+    ),
     "multimedia_assets": CollectionConfig(
         domain="multimedia",
         description=(

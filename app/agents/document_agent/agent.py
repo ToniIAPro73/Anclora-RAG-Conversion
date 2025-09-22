@@ -7,6 +7,7 @@ from typing import Any, Callable, Mapping, Optional
 
 from app.agents.base import AgentResponse, AgentTask, BaseAgent
 from app.common import langchain_module
+from app.common.langchain_module import LegalComplianceGuardError
 from common.observability import record_agent_invocation
 
 QueryFunction = Callable[[str, Optional[str], Optional[str], Optional[Mapping[str, Any]]], str]
@@ -44,12 +45,17 @@ class DocumentAgent(BaseAgent):
             return AgentResponse(success=False, error="question_missing")
 
         try:
-            answer = self._query_function(
-                str(question),
-                language if language else None,
+            answer = self._query_function(str(question), language if language else None)
+        except LegalComplianceGuardError as exc:
+            record_agent_invocation(
+                self.name,
                 task.task_type,
-                task.metadata,
+                "guardrail",
+                duration_seconds=time.perf_counter() - start_time,
+                language=language_label,
             )
+            message = exc.render_message(language_label or "es")
+            return AgentResponse(success=False, error=message)
         except Exception as exc:  # pragma: no cover - defensive branch
             record_agent_invocation(
                 self.name,

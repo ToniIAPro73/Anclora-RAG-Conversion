@@ -14,10 +14,9 @@ from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
-
-from app.agents.base import AgentResponse, AgentTask
-from app.agents.orchestrator import OrchestratorService, create_default_orchestrator
+from common.langchain_module import LegalComplianceGuardError, response
 from common.privacy import PrivacyManager
+from common.translations import get_text
 
 try:  # pragma: no cover - compatibilidad con httpx 0.28+
     import httpx
@@ -560,6 +559,10 @@ async def chat_with_rag(
     token: str = Depends(verify_token)
 ):
     """Realiza consultas conversacionales al sistema Anclora RAG."""
+    language = (request.language or "es").lower()
+    if language not in {"es", "en"}:
+        language = "es"
+
     try:
         if not request.message or len(request.message.strip()) == 0:
             raise HTTPException(status_code=400, detail="Mensaje vacío")
@@ -570,31 +573,58 @@ async def chat_with_rag(
                 detail=f"Mensaje demasiado largo (máximo {request.max_length} caracteres)",
             )
 
-        logger.info("Procesando consulta API: %s...", request.message[:50])
-        language = _normalise_language(request.language)
+        # Procesar consulta
+        logger.info(f"Procesando consulta API: {request.message[:50]}...")
+        try:
+            rag_response = response(request.message, language)
+        except TypeError:
+            rag_response = response(request.message)
 
-        orchestrator = get_orchestrator()
-        task = AgentTask(
-            task_type="document_query",
-            payload={
-                "question": request.message,
-                "language": language,
-                "max_length": request.max_length,
-            },
+        inspection = privacy_manager.inspect_response_citations(rag_response)
+        warning_message: str | None = None
+        if getattr(inspection, "has_sensitive_citations", False) and inspection.message_key:
+            context = dict(getattr(inspection, "context", {}) or {})
+            warning_message = get_text(
+                inspection.message_key,
+                language,
+                **context,
+            )
+            sensitive_refs = tuple(getattr(inspection, "sensitive_citations", ()))
+            if sensitive_refs:
+                privacy_manager.record_sensitive_audit(
+                    response=rag_response,
+                    citations=sensitive_refs,
+                    requested_by=token,
+                    query=request.message,
+                    metadata={
+                        "language": language,
+                        "citations": tuple(getattr(inspection, "citations", sensitive_refs)),
+                    },
+                )
+
+        response_text = rag_response
+        status_label = "success"
+        if warning_message:
+            response_text = f"{warning_message}\n\n{rag_response}"
+            status_label = "warning"
+
+        from datetime import datetime
+        return ChatResponse(
+            response=response_text,
+            status=status_label,
+            timestamp=datetime.now().isoformat()
         )
-        agent_response = orchestrator.execute(task)
 
-        metadata = {
-            "language": language,
-            "task_type": task.task_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-        return _build_agent_http_response(
-            agent_response,
-            extra_metadata=metadata,
-            log_context="chat_document_query",
+    except LegalComplianceGuardError as guard_exc:
+        from datetime import datetime
+
+        message = guard_exc.render_message(language)
+        return ChatResponse(
+            response=message,
+            status="guardrail",
+            timestamp=datetime.now().isoformat(),
         )
-
+      
     except HTTPException:
         raise
     except Exception as exc:
