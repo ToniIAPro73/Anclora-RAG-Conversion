@@ -1,18 +1,12 @@
 version: '3.6'
 
 services:
-    ollama: 
+    ollama:
       image: ollama/ollama:latest
       volumes:
         - /ollama/models:/home/models
       environment:
         - OLLAMA_MODELS=/home/models
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                capabilities: [gpu]
     
     chroma:
       image: chromadb/chroma:0.5.1.dev111
@@ -22,17 +16,6 @@ services:
         - 8000:8000
       networks:
         - net
-    
-    nvidia:
-      image: nvidia/cuda:12.3.1-base-ubuntu20.04
-      command: nvidia-smi
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
     
     ui:
       build: ./app
@@ -44,7 +27,6 @@ services:
       networks:
         - net
       depends_on:
-        - nvidia
         - ollama
         - chroma
       environment:
@@ -77,7 +59,6 @@ services:
       networks:
         - net
       depends_on:
-        - nvidia
         - ollama
         - chroma
       environment:

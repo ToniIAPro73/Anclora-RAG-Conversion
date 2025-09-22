@@ -19,5 +19,5 @@ if not defined ANCLORA_API_TOKENS if not defined ANCLORA_JWT_SECRET (
   exit /b 1
 )
 
-docker-compose up -d %*
+docker compose %* up -d
 endlocal
