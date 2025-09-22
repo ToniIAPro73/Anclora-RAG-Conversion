@@ -21,7 +21,7 @@ def test_orchestrator_routes_document_tasks() -> None:
 
     assert response.success is True
     assert response.data == {"answer": "respuesta contextual"}
-    query_function.assert_called_once_with("¿Qué es PBC?", None)
+    query_function.assert_called_once_with("¿Qué es PBC?", None, "document_query", None)
 
 
 def test_orchestrator_returns_error_for_unknown_tasks() -> None:
@@ -56,4 +56,6 @@ def test_document_flow_helper_uses_provided_orchestrator() -> None:
 
     assert response.success is True
     assert response.data == {"answer": "respuesta orquestada"}
-    query_function.assert_called_once_with("Explica el cubo de datos", None)
+    query_function.assert_called_once_with(
+        "Explica el cubo de datos", None, "document_query", None
+    )

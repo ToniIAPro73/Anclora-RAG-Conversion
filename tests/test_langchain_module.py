@@ -1,5 +1,6 @@
 """Tests for helpers in ``app.common.langchain_module``."""
 
+import sys
 from threading import Lock
 from types import SimpleNamespace
 
@@ -97,23 +98,32 @@ def _configure_rag_environment(
     embeddings_factory,
     collection_counts: dict[str, int] | None = None,
     collection_documents: dict[str, list[SimpleNamespace]] | None = None,
-) -> tuple[list[FakeRetriever], list[object]]:
+) -> tuple[list[FakeRetriever], list[object], list[FakePrompt]]:
 
     def fake_get_text(key: str, language: str, **_: object) -> str:
         return f"{key}:{language}"
 
-    monkeypatch.setattr("app.common.langchain_module.get_text", fake_get_text)
-    monkeypatch.setattr(
-        "app.common.langchain_module.parse_arguments",
-        lambda: SimpleNamespace(hide_source=False, mute_stream=True),
-    )
-    monkeypatch.setattr(
-        "app.common.langchain_module.record_rag_response",
-        lambda *args, **kwargs: None,
-    )
-    monkeypatch.setattr(
-        "app.common.langchain_module.HuggingFaceEmbeddings", embeddings_factory
-    )
+    base_module = sys.modules["app.common.langchain_module"]
+    alias_module = sys.modules.get("common.langchain_module")
+    target_modules = [base_module]
+    if alias_module is not None and alias_module is not base_module:
+        target_modules.append(alias_module)
+
+    for module in target_modules:
+        monkeypatch.setattr(module, "get_text", fake_get_text, raising=False)
+        monkeypatch.setattr(
+            module,
+            "parse_arguments",
+            lambda: SimpleNamespace(hide_source=False, mute_stream=True),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            module,
+            "record_rag_response",
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+        monkeypatch.setattr(module, "HuggingFaceEmbeddings", embeddings_factory, raising=False)
 
     if collection_counts is None:
         counts_by_collection = {name: 2 for name in CHROMA_COLLECTIONS}
@@ -159,10 +169,11 @@ def _configure_rag_environment(
     fake_client = SimpleNamespace(
         get_collection=lambda name: FakeCollection(name),
     )
-    monkeypatch.setattr("app.common.langchain_module.CHROMA_SETTINGS", fake_client)
+    for module in target_modules:
+        monkeypatch.setattr(module, "CHROMA_SETTINGS", fake_client, raising=False)
 
-    vectorstores: dict[str, object] = {}
     chroma_embeddings: list[object] = []
+    created_retrievers: list[FakeRetriever] = []
 
     class FakeChroma:
         def __init__(
@@ -173,9 +184,13 @@ def _configure_rag_environment(
             **__,
         ):
             name = collection_name or "vectordb"
+            self.collection_name = name
             self.retriever = FakeRetriever(name, _documents_for(name))
             created_retrievers.append(self.retriever)
             chroma_embeddings.append(embedding_function)
+
+        def as_retriever(self, **kwargs):
+            return self.retriever
 
         def similarity_search_with_score(
             self, query: str, k: int, **__: object
@@ -194,15 +209,18 @@ def _configure_rag_environment(
                 )
             return results[:k]
 
-    monkeypatch.setattr("app.common.langchain_module.Chroma", FakeChroma)
-    monkeypatch.setattr(
-        "app.common.langchain_module.RunnableLambda",
-        lambda func: FakeRunnable(func),
-    )
-    monkeypatch.setattr(
-        "app.common.langchain_module.RunnablePassthrough",
-        lambda: FakeRunnable(lambda value: value),
-    )
+    for module in target_modules:
+        monkeypatch.setattr(module, "Chroma", FakeChroma, raising=False)
+        monkeypatch.setattr(module, "_collections_cache", {}, raising=False)
+        monkeypatch.setattr(module, "RunnableLambda", lambda func: FakeRunnable(func), raising=False)
+        monkeypatch.setattr(
+            module,
+            "RunnablePassthrough",
+            lambda: FakeRunnable(lambda value: value),
+            raising=False,
+        )
+        if hasattr(module, "_embeddings_instance"):
+            module._embeddings_instance = None
 
     created_prompts: list[FakePrompt] = []
 
@@ -211,22 +229,16 @@ def _configure_rag_environment(
         created_prompts.append(prompt)
         return prompt
 
-    monkeypatch.setattr(
-        "app.common.langchain_module.assistant_prompt",
-        _fake_prompt_factory,
-    )
-    monkeypatch.setattr(
-        "app.common.langchain_module.Ollama", lambda *args, **kwargs: FakeLLM()
-    )
-    monkeypatch.setattr(
-        "app.common.langchain_module.StrOutputParser", lambda: FakeParser()
-    )
-    monkeypatch.setattr(
-        "app.common.langchain_module.RunnableLambda",
-        lambda func: FakeRunnable(func),
-    )
-
-    return vectorstores, chroma_embeddings, created_prompts
+    prompt_builders = {
+        "documental": _fake_prompt_factory,
+        "multimedia": _fake_prompt_factory,
+        "legal": _fake_prompt_factory,
+    }
+    for module in target_modules:
+        monkeypatch.setattr(module, "PROMPT_BUILDERS", prompt_builders, raising=False)
+        monkeypatch.setattr(module, "Ollama", lambda *args, **kwargs: FakeLLM(), raising=False)
+        monkeypatch.setattr(module, "StrOutputParser", lambda: FakeParser(), raising=False)
+    return created_retrievers, chroma_embeddings, created_prompts
 
 
 @pytest.mark.parametrize(
@@ -275,8 +287,9 @@ def test_response_long_greeting_invokes_rag(monkeypatch: pytest.MonkeyPatch) -> 
 
     query = "Hola necesito el informe trimestral"
     monkeypatch.setattr("app.common.langchain_module._embeddings_instance", None)
+    monkeypatch.setattr("common.langchain_module._embeddings_instance", None, raising=False)
 
-    vectorstores, _, _ = _configure_rag_environment(
+    retrievers, _, _ = _configure_rag_environment(
         monkeypatch,
         embeddings_factory=lambda model_name: SimpleNamespace(model_name=model_name),
     )
@@ -284,17 +297,19 @@ def test_response_long_greeting_invokes_rag(monkeypatch: pytest.MonkeyPatch) -> 
     result = response(query)
 
     assert result == "fake_llm_response:Hola necesito el informe trimestral"
-    assert len(retrievers) == len(CHROMA_COLLECTIONS)
-    assert all(retriever.queries == [query] for retriever in retrievers)
-    assert {
-        retriever.collection_name for retriever in retrievers
-    } == set(CHROMA_COLLECTIONS)
+    active = [retriever for retriever in retrievers if retriever.queries]
+    assert {retriever.collection_name for retriever in active} == {
+        "conversion_rules",
+        "troubleshooting",
+    }
+    assert all(retriever.queries == [query] for retriever in active)
 
 def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) -> None:
     """El helper ``get_embeddings`` debe inicializar el modelo una única vez."""
 
     query = "Hola necesito el informe trimestral"
     monkeypatch.setattr("app.common.langchain_module._embeddings_instance", None)
+    monkeypatch.setattr("common.langchain_module._embeddings_instance", None, raising=False)
 
     instantiations: list[str] = []
 
@@ -302,7 +317,7 @@ def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) ->
         instantiations.append(model_name)
         return SimpleNamespace(model_name=model_name)
 
-    vectorstores, chroma_embeddings, _ = _configure_rag_environment(
+    retrievers, chroma_embeddings, _ = _configure_rag_environment(
         monkeypatch, embeddings_factory=fake_embeddings
     )
 
@@ -312,11 +327,12 @@ def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) ->
     assert first_result == "fake_llm_response:Hola necesito el informe trimestral"
     assert second_result == "fake_llm_response:Hola necesito el informe trimestral"
     assert len(instantiations) == 1
-    expected_instances = len(CHROMA_COLLECTIONS) * 2
+    expected_instances = len(CHROMA_COLLECTIONS)
     assert len(chroma_embeddings) == expected_instances
     assert len(retrievers) == expected_instances
     assert all(embedding is chroma_embeddings[0] for embedding in chroma_embeddings)
-    assert all(retriever.queries == [query] for retriever in retrievers)
+    active = [retriever for retriever in retrievers if retriever.queries]
+    assert all(retriever.queries == [query, query] for retriever in active)
 
 
 def test_response_uses_documents_from_additional_collections(
@@ -326,8 +342,9 @@ def test_response_uses_documents_from_additional_collections(
 
     query = "Necesito material multimedia para la campaña"
     monkeypatch.setattr("app.common.langchain_module._embeddings_instance", None)
+    monkeypatch.setattr("common.langchain_module._embeddings_instance", None, raising=False)
 
-    retrievers, _ = _configure_rag_environment(
+    retrievers, _, _ = _configure_rag_environment(
         monkeypatch,
         embeddings_factory=lambda model_name: SimpleNamespace(model_name=model_name),
         collection_counts={
@@ -349,6 +366,7 @@ def test_response_uses_documents_from_additional_collections(
     result = response(query)
 
     assert result == "fake_llm_response:Necesito material multimedia para la campaña"
-    assert len(retrievers) == 1
-    assert retrievers[0].collection_name == "multimedia_assets"
-    assert retrievers[0].queries == [query]
+    active = [retriever for retriever in retrievers if retriever.queries]
+    assert len(active) == 1
+    assert active[0].collection_name == "multimedia_assets"
+    assert active[0].queries == [query]
