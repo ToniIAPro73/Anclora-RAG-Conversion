@@ -414,7 +414,7 @@ def ingest_file(uploaded_file, file_name):
             ingested_collections.append(collection_name)
 
         st.success(
-            "Se agregó el archivo '{file_name}' con éxito en: "
+            f"Se agregó el archivo '{file_name}' con éxito en: "
             f"{', '.join(ingested_collections)}."
         )
         logger.info(
