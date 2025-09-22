@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from typing import Optional
+from typing import Mapping, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ def record_rag_response(
     status: str,
     duration_seconds: Optional[float] = None,
     context_documents: Optional[int] = None,
-    collection_documents: Optional[int] = None,
+    collection_documents: Optional[object] = None,
 ) -> None:
     """Record the outcome of a RAG response pipeline."""
 
@@ -189,8 +189,24 @@ def record_rag_response(
     if context_documents is not None:
         _RAG_CONTEXT.labels(language=normalised_language).observe(max(float(context_documents), 0.0))
 
-    if collection_documents is not None:
-        _KNOWLEDGE_BASE_SIZE.labels(collection="vectordb").set(max(float(collection_documents), 0.0))
+    if isinstance(collection_documents, Mapping):
+        total = 0.0
+        for name, value in collection_documents.items():
+            try:
+                numeric_value = max(float(value), 0.0)
+            except (TypeError, ValueError):  # pragma: no cover - defensive parsing
+                continue
+            _KNOWLEDGE_BASE_SIZE.labels(collection=str(name)).set(numeric_value)
+            total += numeric_value
+
+        if total > 0.0:
+            _KNOWLEDGE_BASE_SIZE.labels(collection="total").set(total)
+    elif collection_documents is not None:
+        try:
+            numeric_total = max(float(collection_documents), 0.0)
+        except (TypeError, ValueError):  # pragma: no cover - defensive parsing
+            numeric_total = 0.0
+        _KNOWLEDGE_BASE_SIZE.labels(collection="vectordb").set(numeric_total)
 
 
 def record_agent_invocation(

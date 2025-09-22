@@ -1,12 +1,13 @@
 """Tests for helpers in ``app.common.langchain_module``."""
 
+import sys
 from threading import Lock
 from types import SimpleNamespace
 
 import pytest
 
 from app.common.constants import CHROMA_COLLECTIONS
-from app.common.langchain_module import detect_language, response
+from app.common.langchain_module import LegalComplianceGuardError, detect_language, response
 
 
 class FakeRunnable:
@@ -179,15 +180,23 @@ def _configure_rag_environment(
     )
 
     if collection_documents is None:
-        documents_by_collection = {
-            name: [
+        documents_by_collection: dict[str, list[SimpleNamespace]] = {}
+        for index, name in enumerate(CHROMA_COLLECTIONS):
+            metadata = {"distance": float(index)}
+            if name == "legal_compliance":
+                metadata.update(
+                    {
+                        "policy_id": "default_policy",
+                        "policy_version": "v1",
+                        "collection": "legal_compliance",
+                    }
+                )
+            documents_by_collection[name] = [
                 SimpleNamespace(
                     page_content=f"Contexto simulado {name}",
-                    metadata={"distance": float(index)},
+                    metadata=metadata,
                 )
             ]
-            for index, name in enumerate(CHROMA_COLLECTIONS)
-        }
     else:
         documents_by_collection = {
             name: list(docs)
@@ -198,10 +207,19 @@ def _configure_rag_environment(
         docs = documents_by_collection.get(collection_name)
         if docs:
             return docs
+        metadata = {"distance": 0.0}
+        if collection_name == "legal_compliance":
+            metadata.update(
+                {
+                    "policy_id": "fallback_policy",
+                    "policy_version": "v1",
+                    "collection": "legal_compliance",
+                }
+            )
         return [
             SimpleNamespace(
                 page_content=f"Contexto simulado {collection_name}",
-                metadata={"distance": 0.0},
+                metadata=metadata,
             )
         ]
 
@@ -236,7 +254,10 @@ def _configure_rag_environment(
             self.collection_name = name
             self.embedding_function = embedding_function
             self.retriever = FakeRetriever(name, _documents_for(name))
+            self.collection_name = name
+            self.queries: list[tuple[str, int]] = []
             created_retrievers.append(self.retriever)
+            
             chroma_embeddings.append((name, embedding_function))
 
         def as_retriever(self, *_, **__):  # noqa: D401 - parity with real API
@@ -271,7 +292,6 @@ def _configure_rag_environment(
     )
 
     return created_retrievers, chroma_embeddings, created_prompts, manager, collection_requests
-
 
 @pytest.mark.parametrize(
     "text, expected",
@@ -320,6 +340,7 @@ def test_response_long_greeting_invokes_rag(monkeypatch: pytest.MonkeyPatch) -> 
     query = "Hola necesito el informe trimestral"
 
     retrievers, _, _, manager, collection_requests = _configure_rag_environment(
+
         monkeypatch,
         embeddings_factory=lambda *, model_name: SimpleNamespace(model_name=model_name),
     )
@@ -340,7 +361,6 @@ def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) ->
     """El helper ``get_embeddings`` debe inicializar el modelo una única vez."""
 
     query = "Hola necesito el informe trimestral"
-
     instantiations: list[str] = []
 
     def fake_embeddings(*, model_name: str):
@@ -378,7 +398,6 @@ def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) ->
     }
     expected_collections = list(CHROMA_COLLECTIONS)
     assert collection_requests == expected_collections * 2
-
 
 def test_response_uses_documents_from_additional_collections(
     monkeypatch: pytest.MonkeyPatch,

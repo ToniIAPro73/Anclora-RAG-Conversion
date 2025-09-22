@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 from common.text_normalization import Document
 
-from .base import BaseFileIngestor
+from ..base import BaseFileIngestor
 
 
 PLAIN_TEXT_FALLBACK = False
@@ -150,4 +150,10 @@ def create_document_ingestor() -> BaseFileIngestor:
 
 DocumentIngestor = create_document_ingestor()
 
-__all__ = ["DocumentIngestor", "create_document_ingestor", "DOCUMENTS_COLLECTION"]
+__all__ = [
+    "DOCUMENTS_COLLECTION",
+    "DocumentIngestor",
+    "EmailFallbackLoader",
+    "create_document_ingestor",
+    "refresh_document_loaders",
+]
