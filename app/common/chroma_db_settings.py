@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 import uuid
 from typing import (
     TYPE_CHECKING,
@@ -23,6 +24,8 @@ from langchain_core.utils import xor_args
 from langchain_core.vectorstores import VectorStore
 
 from langchain_community.vectorstores.utils import maximal_marginal_relevance
+
+from common.constants import CHROMA_COLLECTIONS
 
 if TYPE_CHECKING:
     import chromadb
@@ -802,20 +805,49 @@ class Chroma(VectorStore):
         return self._collection.count()
 
 
-def get_unique_sources_df(chroma_settings):
-    df = pd.DataFrame(chroma_settings.get_collection('vectordb').get(include=['embeddings', 'documents', 'metadatas']))
-    
-    # Suponiendo que 'df' es tu DataFrame original
-    sources = df['metadatas'].apply(lambda x: x.get('source', None)).dropna().unique()
+def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
+    """Return a dataframe describing the files stored across all collections."""
 
-    # Obtener solo el nombre de archivo de cada ruta
-    file_names = [source.split('/')[-1] for source in sources]
+    records: List[Dict[str, str]] = []
+    for collection_name, collection_config in CHROMA_COLLECTIONS.items():
+        collection = chroma_settings.get_or_create_collection(collection_name)
+        try:
+            response = collection.get(include=["metadatas"])
+        except TypeError:
+            response = collection.get()
 
-    # Crear un DataFrame con los nombres de archivo únicos
-    unique_sources_df = pd.DataFrame(file_names, columns=['source'])
-    
-    
-    unique_sources_df.rename(columns={'source': 'Archivo'}, inplace=True)
+        metadata_items: Iterable[Dict[str, Any]]
+        if hasattr(response, "get"):
+            metadata_items = response.get("metadatas", []) or []
+        else:  # pragma: no cover - defensive path for custom doubles
+            metadata_items = []
 
-    # Mostrar el DataFrame con los diferentes valores de 'source'
-    return unique_sources_df
+        for metadata in metadata_items:
+            if not metadata:
+                continue
+
+            file_name = metadata.get("uploaded_file_name")
+            if not file_name:
+                source_path = metadata.get("source")
+                if source_path:
+                    file_name = os.path.basename(str(source_path))
+            if not file_name:
+                continue
+
+            domain = metadata.get("domain") or collection_config.domain
+            collection_label = metadata.get("collection") or collection_name
+
+            records.append(
+                {
+                    "uploaded_file_name": str(file_name),
+                    "domain": str(domain),
+                    "collection": str(collection_label),
+                }
+            )
+
+    if not records:
+        return pd.DataFrame(columns=["uploaded_file_name", "domain", "collection"])
+
+    df = pd.DataFrame(records)
+    df = df.drop_duplicates(subset=["uploaded_file_name", "collection"])
+    return df.sort_values(by=["uploaded_file_name", "collection"]).reset_index(drop=True)
