@@ -1,9 +1,5 @@
-"""Helpers and ingestors for code-oriented workflows."""
+"""Agent responsible for troubleshooting tasks over code snippets."""
 
-from .ingestor import CODE_COLLECTION, CodeIngestor, create_code_ingestor
+from .agent import CodeAgent
 
-__all__ = [
-    "CODE_COLLECTION",
-    "CodeIngestor",
-    "create_code_ingestor",
-]
+__all__ = ["CodeAgent"]
