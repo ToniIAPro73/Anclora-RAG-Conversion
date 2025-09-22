@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import tempfile
 import uuid
 from dataclasses import dataclass, field
@@ -26,6 +27,18 @@ _SENSITIVE_KEYWORDS = (
     "identifier",
     "dni",
     "ssn",
+)
+
+_CITATION_PATTERN = re.compile(r"\[(?:source|fuente|legal_ref):\s*(?P<ref>[^\]\r\n]+)\]", re.IGNORECASE)
+_DEFAULT_SENSITIVE_TERMS = (
+    "confidential",
+    "confidencial",
+    "sensitive",
+    "sensible",
+    "restricted",
+    "restringido",
+    "privado",
+    "classified",
 )
 
 
@@ -57,6 +70,21 @@ class PrivacyActionSummary:
     removed_collections: Sequence[str]
     removed_files: Sequence[Path]
     metadata: Mapping[str, Any]
+
+
+@dataclass(slots=True)
+class SensitiveCitationReport:
+    """Summary of citations detected within an assistant response."""
+
+    citations: tuple[str, ...]
+    sensitive_citations: tuple[str, ...]
+    flagged_terms: tuple[str, ...]
+    message_key: str | None = None
+    context: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def has_sensitive_citations(self) -> bool:
+        return bool(self.sensitive_citations)
 
 
 class PrivacyAuditLogger:
@@ -140,6 +168,106 @@ class PrivacyManager:
     @staticmethod
     def _mask_value(value: str) -> str:
         return ANONYMIZED_VALUE
+
+    # ------------------------------------------------------------------
+    # Response inspection helpers
+    def inspect_response_citations(
+        self,
+        response_text: str,
+        *,
+        sensitive_terms: Sequence[str] | None = None,
+    ) -> SensitiveCitationReport:
+        """Analyse ``response_text`` and flag sensitive citations when present."""
+
+        if not response_text:
+            return SensitiveCitationReport((), (), (), None, {})
+
+        compiled_terms = tuple(
+            term.lower()
+            for term in (sensitive_terms or _DEFAULT_SENSITIVE_TERMS)
+            if term
+        )
+
+        citations: list[str] = []
+        seen: set[str] = set()
+        for match in _CITATION_PATTERN.finditer(response_text):
+            reference = match.group("ref")
+            if not reference:
+                continue
+            cleaned = reference.strip()
+            if not cleaned or cleaned in seen:
+                continue
+            seen.add(cleaned)
+            citations.append(cleaned)
+
+        sensitive: list[str] = []
+        flagged_terms: set[str] = set()
+        for citation in citations:
+            lowered = citation.lower()
+            for term in compiled_terms:
+                if term in lowered:
+                    sensitive.append(citation)
+                    flagged_terms.add(term)
+                    break
+
+        context: dict[str, str] = {}
+        if sensitive:
+            context["citations"] = ", ".join(dict.fromkeys(sensitive))
+        if flagged_terms:
+            context["terms"] = ", ".join(sorted(flagged_terms))
+
+        message_key = "sensitive_citation_warning" if sensitive else None
+
+        return SensitiveCitationReport(
+            citations=tuple(citations),
+            sensitive_citations=tuple(dict.fromkeys(sensitive)),
+            flagged_terms=tuple(sorted(flagged_terms)),
+            message_key=message_key,
+            context=context,
+        )
+
+    def record_sensitive_audit(
+        self,
+        *,
+        response: str,
+        citations: Sequence[str],
+        requested_by: str,
+        query: str,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        """Persist an audit trail entry for sensitive assistant responses."""
+
+        audit_metadata: dict[str, Any] = {
+            "citations": list(dict.fromkeys(citations)),
+            "query": query,
+            "response_preview": response[:200],
+        }
+        if metadata:
+            for key, value in metadata.items():
+                audit_metadata[key] = value
+
+        sanitized_metadata = self.anonymize_metadata(audit_metadata)
+
+        record = PrivacyAuditRecord(
+            audit_id=uuid.uuid4().hex,
+            filename="[assistant_response]",
+            requested_by=requested_by,
+            status="sensitive_response",
+            message=(
+                "Respuesta con referencias sensibles detectada / "
+                "Sensitive references detected"
+            ),
+            subject_id=None,
+            reason="sensitive_citation_guard",
+            collections=(),
+            removed_files=(),
+            metadata=sanitized_metadata,
+        )
+
+        try:
+            self._audit_logger.log(record)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.error("No fue posible registrar la auditoría de respuesta sensible: %s", exc)
 
     # ------------------------------------------------------------------
     # Deletion helpers
@@ -325,6 +453,7 @@ __all__ = [
     "ANONYMIZED_VALUE",
     "PrivacyActionSummary",
     "PrivacyAuditLogger",
+    "SensitiveCitationReport",
     "PrivacyManager",
 ]
 

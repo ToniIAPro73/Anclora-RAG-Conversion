@@ -27,6 +27,8 @@ if "langdetect" not in sys.modules:  # pragma: no cover - testing stub path
     sys.modules["langdetect"] = langdetect_stub
 
 from app import api_endpoints
+from common.langchain_module import LegalComplianceGuardError
+from common.privacy import SensitiveCitationReport
 
 AUTH_HEADERS = {"Authorization": "Bearer your-api-key-here"}
 
@@ -82,3 +84,68 @@ def test_chat_returns_utf8_characters_for_english_queries(monkeypatch) -> None:
     assert "jalapeño" in response.text
     assert "Día 1" in response.text
     assert response.headers["content-type"].startswith("application/json")
+
+
+def test_chat_returns_guardrail_message_for_legal_conflicts(monkeypatch) -> None:
+    """Guardrail violations should produce a translated warning response."""
+
+    client = _build_client(monkeypatch)
+
+    def _guarded_response(message: str, language: str = "es") -> str:
+        raise LegalComplianceGuardError(
+            "legal_compliance_policy_conflict",
+            context={"policies": ["RET", "ACC"]},
+        )
+
+    monkeypatch.setattr(api_endpoints, "response", _guarded_response)
+
+    payload = {"message": "Consulta legal", "language": "es"}
+    response = client.post("/chat", json=payload, headers=AUTH_HEADERS)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "guardrail"
+    assert "políticas legales" in data["response"].lower()
+
+
+def test_chat_appends_sensitive_warning_and_audit(monkeypatch) -> None:
+    """Sensitive citations should append a warning and record an audit trail."""
+
+    client = _build_client(monkeypatch)
+
+    report = SensitiveCitationReport(
+        citations=("policy-x",),
+        sensitive_citations=("policy-x",),
+        flagged_terms=("confidencial",),
+        message_key="sensitive_citation_warning",
+        context={"citations": "policy-x"},
+    )
+
+    monkeypatch.setattr(
+        api_endpoints.privacy_manager,
+        "inspect_response_citations",
+        lambda _: report,
+    )
+
+    recorded: dict[str, object] = {}
+
+    def _record_sensitive_audit(**kwargs):
+        recorded["called"] = True
+        recorded["citations"] = tuple(kwargs.get("citations", ()))
+
+    monkeypatch.setattr(
+        api_endpoints.privacy_manager,
+        "record_sensitive_audit",
+        _record_sensitive_audit,
+    )
+
+    payload = {"message": "Consulta de cumplimiento", "language": "es"}
+    response = client.post("/chat", json=payload, headers=AUTH_HEADERS)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "warning"
+    assert "⚠️" in data["response"]
+    assert "Respuesta eco" in data["response"]
+    assert recorded["called"] is True
+    assert recorded["citations"] == ("policy-x",)

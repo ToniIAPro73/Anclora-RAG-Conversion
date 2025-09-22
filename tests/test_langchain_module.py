@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.common.constants import CHROMA_COLLECTIONS
-from app.common.langchain_module import detect_language, response
+from app.common.langchain_module import LegalComplianceGuardError, detect_language, response
 
 
 class FakeRunnable:
@@ -123,15 +123,23 @@ def _configure_rag_environment(
             counts_by_collection.setdefault(name, 0)
 
     if collection_documents is None:
-        documents_by_collection = {
-            name: [
+        documents_by_collection: dict[str, list[SimpleNamespace]] = {}
+        for index, name in enumerate(CHROMA_COLLECTIONS):
+            metadata = {"distance": float(index)}
+            if name == "legal_compliance":
+                metadata.update(
+                    {
+                        "policy_id": "default_policy",
+                        "policy_version": "v1",
+                        "collection": "legal_compliance",
+                    }
+                )
+            documents_by_collection[name] = [
                 SimpleNamespace(
                     page_content=f"Contexto simulado {name}",
-                    metadata={"distance": float(index)},
+                    metadata=metadata,
                 )
             ]
-            for index, name in enumerate(CHROMA_COLLECTIONS)
-        }
     else:
         documents_by_collection = {
             name: list(docs)
@@ -142,10 +150,19 @@ def _configure_rag_environment(
         docs = documents_by_collection.get(collection_name)
         if docs:
             return docs
+        metadata = {"distance": 0.0}
+        if collection_name == "legal_compliance":
+            metadata.update(
+                {
+                    "policy_id": "fallback_policy",
+                    "policy_version": "v1",
+                    "collection": "legal_compliance",
+                }
+            )
         return [
             SimpleNamespace(
                 page_content=f"Contexto simulado {collection_name}",
-                metadata={"distance": 0.0},
+                metadata=metadata,
             )
         ]
 
@@ -161,7 +178,7 @@ def _configure_rag_environment(
     )
     monkeypatch.setattr("app.common.langchain_module.CHROMA_SETTINGS", fake_client)
 
-    vectorstores: dict[str, object] = {}
+    created_retrievers: list[FakeRetriever] = []
     chroma_embeddings: list[object] = []
 
     class FakeChroma:
@@ -174,6 +191,8 @@ def _configure_rag_environment(
         ):
             name = collection_name or "vectordb"
             self.retriever = FakeRetriever(name, _documents_for(name))
+            self.collection_name = name
+            self.queries: list[tuple[str, int]] = []
             created_retrievers.append(self.retriever)
             chroma_embeddings.append(embedding_function)
 
@@ -182,17 +201,20 @@ def _configure_rag_environment(
         ) -> list[tuple[SimpleNamespace, float]]:
             self.queries.append((query, k))
             results: list[tuple[SimpleNamespace, float]] = []
-            for content, score in docs_by_collection.get(self.collection_name, []):
+            for index, document in enumerate(self.retriever._documents[:k]):
                 results.append(
                     (
                         SimpleNamespace(
-                            page_content=content,
+                            page_content=document.page_content,
                             metadata={"collection": self.collection_name},
                         ),
-                        score,
+                        float(index),
                     )
                 )
-            return results[:k]
+            return results
+
+        def as_retriever(self, *_, **__):
+            return self.retriever
 
     monkeypatch.setattr("app.common.langchain_module.Chroma", FakeChroma)
     monkeypatch.setattr(
@@ -226,7 +248,9 @@ def _configure_rag_environment(
         lambda func: FakeRunnable(func),
     )
 
-    return vectorstores, chroma_embeddings, created_prompts
+    global retrievers
+    retrievers = created_retrievers
+    return created_retrievers, chroma_embeddings, created_prompts
 
 
 @pytest.mark.parametrize(
@@ -327,7 +351,7 @@ def test_response_uses_documents_from_additional_collections(
     query = "Necesito material multimedia para la campaña"
     monkeypatch.setattr("app.common.langchain_module._embeddings_instance", None)
 
-    retrievers, _ = _configure_rag_environment(
+    retrievers, *_ = _configure_rag_environment(
         monkeypatch,
         embeddings_factory=lambda model_name: SimpleNamespace(model_name=model_name),
         collection_counts={
@@ -352,3 +376,32 @@ def test_response_uses_documents_from_additional_collections(
     assert len(retrievers) == 1
     assert retrievers[0].collection_name == "multimedia_assets"
     assert retrievers[0].queries == [query]
+
+
+def test_response_blocks_legal_compliance_when_metadata_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legal compliance guardrails should block answers with incomplete metadata."""
+
+    monkeypatch.setattr("app.common.langchain_module._embeddings_instance", None)
+
+    invalid_docs = {
+        "legal_compliance": [
+            SimpleNamespace(
+                page_content="Contenido legal",
+                metadata={"collection": "legal_compliance", "distance": 0.05},
+            )
+        ]
+    }
+
+    _configure_rag_environment(
+        monkeypatch,
+        embeddings_factory=lambda model_name: SimpleNamespace(model_name=model_name),
+        collection_counts={"legal_compliance": 1},
+        collection_documents=invalid_docs,
+    )
+
+    with pytest.raises(LegalComplianceGuardError) as excinfo:
+        response("Necesito la política legal actualizada", language="es")
+
+    assert excinfo.value.message_key == "legal_compliance_missing_metadata"

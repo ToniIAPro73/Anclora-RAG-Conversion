@@ -47,3 +47,7 @@ greeting_response: "Hello! I'm Bastet, your virtual assistant from PBC. I'm here
 no_documents: "Hi, I'm Bastet from PBC. I don't have any documents in my knowledge base yet. Please upload some documents in the 'Files' section so I can help you with specific information. In the meantime, I can share that PBC offers Software Engineering and Artificial Intelligence services."
 no_context: "No specific information was found in the knowledge base."
 processing_error: "Sorry, an error occurred while processing your query. Please try again or contact the administrator if the problem persists."
+legal_compliance_fields_not_allowed: "The request cannot be answered because unauthorized metadata ({fields}) was detected in legal compliance documents."
+legal_compliance_missing_metadata: "The retrieved legal documents are missing required information ({fields}). Please request an updated source before continuing."
+legal_compliance_policy_conflict: "Your query references multiple legal policies ({policies}). Specify the exact policy you need to continue."
+sensitive_citation_warning: "⚠️ The response includes sensitive references: {citations}. Review them carefully before sharing the answer."
