@@ -98,6 +98,22 @@ build --no-cache` para los servicios `ui` y `api`.
 - Volumen persistente para ChromaDB
 - Variables de entorno para selección de modelo y configuración de embeddings
 
+#### Variables de entorno para ChromaDB
+
+Los servicios `ui` y `api` consumen ChromaDB mediante las variables de entorno `CHROMA_HOST` y `CHROMA_PORT`, definidas en los archivos `docker-compose*.yml` con los valores por defecto `chroma` y `8000`. Estos valores permiten que ambos servicios descubran automáticamente al contenedor `chroma` cuando el stack se ejecuta con Docker Compose.
+
+Si ejecutas la aplicación fuera de Docker (por ejemplo, para desarrollo local), establece las variables antes de iniciar Streamlit o la API para apuntar al host correspondiente:
+
+```bash
+export CHROMA_HOST=localhost
+export CHROMA_PORT=8000
+streamlit run app/Inicio.py
+# o
+uvicorn app.api_endpoints:app --reload --port 8081
+```
+
+También puedes ajustar `CHROMA_HOST` y `CHROMA_PORT` a los valores de cualquier instancia remota de ChromaDB que quieras reutilizar.
+
 ### Archivos Principales
 
 **Punto de Entrada**: app/Inicio.py
