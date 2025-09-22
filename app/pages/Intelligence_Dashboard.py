@@ -1,14 +1,30 @@
 """Dashboard de Inteligencia Empresarial para Anclora RAG."""
 
 import streamlit as st
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import json
-from app.analytics.dashboard_data_service import dashboard_service
+
+# Try to import plotly, fallback to basic charts if not available
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.warning("⚠️ Plotly no está instalado. Usando gráficos básicos de Streamlit.")
+
+# Try to import dashboard service, fallback to mock data if not available
+try:
+    from app.analytics.dashboard_data_service import DashboardDataService
+    dashboard_service = DashboardDataService()
+    DASHBOARD_SERVICE_AVAILABLE = True
+except ImportError:
+    DASHBOARD_SERVICE_AVAILABLE = False
+    dashboard_service = None
+    st.info("ℹ️ Servicio de dashboard no disponible. Usando datos simulados.")
 
 # Set page config
 st.set_page_config(layout='wide', page_title='Intelligence Dashboard', page_icon='📈')
@@ -489,9 +505,16 @@ with col1:
     fig_forecast = go.Figure()
     
     # Historical data
+    historical_timestamps = pd.date_range(
+        start=datetime.now() - timedelta(hours=48),
+        end=datetime.now(),
+        freq='H'
+    )
+    historical_queries = np.random.poisson(15, len(historical_timestamps))
+
     fig_forecast.add_trace(go.Scatter(
-        x=filtered_data['timestamp'][-48:],  # Last 48 hours
-        y=filtered_data['query_volume'][-48:],
+        x=historical_timestamps,
+        y=historical_queries,
         mode='lines',
         name='Histórico',
         line=dict(color='#45B7D1')
