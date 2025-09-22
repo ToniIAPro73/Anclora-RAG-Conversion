@@ -11,7 +11,7 @@ from common.observability import record_agent_invocation
 class MediaAgent(BaseAgent):
     """Provide basic responses for media-oriented tasks until a full pipeline is added."""
 
-    SUPPORTED_TASKS = {"media_transcription", "media_summary"}
+    SUPPORTED_TASKS = {"media_transcription", "media_summary", "media_pipeline"}
 
     def __init__(self) -> None:
         super().__init__(name="media_agent")
@@ -21,6 +21,7 @@ class MediaAgent(BaseAgent):
 
     def handle(self, task: AgentTask) -> AgentResponse:
         media_ref = task.get("media")
+        instructions = self._normalise_instructions(task)
         start_time = time.perf_counter()
 
         if not media_ref:
@@ -39,10 +40,46 @@ class MediaAgent(BaseAgent):
             duration_seconds=time.perf_counter() - start_time,
         )
 
+        placeholders = [
+            {
+                "instruction": instruction,
+                "status": "pending",
+                "detail": (
+                    "Placeholder response. Configure the media processing pipeline to "
+                    f"generate '{instruction}' outputs."
+                ),
+            }
+            for instruction in instructions
+        ]
+
         return AgentResponse(
             success=True,
             data={
-                "message": "Media task acknowledged. Implement post-processing pipeline to extend capabilities.",
                 "media": media_ref,
+                "results": placeholders,
+            },
+            metadata={
+                "instructions": instructions,
+                "response_type": "placeholder",
             },
         )
+
+    def _normalise_instructions(self, task: AgentTask) -> list[str]:
+        instructions = task.get("instructions")
+
+        if isinstance(instructions, str):
+            values = [instructions]
+        elif isinstance(instructions, (list, tuple)):
+            values = [value for value in instructions if isinstance(value, str)]
+        else:
+            values = []
+
+        if values:
+            return [value.strip().lower() for value in values if value.strip()]
+
+        default = {
+            "media_transcription": ["transcription"],
+            "media_summary": ["summary"],
+            "media_pipeline": ["transcription", "summary"],
+        }
+        return default.get(task.task_type, ["transcription"])

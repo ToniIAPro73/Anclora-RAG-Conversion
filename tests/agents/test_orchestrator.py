@@ -4,9 +4,25 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from app.agents.base import AgentTask
+from app.agents.base import AgentResponse, AgentTask, BaseAgent
 from app.agents.document_agent import DocumentAgent
 from app.agents.orchestrator import OrchestratorService, document_query_flow
+
+
+class _DynamicAgent(BaseAgent):
+    def __init__(self, name: str = "dynamic_agent", handled_task: str = "dynamic_task") -> None:
+        super().__init__(name=name)
+        self._handled_task = handled_task
+
+    def can_handle(self, task: AgentTask) -> bool:
+        return task.task_type == self._handled_task
+
+    def handle(self, task: AgentTask) -> AgentResponse:
+        return AgentResponse(success=True, data={"handled_by": self.name})
+
+
+def _dynamic_factory() -> BaseAgent:
+    return _DynamicAgent(name="factory_agent", handled_task="factory_task")
 
 
 def test_orchestrator_routes_document_tasks() -> None:
