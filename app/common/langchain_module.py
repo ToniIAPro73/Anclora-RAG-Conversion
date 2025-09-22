@@ -93,7 +93,7 @@ import logging
 import time
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # Configurar logging
 logging.basicConfig(
