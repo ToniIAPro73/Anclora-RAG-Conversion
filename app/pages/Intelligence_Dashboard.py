@@ -131,6 +131,10 @@ def get_text(key):
 def get_dashboard_data(time_range: str):
     """Get real data from the dashboard service."""
 
+    # Check if dashboard service is available
+    if not DASHBOARD_SERVICE_AVAILABLE or dashboard_service is None:
+        return get_fallback_data()
+
     try:
         # Get real metrics
         performance_metrics = dashboard_service.get_performance_metrics(time_range)
@@ -161,7 +165,7 @@ def get_fallback_data():
     """Fallback data when real data is not available."""
 
     # Generate fallback time series
-    dates = pd.date_range(start=datetime.now() - timedelta(days=1), end=datetime.now(), freq='H')
+    dates = pd.date_range(start=datetime.now() - timedelta(days=1), end=datetime.now(), freq='h')
 
     time_series_data = {
         'response_time': [{'timestamp': d, 'value': 2.5 + np.random.normal(0, 0.3)} for d in dates],
@@ -494,7 +498,7 @@ with col2:
 st.header(get_text('predictive_analytics'))
 
 # Generate forecast data
-future_dates = pd.date_range(start=datetime.now(), end=datetime.now() + timedelta(days=7), freq='H')
+future_dates = pd.date_range(start=datetime.now(), end=datetime.now() + timedelta(days=7), freq='h')
 forecast_queries = np.random.poisson(18, len(future_dates))  # Slightly higher than current
 
 col1, col2 = st.columns(2)
@@ -508,7 +512,7 @@ with col1:
     historical_timestamps = pd.date_range(
         start=datetime.now() - timedelta(hours=48),
         end=datetime.now(),
-        freq='H'
+        freq='h'
     )
     historical_queries = np.random.poisson(15, len(historical_timestamps))
 
