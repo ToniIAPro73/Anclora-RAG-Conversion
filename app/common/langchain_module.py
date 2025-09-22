@@ -187,7 +187,9 @@ def response(query: str, language: Optional[str] = None) -> str:
         }
         normalized_query_lower = stripped_query.lower()
 
-        if any(greeting in normalized_query_lower for greeting in simple_greetings[language_code]) and len(stripped_query.split()) <= 4:
+        word_count = len(re.findall(r"\w+", stripped_query))
+
+        if any(greeting in normalized_query_lower for greeting in simple_greetings[language_code]) and word_count <= 4:
             greeting_text = _translate("greeting_response", language_code)
 
             if os.getenv("PYTEST_CURRENT_TEST"):
