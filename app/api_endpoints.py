@@ -515,7 +515,7 @@ async def list_documents(token: str = Depends(verify_token)):
         from common.constants import CHROMA_SETTINGS
 
         files_df = get_unique_sources_df(CHROMA_SETTINGS)
-        documents = files_df['Archivo'].tolist() if not files_df.empty else []
+        documents = files_df['uploaded_file_name'].tolist() if not files_df.empty else []
         
         return {
             "status": "success",

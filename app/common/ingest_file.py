@@ -37,23 +37,17 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
 from common.chroma_db_settings import Chroma
-from common.constants import CHROMA_SETTINGS
 
 try:
-    from common.constants import CHROMA_COLLECTIONS
-except ImportError:  # pragma: no cover - fallback for lightweight test doubles
-    @dataclass(frozen=True)
-    class _CollectionConfig:
-        domain: str
-        description: str = ""
-
-    CHROMA_COLLECTIONS = {  # type: ignore[var-annotated]
-        "conversion_rules": _CollectionConfig(domain="documents"),
-        "troubleshooting": _CollectionConfig(domain="code"),
-        "multimedia_assets": _CollectionConfig(domain="multimedia"),
-    }
+    from common.chroma_db_settings import get_unique_sources_df as _get_unique_sources_df
+except (ImportError, AttributeError):  # pragma: no cover - fallback for lightweight stubs
+    def _get_unique_sources_df(_chroma_settings) -> pd.DataFrame:
+        return pd.DataFrame(columns=["uploaded_file_name", "domain", "collection"])
+from common.constants import CHROMA_SETTINGS
 from common.text_normalization import Document, normalize_documents_nfc
 from common.privacy import PrivacyManager
+
+get_unique_sources_df = _get_unique_sources_df
 
 logger = logging.getLogger(__name__)
 
@@ -216,37 +210,6 @@ def load_single_document(uploaded_file, file_name: str) -> Tuple[List[Document],
         logger.error("Error al cargar documento %s: %s", uploaded_file.name, exc)
         raise
 
-
-def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
-    """Return a dataframe with the unique files stored across collections."""
-
-    records = []
-    for collection_name, collection_config in CHROMA_COLLECTIONS.items():
-        collection = chroma_settings.get_or_create_collection(collection_name)
-        try:
-            response = collection.get(include=["metadatas"])
-        except Exception:  # pragma: no cover - chroma compatibility fallback
-            response = collection.get()
-        for metadata_entry in response.get("metadatas", []) or []:
-            if not metadata_entry:
-                continue
-            file_name = metadata_entry.get("uploaded_file_name")
-            if not file_name:
-                source = metadata_entry.get("source")
-                if source:
-                    file_name = os.path.basename(source)
-            if file_name:
-                records.append(
-                    {
-                        "source": file_name,
-                        "domain": metadata_entry.get("domain", collection_config.domain),
-                        "collection": metadata_entry.get("collection", collection_name),
-                    }
-                )
-    if not records:
-        return pd.DataFrame(columns=["source", "domain", "collection"])
-    df = pd.DataFrame(records)
-    return df.drop_duplicates(subset=["source", "collection"]).reset_index(drop=True)
 
 def process_file(uploaded_file, file_name: str) -> ProcessResult:
     documents, ingestor = load_single_document(uploaded_file, file_name)

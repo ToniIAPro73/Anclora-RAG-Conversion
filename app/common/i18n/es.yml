@@ -31,6 +31,9 @@ file_uploader_help: "Formatos admitidos: {extensions}. Usa Enter o la barra espa
 file_uploader_caption: "Los archivos se almacenan de forma segura en el contenedor del proyecto."
 add_to_knowledge_base_help: "Valida e ingiere el archivo seleccionado en la base de conocimiento."
 files_table_help: "Usa las flechas para moverte por la tabla. Presiona la barra espaciadora para marcar o desmarcar la casilla de eliminación."
+files_column_file: "Archivo"
+files_column_domain: "Dominio"
+files_column_collection: "Colección"
 delete_file_help: "Verifica el nombre y los metadatos del archivo antes de eliminarlo de la base de conocimiento."
 delete_confirmation_help: "Elimina el archivo seleccionado de la base de conocimiento tras la confirmación."
 

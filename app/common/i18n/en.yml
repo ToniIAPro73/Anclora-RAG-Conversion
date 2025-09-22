@@ -31,6 +31,9 @@ file_uploader_help: "Supported formats: {extensions}. Use Enter or Space to open
 file_uploader_caption: "Files are stored securely in the project container."
 add_to_knowledge_base_help: "Validates and ingests the selected file into the knowledge base."
 files_table_help: "Use the arrow keys to move across the grid. Press Space to toggle the delete checkbox."
+files_column_file: "File"
+files_column_domain: "Domain"
+files_column_collection: "Collection"
 delete_file_help: "Confirm the file name and metadata before deleting it from the knowledge base."
 delete_confirmation_help: "Deletes the selected file from the knowledge base after confirmation."
 

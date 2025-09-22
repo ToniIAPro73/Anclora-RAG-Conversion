@@ -10,11 +10,11 @@ except ImportError:
 import os
 
 try:
-    from common.chroma_db_settings import get_unique_sources_df
     from common.config import get_default_language, get_supported_languages
     from common.ingest_file import (
         SUPPORTED_EXTENSIONS,
         delete_file_from_vectordb,
+        get_unique_sources_df,
         ingest_file,
     )
     from common.constants import CHROMA_SETTINGS
@@ -71,9 +71,6 @@ with st.sidebar:
     if selected_language != st.session_state.language:
         st.session_state.language = selected_language
         st.rerun()
-# Define the Chroma settings
-collection = CHROMA_SETTINGS.get_or_create_collection(name='vectordb')
-
 st.title(get_text("files_title", st.session_state.language))
 st.caption(get_text("files_intro", st.session_state.language))
 
@@ -123,17 +120,29 @@ st.subheader(get_text("files_in_knowledge_base", st.session_state.language))
 st.caption(get_text("files_table_help", st.session_state.language))
 
 files = get_unique_sources_df(CHROMA_SETTINGS)
-files['Eliminar'] = False
+column_labels = {
+    "uploaded_file_name": get_text("files_column_file", st.session_state.language),
+    "domain": get_text("files_column_domain", st.session_state.language),
+    "collection": get_text("files_column_collection", st.session_state.language),
+}
+display_order = list(column_labels.values())
+files_display = files.rename(columns=column_labels).reindex(columns=display_order)
+files_display['Eliminar'] = False
+
 files_df = st.data_editor(
-    files,
+    files_display,
     use_container_width=True,
     help=get_text("files_table_help", st.session_state.language)
 )
-if len(files_df.loc[files_df['Eliminar']]) == 1:
+
+selected_files = files_df.loc[files_df['Eliminar']]
+file_column = column_labels["uploaded_file_name"]
+
+if len(selected_files) == 1:
     st.divider()
     st.subheader(get_text("delete_file", st.session_state.language))
-    file_to_delete = files_df.loc[files_df['Eliminar'] == True]
-    filename = file_to_delete.iloc[0, 0]
+    file_to_delete = selected_files
+    filename = file_to_delete.iloc[0][file_column]
     st.write(filename)
     st.dataframe(file_to_delete, use_container_width=True)
     st.caption(get_text("delete_file_help", st.session_state.language))
@@ -151,8 +160,8 @@ if len(files_df.loc[files_df['Eliminar']]) == 1:
                 st.rerun()
             except Exception as e:
                 st.error(get_text("delete_error", st.session_state.language, error=str(e)))
-    
-elif len(files_df.loc[files_df['Eliminar']]) > 1:
+
+elif len(selected_files) > 1:
     st.warning(get_text("one_file_at_a_time", st.session_state.language))
                 
 
