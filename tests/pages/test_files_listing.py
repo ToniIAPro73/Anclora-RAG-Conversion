@@ -47,6 +47,10 @@ def _install_langchain_stubs(monkeypatch) -> None:
     vectorstores_pkg = sys.modules.get(
         "langchain_community.vectorstores", types.ModuleType("langchain_community.vectorstores")
     )
+    embeddings_pkg = sys.modules.get(
+        "langchain_community.embeddings", types.ModuleType("langchain_community.embeddings")
+    )
+    embeddings_pkg.HuggingFaceEmbeddings = type("HuggingFaceEmbeddings", (), {})
     utils_submodule = types.ModuleType("langchain_community.vectorstores.utils")
 
     def _maximal_marginal_relevance(*_args, **_kwargs):  # type: ignore[override]
@@ -66,6 +70,7 @@ def _install_langchain_stubs(monkeypatch) -> None:
     monkeypatch.setitem(
         sys.modules, "langchain_community.vectorstores.utils", utils_submodule
     )
+    monkeypatch.setitem(sys.modules, "langchain_community.embeddings", embeddings_pkg)
 
 
 @dataclass

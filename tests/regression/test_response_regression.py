@@ -111,6 +111,17 @@ def rag_test_harness(monkeypatch):
 
     constants_stub = types.ModuleType("common.constants")
 
+    constants_stub.CHROMA_COLLECTIONS = {
+        "conversion_rules": SimpleNamespace(domain="documents", description=""),
+        "troubleshooting": SimpleNamespace(domain="code", description=""),
+        "multimedia_assets": SimpleNamespace(domain="multimedia", description=""),
+        "format_specifications": SimpleNamespace(
+            domain="format_specifications", description=""
+        ),
+        "best_practices": SimpleNamespace(domain="best_practices", description=""),
+        "legal_compliance": SimpleNamespace(domain="legal_compliance", description=""),
+    }
+
     class _PlaceholderCollection:
         def count(self) -> int:
             return 0

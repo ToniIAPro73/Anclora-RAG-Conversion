@@ -101,6 +101,16 @@ def api_client_factory(monkeypatch: pytest.MonkeyPatch) -> Callable[[str], TestC
 
         constants_stub = types.ModuleType("common.constants")
         constants_stub.CHROMA_SETTINGS = object()
+        constants_stub.CHROMA_COLLECTIONS = {
+            "conversion_rules": SimpleNamespace(domain="documents", description=""),
+            "troubleshooting": SimpleNamespace(domain="code", description=""),
+            "multimedia_assets": SimpleNamespace(domain="multimedia", description=""),
+            "format_specifications": SimpleNamespace(
+                domain="format_specifications", description=""
+            ),
+            "best_practices": SimpleNamespace(domain="best_practices", description=""),
+            "legal_compliance": SimpleNamespace(domain="legal_compliance", description=""),
+        }
         monkeypatch.setitem(sys.modules, "common.constants", constants_stub)
         setattr(common_pkg, "constants", constants_stub)
 

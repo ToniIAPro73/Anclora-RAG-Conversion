@@ -5,9 +5,10 @@ import logging
 import os
 import tempfile
 import uuid
+from collections import defaultdict
 from contextlib import contextmanager
 from threading import Lock
-from typing import List, Tuple, Optional
+from typing import Dict, List, Mapping, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -111,12 +112,77 @@ def _get_ingestor_for_extension(extension: str) -> BaseFileIngestor:
     raise ValueError(f"Tipo de archivo no soportado: {extension}")
 
 
+def _resolve_file_name(uploaded_file, explicit_name: str | None = None) -> str:
+    """Return the best available name for *uploaded_file*."""
+
+    if explicit_name:
+        return explicit_name
+
+    for attribute in ("name", "filename"):
+        value = getattr(uploaded_file, attribute, None)
+        if isinstance(value, str) and value:
+            return value
+
+    return ""
+
+
+def _read_uploaded_bytes(uploaded_file) -> bytes:
+    """Extract the raw bytes from ``uploaded_file`` across different interfaces."""
+
+    if hasattr(uploaded_file, "getvalue"):
+        data = uploaded_file.getvalue()
+    elif hasattr(uploaded_file, "file") and hasattr(uploaded_file.file, "read"):
+        file_obj = uploaded_file.file
+        data = file_obj.read()
+        try:
+            file_obj.seek(0)
+        except Exception:  # pragma: no cover - defensive reset
+            pass
+    elif hasattr(uploaded_file, "read"):
+        data = uploaded_file.read()
+        try:
+            uploaded_file.seek(0)
+        except Exception:  # pragma: no cover - optional reset
+            pass
+    else:  # pragma: no cover - unsupported interface safeguard
+        raise AttributeError("El objeto de archivo no expone un método de lectura compatible")
+
+    if isinstance(data, bytes):
+        return data
+    return bytes(data)
+
+
+def _uploaded_file_size(uploaded_file) -> int | None:
+    """Best-effort retrieval of the uploaded file size in bytes."""
+
+    size = getattr(uploaded_file, "size", None)
+    if isinstance(size, int):
+        return size
+
+    file_obj = getattr(uploaded_file, "file", None)
+    if hasattr(file_obj, "tell") and hasattr(file_obj, "seek"):
+        try:
+            current = file_obj.tell()
+            file_obj.seek(0, os.SEEK_END)
+            size = file_obj.tell()
+            file_obj.seek(current)
+            return int(size)
+        except Exception:  # pragma: no cover - defensive fallback
+            try:
+                file_obj.seek(current)
+            except Exception:  # pragma: no cover - best effort reset
+                pass
+    return None
+
+
 @contextmanager
 def _temp_file(uploaded_file) -> Iterator[str]:
-    tmp_filename = f"{uuid.uuid4()}_{uploaded_file.name}"
+    original_name = _resolve_file_name(uploaded_file) or "uploaded_file"
+    tmp_filename = f"{uuid.uuid4()}_{original_name}"
     tmp_path = os.path.join(tempfile.gettempdir(), tmp_filename)
+    data = _read_uploaded_bytes(uploaded_file)
     with open(tmp_path, "wb") as tmp_file:
-        tmp_file.write(uploaded_file.getvalue())
+        tmp_file.write(data)
     try:
         yield tmp_path
     finally:
@@ -125,19 +191,28 @@ def _temp_file(uploaded_file) -> Iterator[str]:
 
 
 def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Document], BaseFileIngestor]:
-    ext = os.path.splitext(uploaded_file.name)[1].lower()
+    ext = os.path.splitext(file_name)[1].lower()
     ingestor = _get_ingestor_for_extension(ext)
+    target = ingestor.target_for_extension(ext)
 
     with _temp_file(uploaded_file) as tmp_path:
         documents = ingestor.load(tmp_path, ext)
 
     for document in documents:
         metadata = dict(document.metadata or {})
+        existing_tags = metadata.get("tags")
+        tag_set = set()
+        if isinstance(existing_tags, (list, tuple, set)):
+            tag_set.update(str(tag) for tag in existing_tags if tag)
+        tag_set.update(tag for tag in target.tags if tag)
+        tag_set.update({target.domain, target.collection, ext.lstrip(".")})
         metadata.update(
             {
-                "domain": ingestor.domain,
-                "collection": ingestor.collection_name,
+                "domain": target.domain,
+                "collection": target.collection,
                 "uploaded_file_name": file_name,
+                "source_extension": ext.lstrip("."),
+                "tags": sorted(tag_set),
             }
         )
         document.metadata = metadata
@@ -148,25 +223,50 @@ def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Document], Base
 class ProcessResult(Sequence[Document]):
     """Wrapper that exposes processed documents while keeping ingestor context."""
 
-    __slots__ = ("_documents", "ingestor", "duplicate")
+    __slots__ = (
+        "_documents_by_collection",
+        "duplicate",
+        "duplicate_collections",
+        "ingestor",
+    )
 
-    def __init__(self, documents: List[Document], ingestor: BaseFileIngestor, duplicate: bool = False) -> None:
-        self._documents = documents
+    def __init__(
+        self,
+        documents_by_collection: Mapping[str, List[Document]],
+        ingestor: BaseFileIngestor,
+        duplicate: bool = False,
+        duplicate_collections: Optional[Sequence[str]] = None,
+    ) -> None:
+        self._documents_by_collection: Dict[str, List[Document]] = {
+            collection: list(docs)
+            for collection, docs in documents_by_collection.items()
+        }
         self.ingestor = ingestor
         self.duplicate = duplicate
+        self.duplicate_collections: Tuple[str, ...] = tuple(duplicate_collections or ())
 
     def __len__(self) -> int:  # pragma: no cover - trivial delegation
-        return len(self._documents)
+        return sum(len(docs) for docs in self._documents_by_collection.values())
 
     def __getitem__(self, index):  # pragma: no cover - trivial delegation
-        return self._documents[index]
+        return self.documents[index]
 
     def __iter__(self):  # pragma: no cover - trivial delegation
-        return iter(self._documents)
+        return iter(self.documents)
 
     @property
     def documents(self) -> List[Document]:
-        return self._documents
+        documents: List[Document] = []
+        for items in self._documents_by_collection.values():
+            documents.extend(items)
+        return documents
+
+    @property
+    def collections(self) -> Tuple[str, ...]:
+        return tuple(self._documents_by_collection.keys())
+
+    def by_collection(self):
+        return self._documents_by_collection.items()
 
 
 def _collection_contains_file(collection, file_name: str) -> bool:
@@ -183,13 +283,15 @@ def _collection_contains_file(collection, file_name: str) -> bool:
     )
 
 
-def validate_uploaded_file(uploaded_file) -> tuple[bool, str]:
+def validate_uploaded_file(uploaded_file, file_name: str | None = None) -> tuple[bool, str]:
     """Validate the uploaded file size and extension."""
 
-    if uploaded_file.size > MAX_FILE_SIZE:
+    size = _uploaded_file_size(uploaded_file)
+    if size is not None and size > MAX_FILE_SIZE:
         return False, "Archivo demasiado grande (máximo 10MB)"
 
-    file_ext = os.path.splitext(uploaded_file.name)[1].lower()
+    resolved_name = _resolve_file_name(uploaded_file, file_name)
+    file_ext = os.path.splitext(resolved_name)[1].lower()
     if file_ext not in SUPPORTED_EXTENSIONS:
         return False, f"Tipo de archivo no soportado: {file_ext}"
 
@@ -199,30 +301,47 @@ def validate_uploaded_file(uploaded_file) -> tuple[bool, str]:
 def load_single_document(uploaded_file, file_name: str) -> Tuple[List[Document], BaseFileIngestor]:
     """Load a document from the uploaded file and return its ingestor."""
 
-    is_valid, message = validate_uploaded_file(uploaded_file)
+    is_valid, message = validate_uploaded_file(uploaded_file, file_name)
     if not is_valid:
         raise ValueError(message)
 
+    resolved_name = _resolve_file_name(uploaded_file, file_name)
     try:
-        logger.info("Cargando documento: %s", uploaded_file.name)
+        logger.info("Cargando documento: %s", resolved_name or file_name)
         return _load_documents(uploaded_file, file_name)
     except Exception as exc:
-        logger.error("Error al cargar documento %s: %s", uploaded_file.name, exc)
+        logger.error("Error al cargar documento %s: %s", resolved_name or file_name, exc)
         raise
 
 
 def process_file(uploaded_file, file_name: str) -> ProcessResult:
     documents, ingestor = load_single_document(uploaded_file, file_name)
-    collection = CHROMA_SETTINGS.get_or_create_collection(ingestor.collection_name)
-    if _collection_contains_file(collection, file_name):
-        return ProcessResult([], ingestor, duplicate=True)
+    grouped: Dict[str, List[Document]] = defaultdict(list)
+    for document in documents:
+        metadata = document.metadata or {}
+        collection_name = metadata.get("collection") or ingestor.collection_name
+        grouped[collection_name].append(document)
+
+    duplicate_collections: List[str] = []
+    for collection_name in sorted(grouped):
+        collection = CHROMA_SETTINGS.get_or_create_collection(collection_name)
+        if _collection_contains_file(collection, file_name):
+            duplicate_collections.append(collection_name)
+
+    if duplicate_collections:
+        return ProcessResult({}, ingestor, duplicate=True, duplicate_collections=duplicate_collections)
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
     )
-    texts = text_splitter.split_documents(documents)
-    normalized = normalize_documents_nfc(texts)
-    return ProcessResult(normalized, ingestor)
+
+    processed: Dict[str, List[Document]] = {}
+    for collection_name, docs in grouped.items():
+        texts = text_splitter.split_documents(docs)
+        normalized = normalize_documents_nfc(texts)
+        processed[collection_name] = normalized
+
+    return ProcessResult(processed, ingestor)
 
 def does_vectorstore_exist(settings, collection_name: str) -> bool:
     """Check if a vectorstore already contains data for *collection_name*."""
@@ -242,39 +361,67 @@ def ingest_file(uploaded_file, file_name):
         result = process_file(uploaded_file, file_name)
 
         if result.duplicate:
-            st.warning("Este archivo ya fue agregado anteriormente.")
-            logger.warning("Archivo duplicado: %s", file_name)
+            collections_msg = (
+                ", ".join(result.duplicate_collections)
+                if result.duplicate_collections
+                else "colecciones existentes"
+            )
+            st.warning(
+                f"Este archivo ya fue agregado anteriormente en: {collections_msg}."
+            )
+            logger.warning(
+                "Archivo duplicado en %s: %s",
+                collections_msg,
+                file_name,
+            )
             return
 
-        texts = result.documents
         ingestor = result.ingestor
         embeddings = get_embeddings()
+        ingested_collections: List[str] = []
 
-        spinner_message = f"Creando embeddings para {file_name}..."
-        if does_vectorstore_exist(CHROMA_SETTINGS, ingestor.collection_name):
-            db = Chroma(
-                collection_name=ingestor.collection_name,
-                embedding_function=embeddings,
-                client=CHROMA_SETTINGS,
+        for collection_name, texts in result.by_collection():
+            spinner_message = (
+                f"Creando embeddings para {file_name} en {collection_name}..."
             )
-            with st.spinner(spinner_message):
-                db.add_documents(texts)
-        else:
-            st.info("Creando nueva base de datos vectorial...")
-            with st.spinner("Creando embeddings. Esto puede tomar algunos minutos..."):
-                try:
-                    Chroma.from_documents(
-                        texts,
-                        embeddings,
-                        client=CHROMA_SETTINGS,
-                        collection_name=ingestor.collection_name,
-                    )
-                except TypeError:
-                    # Compatibilidad con dobles de prueba minimalistas.
-                    Chroma.from_documents(texts, embeddings, CHROMA_SETTINGS)
+            if does_vectorstore_exist(CHROMA_SETTINGS, collection_name):
+                db = Chroma(
+                    collection_name=collection_name,
+                    embedding_function=embeddings,
+                    client=CHROMA_SETTINGS,
+                )
+                with st.spinner(spinner_message):
+                    db.add_documents(texts)
+            else:
+                st.info(
+                    "Creando nueva base de datos vectorial para "
+                    f"{collection_name}..."
+                )
+                with st.spinner(
+                    "Creando embeddings. Esto puede tomar algunos minutos..."
+                ):
+                    try:
+                        Chroma.from_documents(
+                            texts,
+                            embeddings,
+                            client=CHROMA_SETTINGS,
+                            collection_name=collection_name,
+                        )
+                    except TypeError:
+                        # Compatibilidad con dobles de prueba minimalistas.
+                        Chroma.from_documents(texts, embeddings, CHROMA_SETTINGS)
 
-        st.success(f"Se agregó el archivo '{file_name}' con éxito.")
-        logger.info("Archivo procesado exitosamente: %s", file_name)
+            ingested_collections.append(collection_name)
+
+        st.success(
+            "Se agregó el archivo '{file_name}' con éxito en: "
+            f"{', '.join(ingested_collections)}."
+        )
+        logger.info(
+            "Archivo procesado exitosamente en %s: %s",
+            ", ".join(ingested_collections) or "-",
+            file_name,
+        )
     except Exception as exc:
         error_msg = f"Error al procesar el archivo '{file_name}': {exc}"
         st.error(error_msg)

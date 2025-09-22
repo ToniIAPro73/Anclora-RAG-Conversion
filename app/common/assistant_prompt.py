@@ -14,6 +14,11 @@ DEFAULT_LANGUAGE = "es"
 SPANISH_LANGUAGE_CODE = "es"
 ENGLISH_LANGUAGE_CODE = "en"
 
+# Legacy prompt constants for compatibility with existing integrations.
+ES_PROMPT = (
+    "Hola, soy Bastet, la asistente virtual de PBC. ¿En qué puedo ayudarte hoy?"
+)
+
 # Company context
 COMPANY_CONTEXT = {
     "es": (

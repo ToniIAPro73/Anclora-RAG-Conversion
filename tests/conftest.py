@@ -4,6 +4,7 @@ import sys
 import types
 import typing
 from pathlib import Path
+from types import SimpleNamespace
 
 
 def _patch_forward_ref_evaluate() -> None:
@@ -171,6 +172,16 @@ def _install_common_stubs() -> None:
         _install_stub_submodule(
             "common.constants",
             CHROMA_SETTINGS=_StubChromaSettings(),
+            CHROMA_COLLECTIONS={
+                "conversion_rules": SimpleNamespace(domain="documents", description=""),
+                "troubleshooting": SimpleNamespace(domain="code", description=""),
+                "multimedia_assets": SimpleNamespace(domain="multimedia", description=""),
+                "format_specifications": SimpleNamespace(
+                    domain="format_specifications", description=""
+                ),
+                "best_practices": SimpleNamespace(domain="best_practices", description=""),
+                "legal_compliance": SimpleNamespace(domain="legal_compliance", description=""),
+            },
         )
 
         class _StubRetriever:
@@ -190,7 +201,7 @@ def _install_common_stubs() -> None:
         )
 
     if "common.ingest_file" not in sys.modules:
-        def _validate_uploaded_file(uploaded_file) -> tuple[bool, str]:  # type: ignore[override]
+        def _validate_uploaded_file(uploaded_file, file_name=None) -> tuple[bool, str]:  # type: ignore[override]
             return True, "Válido"
 
         def _ingest_file(*args: object, **kwargs: object) -> None:

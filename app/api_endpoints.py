@@ -480,7 +480,7 @@ async def upload_document(
         from common.ingest_file import ingest_file, validate_uploaded_file
 
         # Validar archivo
-        is_valid, message = validate_uploaded_file(file)
+        is_valid, message = validate_uploaded_file(file, file.filename)
         if not is_valid:
             raise HTTPException(status_code=400, detail=message)
         

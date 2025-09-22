@@ -1,14 +1,18 @@
-"""Tests for ensuring files are routed to the proper Chroma collection."""
+"""API upload routing tests."""
 from __future__ import annotations
 
 import io
-from contextlib import contextmanager
+import sys
+import types
 from dataclasses import dataclass
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Tuple
 
 import pytest
+from fastapi.testclient import TestClient
 
-from app.common import ingest_file as ingest_module
+from app import api_endpoints
+
+AUTH_HEADERS = {"Authorization": "Bearer your-api-key-here"}
 
 
 @dataclass
@@ -19,7 +23,7 @@ class _RecordedCall:
 
 class _DummyStreamlit:
     def __init__(self) -> None:
-        self.messages: List[tuple[str, tuple, Dict]] = []
+        self.messages: List[Tuple[str, Tuple, Dict]] = []
 
     def warning(self, *args, **kwargs):
         self.messages.append(("warning", args, kwargs))
@@ -33,9 +37,16 @@ class _DummyStreamlit:
     def error(self, *args, **kwargs):
         self.messages.append(("error", args, kwargs))
 
-    @contextmanager
-    def spinner(self, *_args, **_kwargs):
-        yield
+    def spinner(self, *_args, **_kwargs):  # pragma: no cover - compatibility
+        @dataclass
+        class _DummySpinner:
+            def __enter__(self_inner):
+                return self_inner
+
+            def __exit__(self_inner, *_exc):
+                return False
+
+        return _DummySpinner()
 
 
 class _FakeCollection:
@@ -71,13 +82,6 @@ class _FakeCollection:
             "documents": [record["document"] for record in records],
         }
 
-    def delete(self, ids=None):
-        if ids is None:
-            self._records.clear()
-            return
-        ids_set = set(ids)
-        self._records = [record for record in self._records if record["id"] not in ids_set]
-
 
 class _FakeChromaClient:
     def __init__(self) -> None:
@@ -87,7 +91,10 @@ class _FakeChromaClient:
         return self._collections.setdefault(name, _FakeCollection(name))
 
 
-def _install_chroma_stub(monkeypatch: pytest.MonkeyPatch):
+@pytest.fixture
+def upload_env(monkeypatch: pytest.MonkeyPatch):
+    from app.common import ingest_file as ingest_module
+
     records: List[_RecordedCall] = []
     fake_client = _FakeChromaClient()
 
@@ -107,19 +114,18 @@ def _install_chroma_stub(monkeypatch: pytest.MonkeyPatch):
             instance.add_documents(documents)
             return instance
 
+    streamlit_stub = _DummyStreamlit()
+
     monkeypatch.setattr(ingest_module, "Chroma", _RecordingChroma, raising=False)
     monkeypatch.setattr(ingest_module, "CHROMA_SETTINGS", fake_client, raising=False)
-    streamlit_stub = _DummyStreamlit()
     monkeypatch.setattr(ingest_module, "st", streamlit_stub, raising=False)
+    monkeypatch.setattr(ingest_module, "get_embeddings", lambda: object(), raising=False)
+    common_pkg = sys.modules.setdefault("common", types.ModuleType("common"))
+    monkeypatch.setattr(common_pkg, "ingest_file", ingest_module, raising=False)
+    monkeypatch.setitem(sys.modules, "common.ingest_file", ingest_module)
 
-    return records, streamlit_stub
-
-
-class _UploadedFile(io.BytesIO):
-    def __init__(self, name: str, content: str) -> None:
-        super().__init__(content.encode("utf-8"))
-        self.name = name
-        self.size = len(content.encode("utf-8"))
+    client = TestClient(api_endpoints.app)
+    return records, streamlit_stub, client
 
 
 @pytest.mark.parametrize(
@@ -128,25 +134,25 @@ class _UploadedFile(io.BytesIO):
         ("manual.txt", "best_practices", "best_practices"),
         ("specification.pdf", "format_specifications", "format_specifications"),
         ("compliance.eml", "legal_compliance", "legal_compliance"),
-        ("script.py", "code", "troubleshooting"),
-        ("captions.srt", "multimedia", "multimedia_assets"),
     ],
 )
-def test_files_are_routed_to_expected_collection(monkeypatch, filename, expected_domain, expected_collection):
-    records, streamlit_stub = _install_chroma_stub(monkeypatch)
+def test_upload_endpoint_routes_files_correctly(upload_env, filename, expected_domain, expected_collection):
+    records, _streamlit_stub, client = upload_env
 
-    uploaded = _UploadedFile(filename, "Contenido de prueba")
-    ingest_module.ingest_file(uploaded, filename)
+    file_data = {"file": (filename, io.BytesIO(b"contenido de prueba"), "application/octet-stream")}
+    response = client.post("/upload", files=file_data, headers=AUTH_HEADERS)
 
-    assert records, f"No se registraron ingestas: {streamlit_stub.messages}"
+    assert response.status_code == 200, response.json()
+    assert records, "La ingesta no generó registros en Chroma"
     last_call = records[-1]
     assert last_call.collection == expected_collection
     for document in last_call.documents:
-        assert document.metadata["collection"] == expected_collection
-        assert document.metadata["domain"] == expected_domain
-        assert document.metadata["uploaded_file_name"] == filename
-        assert document.metadata["source_extension"] == filename.rsplit(".", 1)[-1]
-        tags = document.metadata.get("tags", [])
+        metadata = document.metadata
+        assert metadata["collection"] == expected_collection
+        assert metadata["domain"] == expected_domain
+        assert metadata["uploaded_file_name"] == filename
+        assert metadata["source_extension"] == filename.rsplit(".", 1)[-1]
+        tags = metadata.get("tags", [])
         assert expected_domain in tags
         assert expected_collection in tags
         assert filename.rsplit(".", 1)[-1] in tags

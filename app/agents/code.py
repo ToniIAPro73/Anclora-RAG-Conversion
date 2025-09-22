@@ -16,7 +16,7 @@ except Exception:  # pragma: no cover - fallback loader for tests
             with open(self.file_path, "r", encoding=self.encoding) as handle:
                 return [Document(page_content=handle.read(), metadata={"source": self.file_path})]
 
-from .base import BaseFileIngestor
+from .base import BaseFileIngestor, IngestionTarget
 
 CODE_LOADERS = {
     ".py": (TextLoader, {"encoding": "utf8"}),
@@ -35,14 +35,30 @@ CODE_LOADERS = {
 CODE_COLLECTION = "troubleshooting"
 
 
+CODE_TARGETS = {
+    extension: IngestionTarget(
+        domain="code",
+        collection=CODE_COLLECTION,
+        tags=("code", "snippet", extension.lstrip(".")),
+    )
+    for extension in CODE_LOADERS
+}
+
+
 def create_code_ingestor() -> BaseFileIngestor:
     return BaseFileIngestor(
         domain="code",
         collection_name=CODE_COLLECTION,
         loader_mapping=CODE_LOADERS,
+        extension_targets=CODE_TARGETS,
     )
 
 
 CodeIngestor = create_code_ingestor()
 
-__all__ = ["CodeIngestor", "create_code_ingestor", "CODE_COLLECTION"]
+__all__ = [
+    "CODE_COLLECTION",
+    "CODE_TARGETS",
+    "CodeIngestor",
+    "create_code_ingestor",
+]

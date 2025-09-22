@@ -32,6 +32,15 @@ class AgentResponse:
     error: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class IngestionTarget:
+    """Destination metadata for a given file extension."""
+
+    domain: str
+    collection: str
+    tags: Tuple[str, ...] = ()
+
+
 class BaseAgent:
     """Common interface for all specialised agents."""
 
@@ -51,6 +60,7 @@ class BaseFileIngestor:
     domain: str
     collection_name: str
     loader_mapping: Mapping[str, LoaderConfig]
+    extension_targets: Mapping[str, IngestionTarget] | None = None
 
     def supports_extension(self, extension: str) -> bool:
         """Return ``True`` if *extension* can be processed by this ingestor."""
@@ -62,6 +72,13 @@ class BaseFileIngestor:
         """Iterable view of supported file extensions."""
 
         return self.loader_mapping.keys()
+
+    def target_for_extension(self, extension: str) -> IngestionTarget:
+        """Return the target metadata that should receive ``extension``."""
+
+        if self.extension_targets and extension in self.extension_targets:
+            return self.extension_targets[extension]
+        return IngestionTarget(domain=self.domain, collection=self.collection_name)
 
     def load(self, file_path: str, extension: str) -> List[Document]:
         """Load ``Document`` instances from *file_path* using the proper loader."""
@@ -101,5 +118,6 @@ __all__ = [
     "AgentTask",
     "BaseAgent",
     "BaseFileIngestor",
+    "IngestionTarget",
     "LoaderConfig",
 ]

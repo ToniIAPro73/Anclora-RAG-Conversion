@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 from common.text_normalization import Document
 
-from .base import BaseFileIngestor
+from .base import BaseFileIngestor, IngestionTarget
 
 
 PLAIN_TEXT_FALLBACK = False
@@ -134,6 +134,78 @@ def refresh_document_loaders(force: bool = False) -> None:
 
 
 DOCUMENTS_COLLECTION = "conversion_rules"
+FORMAT_SPECIFICATIONS_COLLECTION = "format_specifications"
+BEST_PRACTICES_COLLECTION = "best_practices"
+LEGAL_COMPLIANCE_COLLECTION = "legal_compliance"
+
+
+DOCUMENT_TARGETS = {
+    ".csv": IngestionTarget(
+        domain="format_specifications",
+        collection=FORMAT_SPECIFICATIONS_COLLECTION,
+        tags=("documents", "format", "datasets"),
+    ),
+    ".doc": IngestionTarget(
+        domain="format_specifications",
+        collection=FORMAT_SPECIFICATIONS_COLLECTION,
+        tags=("documents", "format", "office"),
+    ),
+    ".docx": IngestionTarget(
+        domain="format_specifications",
+        collection=FORMAT_SPECIFICATIONS_COLLECTION,
+        tags=("documents", "format", "office"),
+    ),
+    ".odt": IngestionTarget(
+        domain="format_specifications",
+        collection=FORMAT_SPECIFICATIONS_COLLECTION,
+        tags=("documents", "format", "open_document"),
+    ),
+    ".pdf": IngestionTarget(
+        domain="format_specifications",
+        collection=FORMAT_SPECIFICATIONS_COLLECTION,
+        tags=("documents", "format", "portable"),
+    ),
+    ".ppt": IngestionTarget(
+        domain="format_specifications",
+        collection=FORMAT_SPECIFICATIONS_COLLECTION,
+        tags=("documents", "format", "presentation"),
+    ),
+    ".pptx": IngestionTarget(
+        domain="format_specifications",
+        collection=FORMAT_SPECIFICATIONS_COLLECTION,
+        tags=("documents", "format", "presentation"),
+    ),
+    ".md": IngestionTarget(
+        domain="best_practices",
+        collection=BEST_PRACTICES_COLLECTION,
+        tags=("documents", "guidelines", "markdown"),
+    ),
+    ".txt": IngestionTarget(
+        domain="best_practices",
+        collection=BEST_PRACTICES_COLLECTION,
+        tags=("documents", "guidelines", "plain_text"),
+    ),
+    ".html": IngestionTarget(
+        domain="best_practices",
+        collection=BEST_PRACTICES_COLLECTION,
+        tags=("documents", "guidelines", "web"),
+    ),
+    ".epub": IngestionTarget(
+        domain="best_practices",
+        collection=BEST_PRACTICES_COLLECTION,
+        tags=("documents", "guidelines", "ebook"),
+    ),
+    ".enex": IngestionTarget(
+        domain="legal_compliance",
+        collection=LEGAL_COMPLIANCE_COLLECTION,
+        tags=("documents", "legal", "notes"),
+    ),
+    ".eml": IngestionTarget(
+        domain="legal_compliance",
+        collection=LEGAL_COMPLIANCE_COLLECTION,
+        tags=("documents", "legal", "email"),
+    ),
+}
 
 
 def create_document_ingestor() -> BaseFileIngestor:
@@ -145,9 +217,18 @@ def create_document_ingestor() -> BaseFileIngestor:
         domain="documents",
         collection_name=DOCUMENTS_COLLECTION,
         loader_mapping=DOCUMENT_LOADERS,
+        extension_targets=DOCUMENT_TARGETS,
     )
 
 
 DocumentIngestor = create_document_ingestor()
 
-__all__ = ["DocumentIngestor", "create_document_ingestor", "DOCUMENTS_COLLECTION"]
+__all__ = [
+    "BEST_PRACTICES_COLLECTION",
+    "DocumentIngestor",
+    "DOCUMENTS_COLLECTION",
+    "DOCUMENT_TARGETS",
+    "FORMAT_SPECIFICATIONS_COLLECTION",
+    "LEGAL_COMPLIANCE_COLLECTION",
+    "create_document_ingestor",
+]

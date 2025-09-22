@@ -72,6 +72,13 @@ CHROMA_COLLECTIONS: Mapping[str, CollectionConfig] = {
             "utilizada durante los procesos de conversión y capacitación."
         ),
     ),
+    "format_specifications": CollectionConfig(
+        domain="format_specifications",
+        description=(
+            "Especificaciones y lineamientos técnicos sobre formatos, codecs y "
+            "parámetros de conversión soportados por la plataforma."
+        ),
+    ),
     "troubleshooting": CollectionConfig(
         domain="code",
         description=(
@@ -79,11 +86,25 @@ CHROMA_COLLECTIONS: Mapping[str, CollectionConfig] = {
             "dar soporte en escenarios de troubleshooting."
         ),
     ),
+    "best_practices": CollectionConfig(
+        domain="best_practices",
+        description=(
+            "Guías operativas, recomendaciones y playbooks para optimizar "
+            "proyectos de conversión y despliegue de contenidos."
+        ),
+    ),
     "multimedia_assets": CollectionConfig(
         domain="multimedia",
         description=(
             "Material audiovisual transcrito como subtítulos o descripciones "
             "para enriquecer respuestas con contenido multimedia."
+        ),
+    ),
+    "legal_compliance": CollectionConfig(
+        domain="legal_compliance",
+        description=(
+            "Documentación legal, políticas y comprobantes de cumplimiento "
+            "regulatorio asociados a los flujos de conversión."
         ),
     ),
 }
