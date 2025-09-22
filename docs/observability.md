@@ -82,19 +82,48 @@ El dashboard puede ampliarse añadiendo nuevos paneles; basta con colocar archiv
 
 ## Harness de regresión y CI
 
-Las pruebas en `tests/regression/test_agent_harness.py` utilizan `AgentRegressionHarness` para ejecutar consultas representativas sobre los agentes disponibles. Cada escenario valida tres aspectos clave:
+El módulo `tests/regression/agent_suite.py` concentra escenarios de regresión para los agentes documental, multimedia, de código y legal. Internamente reutiliza `AgentRegressionHarness` para medir tres dimensiones en cada escenario:
 
-1. **Latencia**: se compara el tiempo total de ejecución con umbrales configurables por escenario (`max_latency`).
-2. **Cobertura de contexto**: se verifican el número mínimo de documentos recuperados (`min_context_docs`) y la distribución por colección/dominio (`expected_collections`, `expected_domains`).
-3. **Calidad**: se aplican heurísticos o _snapshots_ (`quality_check`, `expected_answer`) sobre la respuesta del agente.
+1. **Latencia** (`time.perf_counter`): se compara con el umbral `thresholds.max_latency` y genera la incidencia `latencia_superior_al_umbral` si se supera.
+2. **Cobertura de contexto**: se comprueban `thresholds.min_context_docs` o `thresholds.min_matches` y se reportan los recuentos por colección/dominio recuperados por la consulta.
+3. **Calidad**: se evalúan heurísticos específicos (p. ej. presencia de fragmentos en el contexto, estructura de la respuesta o conteo de coincidencias) y se contrastan _snapshots_ como `expected_answer` o listas de resultados.
 
-Ejecutar el harness desde la línea de comandos genera las mismas garantías que en CI:
+### Ejecución rápida
 
 ```bash
-pytest tests/regression/test_agent_harness.py -q
+make regression-agents                      # ejecuta python -m tests.regression.agent_suite
+python -m tests.regression.agent_suite --format json  # salida estructurada para CI
 ```
 
-El objetivo es que todos los escenarios concluyan sin advertencias (`result.passed`), lo que implica que la latencia está dentro de los umbrales y que las respuestas cumplen los criterios definidos. El `Makefile` expone un _target_ dedicado (`make regression-agents`) para integrar este chequeo en pipelines de CI/CD.
+La salida en texto muestra una tabla con las columnas `Agente`, `Escenario`, `Estado`, `Latencia(s)`, `Umbral`, `Cobertura` e `Incidencias`. Cada bloque posterior detalla el desglose por colección/dominio y un resumen de la respuesta del agente. Un estado `OK` implica que la latencia se mantuvo bajo el umbral y que la cobertura/heurísticas cumplieron lo esperado.
+
+### Ajuste de umbrales y datasets
+
+Los escenarios pueden personalizarse con un archivo JSON (o YAML, si está instalada `PyYAML`) que redefine documentos, respuestas esperadas o umbrales. Ejemplo:
+
+```json
+{
+  "document": {
+    "thresholds": {"max_latency": 0.40, "min_context_docs": 2},
+    "documents": [
+      {"text": "Resumen actualizado con métricas Q4", "collection": "conversion_rules"},
+      {"text": "Post-mortem del incidente crítico", "collection": "troubleshooting"}
+    ],
+    "llm": {
+      "answer": "Nuevo resumen ejecutivo validado.",
+      "context_fragments": ["Resumen actualizado", "incidente crítico"]
+    }
+  },
+  "code": {
+    "matches": [
+      {"content": "Reiniciar el servicio", "metadata": {"source": "runbook.md"}}
+    ],
+    "thresholds": {"min_matches": 1}
+  }
+}
+```
+
+Puede pasarse con `python -m tests.regression.agent_suite --config overrides.json` o definir la ruta mediante la variable `AGENT_REGRESSION_CONFIG`. El _target_ `make regression-agents` hereda esta configuración, por lo que es sencillo integrar el harness en pipelines de CI/CD o comparar datasets alternativos.
 
 ## Exportación de métricas a Prometheus y Grafana
 

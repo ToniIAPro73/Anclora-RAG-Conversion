@@ -96,7 +96,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 from types import SimpleNamespace
 
 # Configurar logging
