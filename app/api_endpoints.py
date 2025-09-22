@@ -10,13 +10,14 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from common.langchain_module import LegalComplianceGuardError, response
 from common.privacy import PrivacyManager
 from common.translations import get_text
+from app.security import AdvancedSecurityManager, SecurityPolicy
 
 try:  # pragma: no cover - compatibilidad con httpx 0.28+
     import httpx
@@ -64,6 +65,16 @@ app = FastAPI(
 # Seguridad básica
 security = HTTPBearer()
 privacy_manager = PrivacyManager()
+
+# Sistema de seguridad avanzado
+security_policy = SecurityPolicy(
+    max_queries_per_minute=100,
+    max_queries_per_hour=2000,
+    max_query_length=3000,
+    enable_content_filtering=True,
+    enable_anomaly_detection=True
+)
+advanced_security = AdvancedSecurityManager(security_policy)
 
 
 _ORCHESTRATOR: OrchestratorService | None = None
@@ -472,6 +483,37 @@ def _verify_jwt_token(token: str, secret: str) -> None:
         raise HTTPException(status_code=401, detail="Token inválido") from exc
 
 
+# Función de seguridad avanzada
+def verify_security(request: Request) -> bool:
+    """Verificar seguridad avanzada antes de procesar la solicitud."""
+
+    try:
+        # Obtener IP del cliente
+        client_ip = request.client.host if request.client else "unknown"
+
+        # Verificar si la IP está en cuarentena
+        if advanced_security.is_ip_quarantined(client_ip):
+            raise HTTPException(
+                status_code=403,
+                detail="IP address is quarantined due to security violations"
+            )
+
+        # Verificar rate limiting
+        if not advanced_security.check_rate_limit(client_ip):
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit exceeded"
+            )
+
+        return True
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Security verification error: {e}")
+        return True  # Permitir en caso de error para no bloquear el servicio
+
+
 # Función de autenticación basada en variables de entorno / JWT
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Verificar que el token recibido coincide con la configuración del entorno."""
@@ -533,6 +575,7 @@ async def health_check():
     ),
 )
 async def chat_with_rag(
+    http_request: Request,
     request: ChatRequest = Body(
         ...,
         examples={
@@ -559,6 +602,25 @@ async def chat_with_rag(
     token: str = Depends(verify_token)
 ):
     """Realiza consultas conversacionales al sistema Anclora RAG."""
+
+    # Verificación de seguridad avanzada
+    verify_security(http_request)
+
+    # Análisis de seguridad del contenido
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    security_result = advanced_security.analyze_query(
+        query=request.message,
+        user_id=token[:8] if token else "anonymous",  # Usar parte del token como ID
+        ip_address=client_ip
+    )
+
+    if not security_result.is_safe:
+        logger.warning(f"Unsafe query detected from {client_ip}: {security_result.threat_type}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Query blocked due to security policy: {security_result.threat_type}"
+        )
+
     language = (request.language or "es").lower()
     if language not in {"es", "en"}:
         language = "es"

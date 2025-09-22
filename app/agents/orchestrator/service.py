@@ -11,6 +11,8 @@ from app.agents.base import AgentResponse, AgentTask, BaseAgent
 from app.agents.code_agent import CodeAgent
 from app.agents.document_agent import DocumentAgent
 from app.agents.media_agent import MediaAgent
+from app.agents.content_analyzer_agent import ContentAnalyzerAgent
+from app.agents.smart_converter_agent import SmartConverterAgent
 from common.observability import record_orchestrator_decision
 
 
@@ -114,7 +116,13 @@ class OrchestratorService:
 def create_default_orchestrator() -> OrchestratorService:
     """Build an orchestrator with the default agents described in the report."""
 
-    return OrchestratorService(agents=[DocumentAgent(), MediaAgent(), CodeAgent()])
+    return OrchestratorService(agents=[
+        DocumentAgent(),
+        MediaAgent(),
+        CodeAgent(),
+        ContentAnalyzerAgent(),
+        SmartConverterAgent()
+    ])
 
 
 def document_query_flow(question: str, language: str | None = None, orchestrator: OrchestratorService | None = None) -> AgentResponse:

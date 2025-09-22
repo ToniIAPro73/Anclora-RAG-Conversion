@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import json
+from app.analytics.dashboard_data_service import dashboard_service
 
 # Set page config
 st.set_page_config(layout='wide', page_title='Intelligence Dashboard', page_icon='📈')
@@ -109,56 +110,101 @@ translations = {
 def get_text(key):
     return translations[st.session_state.language].get(key, key)
 
-# Generate sample data
-def generate_sample_data():
-    """Generate sample data for the dashboard."""
-    
-    # Performance metrics
-    dates = pd.date_range(start=datetime.now() - timedelta(days=30), end=datetime.now(), freq='H')
-    
-    performance_data = pd.DataFrame({
-        'timestamp': dates,
-        'response_time': np.random.normal(2.5, 0.8, len(dates)).clip(0.5, 8.0),
-        'query_volume': np.random.poisson(15, len(dates)),
-        'success_rate': np.random.normal(0.95, 0.05, len(dates)).clip(0.8, 1.0),
-        'user_satisfaction': np.random.normal(0.85, 0.1, len(dates)).clip(0.6, 1.0)
-    })
-    
-    # Usage analytics
-    usage_data = {
-        'peak_hours': [9, 10, 11, 14, 15, 16],
-        'content_categories': {
-            'Documentos Técnicos': 35,
-            'Documentos Legales': 25,
-            'Documentos Comerciales': 20,
-            'Documentos Académicos': 15,
-            'Otros': 5
-        },
-        'language_distribution': {
-            'Español': 70,
-            'Inglés': 25,
-            'Otros': 5
+# Get real data from dashboard service
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def get_dashboard_data(time_range: str):
+    """Get real data from the dashboard service."""
+
+    try:
+        # Get real metrics
+        performance_metrics = dashboard_service.get_performance_metrics(time_range)
+        usage_analytics = dashboard_service.get_usage_analytics()
+        security_overview = dashboard_service.get_security_overview()
+        predictive_insights = dashboard_service.get_predictive_insights()
+
+        # Get time series data
+        time_series_data = {}
+        for metric in ['response_time', 'query_volume', 'success_rate', 'user_satisfaction']:
+            time_series_data[metric] = dashboard_service.get_time_series_data(metric, time_range)
+
+        return {
+            'performance_metrics': performance_metrics,
+            'usage_analytics': usage_analytics,
+            'security_overview': security_overview,
+            'predictive_insights': predictive_insights,
+            'time_series_data': time_series_data
         }
+
+    except Exception as e:
+        st.error(f"Error loading dashboard data: {e}")
+        # Fallback to mock data
+        return get_fallback_data()
+
+
+def get_fallback_data():
+    """Fallback data when real data is not available."""
+
+    # Generate fallback time series
+    dates = pd.date_range(start=datetime.now() - timedelta(days=1), end=datetime.now(), freq='H')
+
+    time_series_data = {
+        'response_time': [{'timestamp': d, 'value': 2.5 + np.random.normal(0, 0.3)} for d in dates],
+        'query_volume': [{'timestamp': d, 'value': 15 + np.random.poisson(5)} for d in dates],
+        'success_rate': [{'timestamp': d, 'value': 0.95 + np.random.normal(0, 0.02)} for d in dates],
+        'user_satisfaction': [{'timestamp': d, 'value': 0.85 + np.random.normal(0, 0.05)} for d in dates]
     }
-    
-    # Security data
-    security_data = {
-        'total_events': 127,
-        'threat_levels': {
-            'Bajo': 85,
-            'Medio': 32,
-            'Alto': 8,
-            'Crítico': 2
+
+    return {
+        'performance_metrics': {
+            'avg_response_time': 2.5,
+            'total_queries': 1200,
+            'success_rate': 0.95,
+            'user_satisfaction': 0.85
         },
-        'event_types': {
-            'Rate Limit': 45,
-            'Consulta Sospechosa': 38,
-            'Intento de Inyección': 12,
-            'Comportamiento Anómalo': 32
-        }
+        'usage_analytics': {
+            'peak_hours': [9, 10, 11, 14, 15, 16],
+            'content_categories': {
+                'Documentos Técnicos': 35,
+                'Documentos Legales': 25,
+                'Documentos Comerciales': 20,
+                'Documentos Académicos': 15,
+                'Otros': 5
+            },
+            'language_distribution': {
+                'Español': 70,
+                'Inglés': 25,
+                'Otros': 5
+            }
+        },
+        'security_overview': {
+            'total_events': 127,
+            'quarantined_ips': 3,
+            'threat_levels': {
+                'Bajo': 85,
+                'Medio': 32,
+                'Alto': 8,
+                'Crítico': 2
+            },
+            'event_types': {
+                'Rate Limit': 45,
+                'Consulta Sospechosa': 38,
+                'Intento de Inyección': 12,
+                'Comportamiento Anómalo': 32
+            }
+        },
+        'predictive_insights': {
+            'usage_forecast': [15, 18, 22, 19, 16, 14, 17],
+            'optimization_recommendations': [
+                {
+                    'type': 'performance',
+                    'description': 'Optimizar tamaño de chunks',
+                    'impact': '25% mejora en tiempo de respuesta',
+                    'priority': 'Alta'
+                }
+            ]
+        },
+        'time_series_data': time_series_data
     }
-    
-    return performance_data, usage_data, security_data
 
 # Main content
 st.title(get_text('title'))
@@ -177,18 +223,14 @@ with col1:
 with col2:
     auto_refresh = st.checkbox(get_text('real_time'), value=False)
 
-# Generate data
-performance_data, usage_data, security_data = generate_sample_data()
+# Get real data
+dashboard_data = get_dashboard_data(time_range)
 
-# Filter data based on time range
-if time_range == 'last_24h':
-    cutoff = datetime.now() - timedelta(days=1)
-elif time_range == 'last_7d':
-    cutoff = datetime.now() - timedelta(days=7)
-else:
-    cutoff = datetime.now() - timedelta(days=30)
-
-filtered_data = performance_data[performance_data['timestamp'] >= cutoff]
+performance_metrics = dashboard_data['performance_metrics']
+usage_analytics = dashboard_data['usage_analytics']
+security_overview = dashboard_data['security_overview']
+predictive_insights = dashboard_data['predictive_insights']
+time_series_data = dashboard_data['time_series_data']
 
 # Performance Metrics Section
 st.header(get_text('performance_metrics'))
@@ -196,7 +238,7 @@ st.header(get_text('performance_metrics'))
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    avg_response_time = filtered_data['response_time'].mean()
+    avg_response_time = performance_metrics['avg_response_time']
     st.metric(
         label=get_text('response_time'),
         value=f"{avg_response_time:.2f}s",
@@ -204,7 +246,7 @@ with col1:
     )
 
 with col2:
-    total_queries = filtered_data['query_volume'].sum()
+    total_queries = int(performance_metrics['total_queries'])
     st.metric(
         label=get_text('query_volume'),
         value=f"{total_queries:,}",
@@ -212,19 +254,19 @@ with col2:
     )
 
 with col3:
-    avg_success_rate = filtered_data['success_rate'].mean()
+    success_rate = performance_metrics['success_rate']
     st.metric(
         label=get_text('success_rate'),
-        value=f"{avg_success_rate:.1%}",
-        delta=f"{(avg_success_rate - 0.95):.1%}"
+        value=f"{success_rate:.1%}",
+        delta=f"{(success_rate - 0.95):.1%}"
     )
 
 with col4:
-    avg_satisfaction = filtered_data['user_satisfaction'].mean()
+    user_satisfaction = performance_metrics['user_satisfaction']
     st.metric(
         label=get_text('user_satisfaction'),
-        value=f"{avg_satisfaction:.1%}",
-        delta=f"{(avg_satisfaction - 0.85):.1%}"
+        value=f"{user_satisfaction:.1%}",
+        delta=f"{(user_satisfaction - 0.85):.1%}"
     )
 
 # Performance Trends
@@ -241,52 +283,68 @@ fig_performance = make_subplots(
 )
 
 # Response time trend
-fig_performance.add_trace(
-    go.Scatter(
-        x=filtered_data['timestamp'],
-        y=filtered_data['response_time'],
-        mode='lines',
-        name=get_text('response_time'),
-        line=dict(color='#FF6B6B')
-    ),
-    row=1, col=1
-)
+response_time_data = time_series_data.get('response_time', [])
+if response_time_data:
+    timestamps = [d['timestamp'] for d in response_time_data]
+    values = [d['value'] for d in response_time_data]
+    fig_performance.add_trace(
+        go.Scatter(
+            x=timestamps,
+            y=values,
+            mode='lines',
+            name=get_text('response_time'),
+            line=dict(color='#FF6B6B')
+        ),
+        row=1, col=1
+    )
 
 # Query volume trend
-fig_performance.add_trace(
-    go.Scatter(
-        x=filtered_data['timestamp'],
-        y=filtered_data['query_volume'],
-        mode='lines',
-        name=get_text('query_volume'),
-        line=dict(color='#4ECDC4')
-    ),
-    row=1, col=2
-)
+query_volume_data = time_series_data.get('query_volume', [])
+if query_volume_data:
+    timestamps = [d['timestamp'] for d in query_volume_data]
+    values = [d['value'] for d in query_volume_data]
+    fig_performance.add_trace(
+        go.Scatter(
+            x=timestamps,
+            y=values,
+            mode='lines',
+            name=get_text('query_volume'),
+            line=dict(color='#4ECDC4')
+        ),
+        row=1, col=2
+    )
 
 # Success rate trend
-fig_performance.add_trace(
-    go.Scatter(
-        x=filtered_data['timestamp'],
-        y=filtered_data['success_rate'],
-        mode='lines',
-        name=get_text('success_rate'),
-        line=dict(color='#45B7D1')
-    ),
-    row=2, col=1
-)
+success_rate_data = time_series_data.get('success_rate', [])
+if success_rate_data:
+    timestamps = [d['timestamp'] for d in success_rate_data]
+    values = [d['value'] for d in success_rate_data]
+    fig_performance.add_trace(
+        go.Scatter(
+            x=timestamps,
+            y=values,
+            mode='lines',
+            name=get_text('success_rate'),
+            line=dict(color='#45B7D1')
+        ),
+        row=2, col=1
+    )
 
 # User satisfaction trend
-fig_performance.add_trace(
-    go.Scatter(
-        x=filtered_data['timestamp'],
-        y=filtered_data['user_satisfaction'],
-        mode='lines',
-        name=get_text('user_satisfaction'),
-        line=dict(color='#96CEB4')
-    ),
-    row=2, col=2
-)
+satisfaction_data = time_series_data.get('user_satisfaction', [])
+if satisfaction_data:
+    timestamps = [d['timestamp'] for d in satisfaction_data]
+    values = [d['value'] for d in satisfaction_data]
+    fig_performance.add_trace(
+        go.Scatter(
+            x=timestamps,
+            y=values,
+            mode='lines',
+            name=get_text('user_satisfaction'),
+            line=dict(color='#96CEB4')
+        ),
+        row=2, col=2
+    )
 
 fig_performance.update_layout(height=600, showlegend=False)
 st.plotly_chart(fig_performance, use_container_width=True)
@@ -298,12 +356,12 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader(get_text('content_categories'))
-    
+
     categories_df = pd.DataFrame(
-        list(usage_data['content_categories'].items()),
+        list(usage_analytics['content_categories'].items()),
         columns=['Category', 'Count']
     )
-    
+
     fig_categories = px.pie(
         categories_df,
         values='Count',
@@ -315,12 +373,12 @@ with col1:
 
 with col2:
     st.subheader(get_text('language_distribution'))
-    
+
     lang_df = pd.DataFrame(
-        list(usage_data['language_distribution'].items()),
+        list(usage_analytics['language_distribution'].items()),
         columns=['Language', 'Percentage']
     )
-    
+
     fig_languages = px.bar(
         lang_df,
         x='Language',
@@ -335,7 +393,7 @@ with col2:
 st.subheader(get_text('peak_hours'))
 
 hours = list(range(24))
-hourly_activity = [50 if h in usage_data['peak_hours'] else np.random.randint(10, 30) for h in hours]
+hourly_activity = [50 if h in usage_analytics['peak_hours'] else np.random.randint(10, 30) for h in hours]
 
 fig_peak = px.bar(
     x=hours,
@@ -355,12 +413,12 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.metric(
         label=get_text('security_events'),
-        value=security_data['total_events'],
+        value=security_overview['total_events'],
         delta="-15"
     )
 
 with col2:
-    high_threats = security_data['threat_levels']['Alto'] + security_data['threat_levels']['Crítico']
+    high_threats = security_overview['threat_levels']['Alto'] + security_overview['threat_levels']['Crítico']
     st.metric(
         label="Amenazas Altas/Críticas",
         value=high_threats,
@@ -368,7 +426,7 @@ with col2:
     )
 
 with col3:
-    blocked_attempts = security_data['event_types']['Intento de Inyección']
+    blocked_attempts = security_overview['event_types']['Intento de Inyección']
     st.metric(
         label="Intentos Bloqueados",
         value=blocked_attempts,
@@ -380,12 +438,12 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("Eventos por Nivel de Amenaza")
-    
+
     threat_df = pd.DataFrame(
-        list(security_data['threat_levels'].items()),
+        list(security_overview['threat_levels'].items()),
         columns=['Nivel', 'Cantidad']
     )
-    
+
     fig_threats = px.bar(
         threat_df,
         x='Nivel',
@@ -402,12 +460,12 @@ with col1:
 
 with col2:
     st.subheader("Tipos de Eventos de Seguridad")
-    
+
     events_df = pd.DataFrame(
-        list(security_data['event_types'].items()),
+        list(security_overview['event_types'].items()),
         columns=['Tipo', 'Cantidad']
     )
-    
+
     fig_events = px.pie(
         events_df,
         values='Cantidad',
