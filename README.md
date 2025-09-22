@@ -53,26 +53,35 @@ Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) qu
 
 #### Modelos de embeddings
 
-Puedes elegir qué modelo de embeddings utilizar fijando la variable de entorno `EMBEDDINGS_MODEL_NAME`. La aplicación detecta
-este valor tanto al ingerir documentos como al realizar consultas, por lo que no se requiere ningún cambio adicional en el
-código. Algunas opciones probadas:
+El gestor de embeddings permite asignar un modelo diferente por dominio (`documents`, `code`, `multimedia`). Por defecto se
+usa `all-MiniLM-L6-v2`, pero puedes personalizarlo mediante variables de entorno o un archivo YAML:
 
-- `sentence-transformers/all-mpnet-base-v2`: equilibrio entre calidad y desempeño en inglés/español.
-- `intfloat/multilingual-e5-large`: recomendado para escenarios multilingües con más de dos idiomas.
-- `all-MiniLM-L6-v2`: alternativa ligera para equipos con recursos limitados.
+- `EMBEDDINGS_MODEL_NAME`: modelo por defecto aplicado a todos los dominios si no hay overrides.
+- `EMBEDDINGS_MODEL_<DOMINIO>`: valor específico por dominio (`EMBEDDINGS_MODEL_CODE`, `EMBEDDINGS_MODEL_MULTIMEDIA`, etc.).
+- `EMBEDDINGS_CONFIG_FILE`: ruta a un YAML con la estructura:
 
-Ejemplo de configuración en `docker-compose.yml`:
+```yaml
+default_model: sentence-transformers/all-MiniLM-L6-v2
+domains:
+  documents: sentence-transformers/all-mpnet-base-v2
+  code: sentence-transformers/all-mpnet-base-v2
+  multimedia: intfloat/multilingual-e5-large
+```
+
+Ejemplo de configuración en `docker-compose.yml` asignando modelos distintos:
 
 ```yaml
 environment:
   - MODEL=llama3
-  - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
+  - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+  - EMBEDDINGS_MODEL_CODE=sentence-transformers/all-mpnet-base-v2
+  - EMBEDDINGS_MODEL_MULTIMEDIA=intfloat/multilingual-e5-large
 ```
 
 Para comparar rápidamente el rendimiento de distintos modelos se incluye el script `scripts/eval_embeddings.py`:
 
 ```bash
-# Usa los valores definidos en EMBEDDINGS_MODEL_NAME
+# Usa los valores definidos en la configuración del gestor
 python scripts/eval_embeddings.py
 
 # Compara múltiples modelos en una sola corrida

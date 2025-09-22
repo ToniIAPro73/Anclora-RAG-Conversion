@@ -6,8 +6,7 @@ import os
 import tempfile
 import uuid
 from contextlib import contextmanager
-from threading import Lock
-from typing import List, Tuple, Optional
+from typing import Any, List, Tuple, Optional
 
 import pandas as pd
 import streamlit as st
@@ -24,8 +23,6 @@ except Exception:  # pragma: no cover - fallback path used in constrained enviro
 
         def split_documents(self, documents):
             return list(documents)
-from langchain_community.embeddings import HuggingFaceEmbeddings
-
 from ..agents import (
     BaseFileIngestor,
     CodeIngestor,
@@ -37,6 +34,12 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
 from common.chroma_db_settings import Chroma
+from common.embeddings_manager import get_embeddings_manager
+
+try:
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+except ImportError:  # pragma: no cover - used in lightweight stubs
+    HuggingFaceEmbeddings = Any  # type: ignore[assignment]
 
 try:
     from common.chroma_db_settings import get_unique_sources_df as _get_unique_sources_df
@@ -73,24 +76,10 @@ class ProcessedFile:
     def __getitem__(self, item):  # type: ignore[override]
         return self.documents[item]
 
-# Load environment variables
-embeddings_model_name = os.environ.get("EMBEDDINGS_MODEL_NAME", "all-MiniLM-L6-v2")
+def get_embeddings(domain: Optional[str] = None) -> HuggingFaceEmbeddings:
+    """Obtain embeddings for the requested domain using the shared manager."""
 
-_embeddings_lock: Lock = Lock()
-_embeddings_instance: Optional[HuggingFaceEmbeddings] = None
-
-
-def get_embeddings() -> HuggingFaceEmbeddings:
-    """Return a cached instance of the embeddings model."""
-
-    global _embeddings_instance
-    if _embeddings_instance is None:
-        with _embeddings_lock:
-            if _embeddings_instance is None:
-                _embeddings_instance = HuggingFaceEmbeddings(
-                    model_name=embeddings_model_name
-                )
-    return _embeddings_instance
+    return get_embeddings_manager().get_embeddings(domain)
 
 # Ensure the ingestors see the latest loader implementations when the module is re-imported
 refresh_document_loaders(force=True)
@@ -248,7 +237,7 @@ def ingest_file(uploaded_file, file_name):
 
         texts = result.documents
         ingestor = result.ingestor
-        embeddings = get_embeddings()
+        embeddings = get_embeddings(ingestor.domain)
 
         spinner_message = f"Creando embeddings para {file_name}..."
         if does_vectorstore_exist(CHROMA_SETTINGS, ingestor.collection_name):

@@ -14,6 +14,12 @@ DEFAULT_LANGUAGE = "es"
 SPANISH_LANGUAGE_CODE = "es"
 ENGLISH_LANGUAGE_CODE = "en"
 
+# Legacy constant kept for backwards compatibility with tests
+ES_PROMPT = (
+    "Eres Bastet, la asistente virtual de PBC. Responde en español natural y conserva"
+    " las tildes y eñes en todos los mensajes."
+)
+
 # Company context
 COMPANY_CONTEXT = {
     "es": (
