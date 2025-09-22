@@ -13,14 +13,15 @@ Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) qu
 - **app/**: Código principal de la aplicación incluyendo la interfaz de Streamlit, procesamiento de documentos e implementación RAG
 - **docs/**: Archivos de documentación del proyecto
 - **.vscode/**: Configuración de VS Code
-- **docker-compose.yml**: Configuración Docker para setup con GPU (Llama3)
-- **docker-compose_sin_gpu.yml**: Configuración Docker para setup sin GPU (Phi3)
+- **docker-compose.yml**: Stack base (CPU) con Ollama, Chroma, UI/API y observabilidad.
+- **docker-compose.gpu.yml**: Overlay opcional para habilitar GPU (reservas NVIDIA y diagnóstico con `nvidia-smi`).
+- **docker-compose_sin_gpu.yml**: Variante alternativa histórica sin GPU (modelo Phi3).
 
 ### Componentes principales del repositorio
 
 - **Interfaz Streamlit (`app/Inicio.py` y `app/pages/`)**: Proporciona el chat principal y la gestión de archivos para la base de conocimiento a través del puerto `8080`. Aquí se orquestan las llamadas al módulo RAG, se gestionan los estados de sesión y se aplican los estilos personalizados.
 - **API FastAPI (`app/api_endpoints.py`)**: Expone endpoints REST para integraciones externas en el puerto `8081`, reutilizando la misma lógica de recuperación y generación que la interfaz. Incluye operaciones de consulta, ingesta y administración de documentos.
-- **Scripts de arranque (`open_rag.sh` y `open_rag.bat`)**: Automatizan el levantamiento del stack Docker desde distintas plataformas. Solo requieren actualizar la ruta del proyecto antes de ejecutar `docker-compose up -d`.
+- **Scripts de arranque (`open_rag.sh` y `open_rag.bat`)**: Automatizan el levantamiento del stack Docker desde distintas plataformas. Solo requieren actualizar la ruta del proyecto antes de ejecutar `docker compose up -d` (aceptan parámetros adicionales como `--profile` o `-f`).
 
 ### Lenguaje y Entorno
 
@@ -88,15 +89,31 @@ build --no-cache` para los servicios `ui` y `api`.
 
 - ollama/ollama:latest (servicio LLM)
 - chromadb/chroma:0.5.1.dev111 (Base de datos vectorial)
-- nvidia/cuda:12.3.1-base-ubuntu20.04 (Soporte GPU)
+- nvidia/cuda:12.3.1-base-ubuntu20.04 (solo al combinar con `docker-compose.gpu.yml`)
 - Imagen UI/API personalizada construida desde `./app`
 
 **Configuración**:
 
-- Paso de GPU para el modelo Llama3
+- Overlay opcional para habilitar GPU cuando se combine `docker-compose.yml` con `docker-compose.gpu.yml`
 - Configuración solo CPU disponible para el modelo Phi3
 - Volumen persistente para ChromaDB
 - Variables de entorno para selección de modelo y configuración de embeddings
+
+#### Variables de entorno para ChromaDB
+
+Los servicios `ui` y `api` consumen ChromaDB mediante las variables de entorno `CHROMA_HOST` y `CHROMA_PORT`, definidas en los archivos `docker-compose*.yml` con los valores por defecto `chroma` y `8000`. Estos valores permiten que ambos servicios descubran automáticamente al contenedor `chroma` cuando el stack se ejecuta con Docker Compose.
+
+Si ejecutas la aplicación fuera de Docker (por ejemplo, para desarrollo local), establece las variables antes de iniciar Streamlit o la API para apuntar al host correspondiente:
+
+```bash
+export CHROMA_HOST=localhost
+export CHROMA_PORT=8000
+streamlit run app/Inicio.py
+# o
+uvicorn app.api_endpoints:app --reload --port 8081
+```
+
+También puedes ajustar `CHROMA_HOST` y `CHROMA_PORT` a los valores de cualquier instancia remota de ChromaDB que quieras reutilizar.
 
 ### Archivos Principales
 
@@ -116,6 +133,19 @@ El detalle de fases, épicas y tareas priorizadas se encuentra en el [backlog de
 ### Documentación adicional
 
 - [Guía de Integración / Integration Guide](docs/integration-guide.md): Pasos para consumir la API, usar el cliente Python oficial y conectar agentes (LangChain, AutoGen) con recomendaciones de encoding y manejo de Unicode.
+
+### Configuración de credenciales
+
+Los scripts `open_rag.sh` (Linux/macOS) y `open_rag.bat` (Windows) cargan automáticamente el archivo `.env` si existe. Si no defines `ANCLORA_API_TOKENS` ni `ANCLORA_JWT_SECRET`, se reutilizará el valor de `ANCLORA_DEFAULT_API_TOKEN` y se mostrará una advertencia indicando que se usará el token por defecto. Esto permite levantar la pila rápidamente en entornos locales manteniendo la opción de reforzar la seguridad en producción.
+
+Para inyectar credenciales reales, copia el archivo `.env.example` a `.env` y reemplaza los valores por los de tu entorno:
+
+```bash
+cp .env.example .env
+# Edita .env y define ANCLORA_API_TOKENS o ANCLORA_JWT_SECRET con tus credenciales.
+```
+
+En producción se recomienda definir tus propios tokens o secretos JWT para deshabilitar el token de ejemplo.
 
 ### Información legal y cumplimiento
 
@@ -185,7 +215,10 @@ curl -X POST "http://localhost:8081/upload" \
 
 ### Elección del modelo de datos (LLM)
 
-Antes de comenzar con la instalación, tenemos que analizar si tenemos o no una tarjeta gráfica capaz de utilizar Llama3-7b o no. Si tenemos una tarjeta gráfica capaz de utilizar este modelo de datos utilizaremos el archivo `docker-compose.yml`, si no contamos con esa posibilidad vamos a eliminar el `docker-compose.yml` y vamos a renombrar el archivo `docker-compose_sin_gpu.yml` por `docker-compose.yml`. La diferencia entre un archivo y otro es que el `docker-compose_sin_gpu.yml` utiliza el LLM `Phi3-4b`, que es mucho más ligero para correrlo en el procesador de tu PC, mientras que `Llama3-7b` es mucho más pesado y si bien puede correr en CPU, es más recomendable una gráfica. En el video voy a estar utilizando una RTX 4060 8GB.
+Antes de comenzar con la instalación, define si ejecutarás el stack solo con CPU o si habilitarás GPU. El archivo base `docker-compose.yml` funciona en ambos escenarios (por defecto el servicio `ollama` expone el modelo `llama3`, que también puede ejecutarse en CPU). Si prefieres un modelo más liviano puedes reutilizar la variante `docker-compose_sin_gpu.yml` (modelo `phi3`).
+
+- **Solo CPU:** `docker compose up -d` levanta `ollama`, `chroma`, `ui`, `api`, Prometheus y Grafana.
+- **Con GPU NVIDIA:** combina los archivos ejecutando `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`. El segundo archivo agrega las reservas de GPU y un contenedor auxiliar (`gpu-diagnostics`) que ejecuta `nvidia-smi` para validar el acceso a la tarjeta.
 
 #### Docker Installation
 
@@ -194,7 +227,7 @@ Tenemos que tener Docker o Docker Desktop instalado, te recomiendo ver este vide
 Una vez instalado y prendido el Docker Desktop si lo estamos utilizando, vamos a ejecutar en esta misma carpeta:
 
 ```bash
-docker-compose up
+docker compose up
 ```
 
 La primera vez vamos a tener que esperar a que todo se instale correctamente, va a tardar unos cuantos minutos en ese paso.
@@ -280,7 +313,13 @@ Entonces en mi caso va a ser así el `open_rag.bat` (el .sh es lo mismo):
 
 ```batch
 cd C:\Users\fcore\OneDrive\Desktop\Basdonax\basdonax-rag
-docker-compose up -d
+docker compose up -d
+```
+
+Si necesitas habilitar GPU desde estos scripts, agrega los archivos adicionales antes del comando `up`, por ejemplo:
+
+```batch
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 ```
 
 Ahora mientras que tengamos el Docker/Docker Desktop prendido y mientras que ejecutemos este archivo vamos a poder acceder al RAG en este link: <http://localhost:8080>

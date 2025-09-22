@@ -34,6 +34,8 @@ services:
         # Embedding model used for document ingestion and retrieval
         - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
         - TARGET_SOURCE_CHUNKS=5
+        - CHROMA_HOST=${CHROMA_HOST:-chroma}
+        - CHROMA_PORT=${CHROMA_PORT:-8000}
         - PROMETHEUS_METRICS_PORT=9000
         - PROMETHEUS_METRICS_HOST=0.0.0.0
       healthcheck:
@@ -60,6 +62,8 @@ services:
         # Embedding model used for document ingestion and retrieval
         - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
         - TARGET_SOURCE_CHUNKS=5
+        - CHROMA_HOST=${CHROMA_HOST:-chroma}
+        - CHROMA_PORT=${CHROMA_PORT:-8000}
         - ANCLORA_API_TOKENS=${ANCLORA_API_TOKENS:-}
         - ANCLORA_API_TOKEN=${ANCLORA_API_TOKEN:-}
         - ANCLORA_JWT_SECRET=${ANCLORA_JWT_SECRET:-}

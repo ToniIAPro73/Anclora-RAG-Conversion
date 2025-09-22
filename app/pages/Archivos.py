@@ -7,15 +7,6 @@ except ImportError:
     import sys
     sys.exit(1)
 
-# Try to import the required modules, and if they fail, provide helpful error messages
-try:
-    import chromadb  # type: ignore
-    from chromadb.config import Settings  # type: ignore
-except ImportError:
-    print("Error: chromadb module not found. Please install it with 'pip install chromadb==0.4.7'")
-    import sys
-    sys.exit(1)
-
 try:
     from langchain_community.embeddings import HuggingFaceEmbeddings  # type: ignore
 except ImportError:
@@ -33,6 +24,7 @@ try:
         delete_file_from_vectordb,
         ingest_file,
     )
+    from common.constants import CHROMA_SETTINGS
     from common.streamlit_style import hide_streamlit_style
     from common.translations import get_text
 except ImportError:
@@ -87,7 +79,6 @@ with st.sidebar:
         st.session_state.language = selected_language
         st.rerun()
 # Define the Chroma settings
-CHROMA_SETTINGS = chromadb.HttpClient(host="host.docker.internal", port = 8000, settings=Settings(allow_reset=True, anonymized_telemetry=False))
 collection = CHROMA_SETTINGS.get_or_create_collection(name='vectordb')
 embeddings = HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')
 

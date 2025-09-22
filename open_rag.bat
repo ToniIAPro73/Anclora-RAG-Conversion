@@ -15,9 +15,15 @@ if exist .env (
 )
 
 if not defined ANCLORA_API_TOKENS if not defined ANCLORA_JWT_SECRET (
-  echo [ERROR] Debes definir ANCLORA_API_TOKENS o ANCLORA_JWT_SECRET antes de iniciar los servicios.
-  exit /b 1
+  if defined ANCLORA_DEFAULT_API_TOKEN (
+    set "ANCLORA_API_TOKENS=%ANCLORA_DEFAULT_API_TOKEN%"
+    set "ANCLORA_API_TOKEN=%ANCLORA_DEFAULT_API_TOKEN%"
+    >&2 echo [WARN] No se definieron ANCLORA_API_TOKENS ni ANCLORA_JWT_SECRET; se usará el token por defecto.
+  ) else (
+    >&2 echo [ERROR] Debes definir ANCLORA_API_TOKENS, ANCLORA_JWT_SECRET o ANCLORA_DEFAULT_API_TOKEN antes de iniciar los servicios.
+    exit /b 1
+  )
 )
 
-docker-compose up -d %*
+docker compose %* up -d
 endlocal

@@ -49,6 +49,7 @@ x-logging: &logging-config
       max-file: "3"
 
 services:
+<<<<<<< HEAD
   # =============================================================================
   # Language Model Service - Ollama
   # =============================================================================
@@ -117,6 +118,86 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+=======
+    ollama:
+      image: ollama/ollama:latest
+      volumes:
+        - /ollama/models:/home/models
+      environment:
+        - OLLAMA_MODELS=/home/models
+    
+    chroma:
+      image: chromadb/chroma:0.5.1.dev111
+      volumes:
+        - index_data:/chroma/.chroma/index
+      ports:
+        - 8000:8000
+      networks:
+        - net
+    
+    ui:
+      build: ./app
+      ports:
+        - 8080:8080
+        - 9000:9000
+      volumes:
+        - ./app:/app
+      networks:
+        - net
+      depends_on:
+        - ollama
+        - chroma
+      environment:
+        - MODEL=llama3
+        # Embedding model used for document ingestion and retrieval
+        - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
+        - TARGET_SOURCE_CHUNKS=5
+        - CHROMA_HOST=${CHROMA_HOST:-chroma}
+        - CHROMA_PORT=${CHROMA_PORT:-8000}
+        - ANCLORA_API_TOKENS=${ANCLORA_API_TOKENS:-}
+        - ANCLORA_API_TOKEN=${ANCLORA_API_TOKEN:-}
+        - ANCLORA_JWT_SECRET=${ANCLORA_JWT_SECRET:-}
+        - ANCLORA_JWT_ALGORITHMS=${ANCLORA_JWT_ALGORITHMS:-HS256}
+        - ANCLORA_JWT_AUDIENCE=${ANCLORA_JWT_AUDIENCE:-}
+        - ANCLORA_JWT_ISSUER=${ANCLORA_JWT_ISSUER:-}
+        - PROMETHEUS_METRICS_PORT=9000
+        - PROMETHEUS_METRICS_HOST=0.0.0.0
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:8080/_stcore/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+        start_period: 40s
+
+    api:
+      build: ./app
+      ports:
+        - 8081:8081
+        - 9001:9001
+      volumes:
+        - ./app:/app
+      networks:
+        - net
+      depends_on:
+        - ollama
+        - chroma
+      environment:
+        - MODEL=llama3
+        # Embedding model used for document ingestion and retrieval
+        - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
+        - TARGET_SOURCE_CHUNKS=5
+        - CHROMA_HOST=${CHROMA_HOST:-chroma}
+        - CHROMA_PORT=${CHROMA_PORT:-8000}
+        - PROMETHEUS_METRICS_PORT=9001
+        - PROMETHEUS_METRICS_HOST=0.0.0.0
+      command: ["python", "-m", "uvicorn", "api_endpoints:app", "--host", "0.0.0.0", "--port", "8081"]
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+        start_period: 40s
+>>>>>>> e144ab5a7cd2487107061e72523d593854d0fcef
 
   # =============================================================================
   # GPU Validation Service
