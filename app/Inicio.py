@@ -1,16 +1,27 @@
 import streamlit as st
 
+from app.agents.base import AgentTask
+from app.agents.orchestrator import create_default_orchestrator
+
 # Set page config
 st.set_page_config(layout='wide', page_title='Anclora AI RAG', page_icon='🤖')
 
 # Import required modules
 try:
-    from common.langchain_module import response
     from common.streamlit_style import hide_streamlit_style
+
     hide_streamlit_style()
 except ImportError as e:
     st.error(f"Error importing modules: {e}")
     st.stop()
+
+
+def _get_orchestrator():
+    """Retrieve the orchestrator instance stored in the session state."""
+
+    if "orchestrator" not in st.session_state:
+        st.session_state.orchestrator = create_default_orchestrator()
+    return st.session_state.orchestrator
 
 # Initialize language in session state
 if 'language' not in st.session_state:
@@ -66,13 +77,40 @@ if prompt := st.chat_input(chat_placeholder):
 
     # Display assistant response in chat message container
     with st.chat_message("assistant"):
+        language = st.session_state.language
         try:
-            # Get response from the RAG system
-            assistant_response = response(prompt, st.session_state.language)
-            st.markdown(assistant_response)
-            # Add assistant response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-        except Exception as e:
-            error_message = "Error procesando la solicitud" if st.session_state.language == 'es' else "Error processing request"
-            st.error(f"{error_message}: {str(e)}")
-            st.session_state.messages.append({"role": "assistant", "content": f"{error_message}: {str(e)}"})
+            orchestrator = _get_orchestrator()
+            history_snapshot = [dict(message) for message in st.session_state.messages]
+            task = AgentTask(
+                task_type="document_query",
+                payload={
+                    "question": prompt,
+                    "language": language,
+                    "history": history_snapshot,
+                },
+            )
+            agent_response = orchestrator.execute(task)
+        except Exception as exc:
+            error_message = "Error procesando la solicitud" if language == 'es' else "Error processing request"
+            st.error(f"{error_message}: {exc}")
+            st.session_state.messages.append(
+                {"role": "assistant", "content": f"{error_message}: {exc}"}
+            )
+        else:
+            if agent_response.success:
+                assistant_response = ""
+                if agent_response.data:
+                    assistant_response = agent_response.data.get("answer", "") or ""
+                if not assistant_response:
+                    assistant_response = (
+                        "El agente no generó una respuesta." if language == 'es' else "The agent did not generate a response."
+                    )
+                st.markdown(assistant_response)
+                st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+            else:
+                error_message = "Error procesando la solicitud" if language == 'es' else "Error processing request"
+                error_detail = agent_response.error or "unknown_error"
+                st.error(f"{error_message}: {error_detail}")
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": f"{error_message}: {error_detail}"}
+                )
