@@ -157,8 +157,6 @@ services:
     networks:
       - anclora-network
     depends_on:
-      nvidia:
-        condition: service_completed_successfully
       ollama:
         condition: service_healthy
       chroma:
@@ -210,8 +208,6 @@ services:
     networks:
       - anclora-network
     depends_on:
-      nvidia:
-        condition: service_completed_successfully
       ollama:
         condition: service_healthy
       chroma:
