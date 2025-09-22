@@ -133,6 +133,19 @@ El detalle de fases, épicas y tareas priorizadas se encuentra en el [backlog de
 
 - [Guía de Integración / Integration Guide](docs/integration-guide.md): Pasos para consumir la API, usar el cliente Python oficial y conectar agentes (LangChain, AutoGen) con recomendaciones de encoding y manejo de Unicode.
 
+### Configuración de credenciales
+
+Los scripts `open_rag.sh` (Linux/macOS) y `open_rag.bat` (Windows) cargan automáticamente el archivo `.env` si existe. Si no defines `ANCLORA_API_TOKENS` ni `ANCLORA_JWT_SECRET`, se reutilizará el valor de `ANCLORA_DEFAULT_API_TOKEN` y se mostrará una advertencia indicando que se usará el token por defecto. Esto permite levantar la pila rápidamente en entornos locales manteniendo la opción de reforzar la seguridad en producción.
+
+Para inyectar credenciales reales, copia el archivo `.env.example` a `.env` y reemplaza los valores por los de tu entorno:
+
+```bash
+cp .env.example .env
+# Edita .env y define ANCLORA_API_TOKENS o ANCLORA_JWT_SECRET con tus credenciales.
+```
+
+En producción se recomienda definir tus propios tokens o secretos JWT para deshabilitar el token de ejemplo.
+
 ### Información legal y cumplimiento
 
 - [Términos y Condiciones de Uso](docs/legal/terms.md): reglas de uso de la plataforma, política de consentimiento y proceso de verificación de derechos antes de cada conversión.
