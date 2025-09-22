@@ -86,6 +86,27 @@ CHROMA_COLLECTIONS: Mapping[str, CollectionConfig] = {
             "para enriquecer respuestas con contenido multimedia."
         ),
     ),
+    "format_specs": CollectionConfig(
+        domain="formats",
+        description=(
+            "Catálogo de convenciones y requisitos de formatos para asegurar "
+            "consistencias en entregables y conversiones."
+        ),
+    ),
+    "knowledge_guides": CollectionConfig(
+        domain="guides",
+        description=(
+            "Guías operativas y playbooks paso a paso que estructuran las "
+            "respuestas de los agentes con mejores prácticas."
+        ),
+    ),
+    "compliance_archive": CollectionConfig(
+        domain="compliance",
+        description=(
+            "Repositorio de lineamientos regulatorios y políticas internas "
+            "para respaldar respuestas con enfoque legal y normativo."
+        ),
+    ),
 }
 
 DOMAIN_TO_COLLECTION: Mapping[str, str] = {
