@@ -13,6 +13,7 @@ services:
   gpu-diagnostics:
     image: nvidia/cuda:12.3.1-base-ubuntu20.04
     command: nvidia-smi
+    profiles: [gpu-only]
     deploy:
       resources:
         reservations:

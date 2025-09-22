@@ -53,7 +53,6 @@ services:
   ollama:
     <<: *restart-policy
     image: ollama/ollama:latest
-    container_name: anclora-ollama
     volumes:
       - ollama_models:/ollama/models
     networks:
@@ -91,7 +90,6 @@ services:
   chroma:
     <<: *restart-policy
     image: chromadb/chroma:0.5.1.dev111
-    container_name: anclora-chroma
     volumes:
       - chroma_data:/chroma/.chroma/index
     ports:
@@ -123,7 +121,6 @@ services:
   # =============================================================================
   nvidia:
     image: nvidia/cuda:12.3.1-base-ubuntu20.04
-    container_name: anclora-nvidia-check
     command: nvidia-smi
     deploy:
       resources:
@@ -147,13 +144,11 @@ services:
     build:
       context: ./app
       dockerfile: Dockerfile
-    container_name: anclora-ui
     ports:
       - 8080:8080
       - 9000:9000
     volumes:
       - ./app:/app
-      - /app/__pycache__
     networks:
       - anclora-network
     depends_on:
@@ -198,13 +193,11 @@ services:
     build:
       context: ./app
       dockerfile: Dockerfile
-    container_name: anclora-api
     ports:
       - 8081:8081
       - 9001:9001
     volumes:
       - ./app:/app
-      - /app/__pycache__
     networks:
       - anclora-network
     depends_on:
@@ -242,7 +235,6 @@ services:
   prometheus:
     <<: *restart-policy
     image: prom/prometheus:latest
-    container_name: anclora-prometheus
     ports:
       - 9090:9090
     volumes:
@@ -280,7 +272,6 @@ services:
   grafana:
     <<: *restart-policy
     image: grafana/grafana:10.4.3
-    container_name: anclora-grafana
     ports:
       - 3000:3000
     environment:
@@ -339,7 +330,6 @@ volumes:
 networks:
   anclora-network:
     driver: bridge
-    name: anclora-network
 
 # =============================================================================
 # Service Profiles
