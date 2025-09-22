@@ -121,6 +121,13 @@ def _install_langchain_stubs() -> None:
             def __call__(self, value: object) -> object:
                 return value
 
+        class _RunnableLambda:
+            def __init__(self, func):
+                self._func = func
+
+            def __call__(self, value: object) -> object:
+                return func(value) if callable(func := self._func) else value
+
         class _ChatPromptTemplate:
             def __init__(self, messages: tuple[str, object]) -> None:
                 self.messages = messages
@@ -136,6 +143,7 @@ def _install_langchain_stubs() -> None:
         _install_stub_submodule(
             "langchain_core.runnables",
             RunnablePassthrough=_RunnablePassthrough,
+            RunnableLambda=_RunnableLambda,
         )
         _install_stub_submodule(
             "langchain_core.prompts",

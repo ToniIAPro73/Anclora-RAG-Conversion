@@ -1,5 +1,6 @@
 """Tests for helpers in ``app.common.langchain_module``."""
 
+from threading import Lock
 from types import SimpleNamespace
 
 import pytest
@@ -32,30 +33,25 @@ class FakeRunnable:
         return NotImplemented
 
 
-class FakeRetriever:
-    def __init__(self) -> None:
-        self.queries: list[str] = []
-
-    def __call__(self, rag_query: str):
-        self.queries.append(rag_query)
-        return [SimpleNamespace(page_content="Contexto simulado")]
-
-    def __or__(self, formatter):
-        return FakeRunnable(lambda rag_query: formatter(self(rag_query)))
-
-
 class FakePrompt:
     def __init__(self, language: str) -> None:
         self.language = language
+        self.last_context: str | None = None
+        self.last_question: str | None = None
 
     def __ror__(self, mapping):
-        return FakeRunnable(
-            lambda rag_query: {
+        def _runner(rag_query: str):
+            context = mapping["context"].invoke(rag_query)
+            question = mapping["question"].invoke(rag_query)
+            self.last_context = context
+            self.last_question = question
+            return {
                 "language": self.language,
-                "context": mapping["context"].invoke(rag_query),
-                "question": mapping["question"].invoke(rag_query),
+                "context": context,
+                "question": question,
             }
-        )
+
+        return FakeRunnable(_runner)
 
 
 class FakeLLM:
@@ -71,8 +67,11 @@ class FakeParser:
 
 
 def _configure_rag_environment(
-    monkeypatch: pytest.MonkeyPatch, *, embeddings_factory
-) -> tuple[list[FakeRetriever], list[object]]:
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    embeddings_factory,
+    docs_by_collection: dict[str, list[tuple[str, float]]] | None = None,
+) -> tuple[dict[str, object], list[object], list[FakePrompt]]:
     def fake_get_text(key: str, language: str, **_: object) -> str:
         return f"{key}:{language}"
 
@@ -89,35 +88,87 @@ def _configure_rag_environment(
         "app.common.langchain_module.HuggingFaceEmbeddings", embeddings_factory
     )
 
+    docs_by_collection = docs_by_collection or {
+        "conversion_rules": [("Contexto simulado", 0.1)],
+    }
+
+    monkeypatch.setattr(
+        "app.common.langchain_module.CHROMA_COLLECTIONS",
+        {
+            name: SimpleNamespace(domain=name, description=name)
+            for name in docs_by_collection
+        },
+    )
+
+    monkeypatch.setattr("app.common.langchain_module._collections_cache", {})
+    monkeypatch.setattr("app.common.langchain_module._collections_lock", Lock())
+
     class FakeCollection:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
         def count(self) -> int:
-            return 2
+            return len(docs_by_collection.get(self.name, []))
 
     fake_client = SimpleNamespace(
-        get_collection=lambda name: FakeCollection(),
+        get_collection=lambda name: FakeCollection(name),
     )
     monkeypatch.setattr("app.common.langchain_module.CHROMA_SETTINGS", fake_client)
 
-    created_retrievers: list[FakeRetriever] = []
+    vectorstores: dict[str, object] = {}
     chroma_embeddings: list[object] = []
 
     class FakeChroma:
-        def __init__(self, *_, embedding_function=None, **__):
-            self.retriever = FakeRetriever()
-            created_retrievers.append(self.retriever)
+        def __init__(
+            self,
+            *,
+            collection_name: str,
+            embedding_function=None,
+            **__: object,
+        ) -> None:
+            self.collection_name = collection_name
+            self.embedding = embedding_function
+            self.queries: list[tuple[str, int]] = []
+            vectorstores[self.collection_name] = self
             chroma_embeddings.append(embedding_function)
 
-        def as_retriever(self, **_):
-            return self.retriever
+        def similarity_search_with_score(
+            self, query: str, k: int, **__: object
+        ) -> list[tuple[SimpleNamespace, float]]:
+            self.queries.append((query, k))
+            results: list[tuple[SimpleNamespace, float]] = []
+            for content, score in docs_by_collection.get(self.collection_name, []):
+                results.append(
+                    (
+                        SimpleNamespace(
+                            page_content=content,
+                            metadata={"collection": self.collection_name},
+                        ),
+                        score,
+                    )
+                )
+            return results[:k]
 
     monkeypatch.setattr("app.common.langchain_module.Chroma", FakeChroma)
+    monkeypatch.setattr(
+        "app.common.langchain_module.RunnableLambda",
+        lambda func: FakeRunnable(func),
+    )
     monkeypatch.setattr(
         "app.common.langchain_module.RunnablePassthrough",
         lambda: FakeRunnable(lambda value: value),
     )
+
+    created_prompts: list[FakePrompt] = []
+
+    def _fake_prompt_factory(language: str) -> FakePrompt:
+        prompt = FakePrompt(language)
+        created_prompts.append(prompt)
+        return prompt
+
     monkeypatch.setattr(
         "app.common.langchain_module.assistant_prompt",
-        lambda language: FakePrompt(language),
+        _fake_prompt_factory,
     )
     monkeypatch.setattr(
         "app.common.langchain_module.Ollama", lambda *args, **kwargs: FakeLLM()
@@ -126,7 +177,7 @@ def _configure_rag_environment(
         "app.common.langchain_module.StrOutputParser", lambda: FakeParser()
     )
 
-    return created_retrievers, chroma_embeddings
+    return vectorstores, chroma_embeddings, created_prompts
 
 
 @pytest.mark.parametrize(
@@ -176,7 +227,7 @@ def test_response_long_greeting_invokes_rag(monkeypatch: pytest.MonkeyPatch) -> 
     query = "Hola necesito el informe trimestral"
     monkeypatch.setattr("app.common.langchain_module._embeddings_instance", None)
 
-    retrievers, _ = _configure_rag_environment(
+    vectorstores, _, _ = _configure_rag_environment(
         monkeypatch,
         embeddings_factory=lambda model_name: SimpleNamespace(model_name=model_name),
     )
@@ -184,7 +235,10 @@ def test_response_long_greeting_invokes_rag(monkeypatch: pytest.MonkeyPatch) -> 
     result = response(query)
 
     assert result == "fake_llm_response:Hola necesito el informe trimestral"
-    assert retrievers[-1].queries == [query]
+    assert all(
+        [stored_query for stored_query, _ in store.queries] == [query]
+        for store in vectorstores.values()
+    )
 
 
 def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -199,7 +253,7 @@ def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) ->
         instantiations.append(model_name)
         return SimpleNamespace(model_name=model_name)
 
-    retrievers, chroma_embeddings = _configure_rag_environment(
+    vectorstores, chroma_embeddings, _ = _configure_rag_environment(
         monkeypatch, embeddings_factory=fake_embeddings
     )
 
@@ -209,6 +263,76 @@ def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) ->
     assert first_result == "fake_llm_response:Hola necesito el informe trimestral"
     assert second_result == "fake_llm_response:Hola necesito el informe trimestral"
     assert len(instantiations) == 1
-    assert len(chroma_embeddings) == 2
-    assert chroma_embeddings[0] is chroma_embeddings[1]
-    assert all(retriever.queries == [query] for retriever in retrievers)
+    assert len(chroma_embeddings) == 1
+    store = next(iter(vectorstores.values()))
+    assert store.embedding is chroma_embeddings[0]
+    assert [stored_query for stored_query, _ in store.queries] == [query, query]
+
+
+@pytest.mark.parametrize(
+    "docs_by_collection, expected_snippet",
+    [
+        (
+            {
+                "conversion_rules": [("Manual de conversión detallado", 0.05)],
+                "troubleshooting": [],
+            },
+            "Manual de conversión detallado",
+        ),
+        (
+            {
+                "conversion_rules": [],
+                "troubleshooting": [
+                    ("Procedimiento de diagnóstico crítico", 0.02),
+                ],
+            },
+            "Procedimiento de diagnóstico crítico",
+        ),
+    ],
+)
+def test_response_retrieves_from_any_collection(
+    monkeypatch: pytest.MonkeyPatch,
+    docs_by_collection: dict[str, list[tuple[str, float]]],
+    expected_snippet: str,
+) -> None:
+    """``response`` debe utilizar la colección disponible sin declarar la base vacía."""
+
+    monkeypatch.setattr("app.common.langchain_module._embeddings_instance", None)
+
+    _, _, prompts = _configure_rag_environment(
+        monkeypatch,
+        embeddings_factory=lambda model_name: SimpleNamespace(model_name=model_name),
+        docs_by_collection=docs_by_collection,
+    )
+
+    result = response("Necesito asistencia técnica")
+
+    assert result == "fake_llm_response:Necesito asistencia técnica"
+    assert prompts
+    assert expected_snippet in (prompts[-1].last_context or "")
+
+
+def test_response_combines_documents_across_collections(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """El contexto debe incluir fragmentos de todas las colecciones con documentos."""
+
+    monkeypatch.setattr("app.common.langchain_module._embeddings_instance", None)
+
+    docs = {
+        "conversion_rules": [("Guía de conversión avanzada", 0.04)],
+        "troubleshooting": [("Checklist de soporte urgente", 0.03)],
+    }
+
+    _, _, prompts = _configure_rag_environment(
+        monkeypatch,
+        embeddings_factory=lambda model_name: SimpleNamespace(model_name=model_name),
+        docs_by_collection=docs,
+    )
+
+    result = response("Requiero documentación técnica")
+
+    assert result == "fake_llm_response:Requiero documentación técnica"
+    context = prompts[-1].last_context or ""
+    assert "Guía de conversión avanzada" in context
+    assert "Checklist de soporte urgente" in context
