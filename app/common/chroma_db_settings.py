@@ -811,13 +811,16 @@ def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
     records: List[Dict[str, str]] = []
     for collection_name, collection_config in CHROMA_COLLECTIONS.items():
         collection = chroma_settings.get_or_create_collection(collection_name)
+
         try:
             response = collection.get(include=["metadatas"])
-        except TypeError:
+        except TypeError:  # pragma: no cover - compatibility with legacy clients
             response = collection.get()
 
-        metadata_items: Iterable[Dict[str, Any]]
-        if hasattr(response, "get"):
+        metadata_items: Iterable[Any]
+        if isinstance(response, dict):
+            metadata_items = response.get("metadatas", []) or []
+        elif hasattr(response, "get"):
             metadata_items = response.get("metadatas", []) or []
         else:  # pragma: no cover - defensive path for custom doubles
             metadata_items = []
@@ -826,16 +829,20 @@ def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
             if not metadata:
                 continue
 
-            file_name = metadata.get("uploaded_file_name")
-            if not file_name:
+            file_name = metadata.get("uploaded_file_name") if isinstance(metadata, dict) else None
+            if not file_name and isinstance(metadata, dict):
                 source_path = metadata.get("source")
                 if source_path:
                     file_name = os.path.basename(str(source_path))
             if not file_name:
                 continue
 
-            domain = metadata.get("domain") or collection_config.domain
-            collection_label = metadata.get("collection") or collection_name
+            domain = (
+                metadata.get("domain") if isinstance(metadata, dict) else None
+            ) or collection_config.domain
+            collection_label = (
+                metadata.get("collection") if isinstance(metadata, dict) else None
+            ) or collection_name
 
             records.append(
                 {

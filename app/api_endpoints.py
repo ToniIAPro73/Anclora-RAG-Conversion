@@ -511,8 +511,8 @@ async def upload_document(
 async def list_documents(token: str = Depends(verify_token)):
     """Obtiene el catálogo de documentos actualmente indexados."""
     try:
-        from common.chroma_db_settings import get_unique_sources_df
         from common.constants import CHROMA_SETTINGS
+        from common.ingest_file import get_unique_sources_df
 
         files_df = get_unique_sources_df(CHROMA_SETTINGS)
         documents = files_df['uploaded_file_name'].tolist() if not files_df.empty else []
