@@ -14,13 +14,19 @@ DEFAULT_LANGUAGE = "es"
 SPANISH_LANGUAGE_CODE = "es"
 ENGLISH_LANGUAGE_CODE = "en"
 
+# Legacy constant kept for backwards compatibility with tests
+ES_PROMPT = (
+    "Eres Bastet, la asistente virtual de PBC. Responde en español natural y conserva"
+    " las tildes y eñes en todos los mensajes."
+)
+
 # Company context
 COMPANY_CONTEXT = {
     "es": (
         "PBC es una consultora que ofrece servicios de Ingeniería de Software "
         "e Inteligencia Artificial en Latinoamérica para ayudar a las empresas "
         "a ser data driven. Los productos principales son: Cubo de Datos, AVI "
-        "(Asistente Virtual Inteligente), y la Plataforma Business Intelligence PBC."
+        "(Asistente Virtual Inteligente) y la Plataforma Business Intelligence PBC."
     ),
     "en": (
         "PBC is a consulting firm that delivers Software Engineering and "
@@ -97,19 +103,9 @@ NOTES = {
 _prompt_templates: Optional[Dict[str, ChatPromptTemplate]] = None
 
 
-def _build_prompt_template(language: str) -> ChatPromptTemplate:
-    """
-    Build a prompt template for the specified language.
+def _build_prompt_content(language: str) -> str:
+    """Return the textual representation of the assistant prompt."""
 
-    Args:
-        language: Language code ('es' or 'en')
-
-    Returns:
-        ChatPromptTemplate for the specified language
-
-    Raises:
-        ValueError: If language is not supported
-    """
     if language not in SUPPORTED_LANGUAGES:
         raise ValueError(
             f"Unsupported language: {language}. Supported languages: {SUPPORTED_LANGUAGES}"
@@ -121,8 +117,7 @@ def _build_prompt_template(language: str) -> ChatPromptTemplate:
     guidelines = GUIDELINES[language]
     notes = NOTES[language]
 
-    # Build the prompt content
-    prompt_content = (
+    return (
         f"""# Rol
 {role}
 
@@ -145,6 +140,11 @@ Context: {{context}}
         + "\n".join(f"- {note}" for note in notes)
     )
 
+
+def _build_prompt_template(language: str) -> ChatPromptTemplate:
+    """Build a prompt template for the specified language."""
+
+    prompt_content = _build_prompt_content(language)
     return ChatPromptTemplate.from_messages(("human", prompt_content))
 
 
@@ -198,6 +198,10 @@ def assistant_prompt(language: Optional[str] = None) -> ChatPromptTemplate:
     prompts = _initialize_prompts()
 
     return prompts[language]
+
+
+ES_PROMPT = _build_prompt_content(SPANISH_LANGUAGE_CODE)
+EN_PROMPT = _build_prompt_content(ENGLISH_LANGUAGE_CODE)
 
 
 def get_supported_languages() -> set:

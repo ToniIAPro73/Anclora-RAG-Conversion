@@ -286,7 +286,6 @@ def record_rag_response(
             max(float(collection_documents), 0.0)
         )
 
-
 def record_agent_invocation(
     agent_name: str,
     task_type: str,

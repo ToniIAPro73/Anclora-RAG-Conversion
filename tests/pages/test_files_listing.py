@@ -49,7 +49,7 @@ def _install_langchain_stubs(monkeypatch) -> None:
     )
     embeddings_pkg = sys.modules.get(
         "langchain_community.embeddings", types.ModuleType("langchain_community.embeddings")
-    )
+    
     llms_pkg = sys.modules.get("langchain_community.llms", types.ModuleType("langchain_community.llms"))
     utils_submodule = types.ModuleType("langchain_community.vectorstores.utils")
 

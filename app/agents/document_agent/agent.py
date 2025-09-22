@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 
 from app.agents.base import AgentResponse, AgentTask, BaseAgent
 from app.common import langchain_module
+from app.common.langchain_module import LegalComplianceGuardError
 from common.observability import record_agent_invocation
 
-QueryFunction = Callable[[str, Optional[str]], str]
+QueryFunction = Callable[[str, Optional[str], Optional[str], Optional[Mapping[str, Any]]], str]
 
 
 class DocumentAgent(BaseAgent):
@@ -45,6 +46,16 @@ class DocumentAgent(BaseAgent):
 
         try:
             answer = self._query_function(str(question), language if language else None)
+        except LegalComplianceGuardError as exc:
+            record_agent_invocation(
+                self.name,
+                task.task_type,
+                "guardrail",
+                duration_seconds=time.perf_counter() - start_time,
+                language=language_label,
+            )
+            message = exc.render_message(language_label or "es")
+            return AgentResponse(success=False, error=message)
         except Exception as exc:  # pragma: no cover - defensive branch
             record_agent_invocation(
                 self.name,

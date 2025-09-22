@@ -1,11 +1,10 @@
-"""Regression tests for the RAG response flow."""
+"""Regression tests for the public ``response`` helper."""
 
 from __future__ import annotations
 
 import pytest
 
 from app.common.text_normalization import normalize_to_nfc
-
 
 @pytest.mark.parametrize(
     ("description", "query", "language", "expected_response"),
@@ -55,6 +54,7 @@ def test_response_regressions(description, query, language, expected_response, r
         return expected_response
 
     harness.set_llm_callback(_llm_callback)
+    harness.reset_tracking()
 
     result = module.response(query, language=language)
 
@@ -68,7 +68,127 @@ def test_response_regressions(description, query, language, expected_response, r
 
     if "acentos" in description:
         assert "acción" in result
-
-    # Confirm that the accent-sensitive checks would fail if accents were missing.
-    if "acentos" in description:
         assert "accion" not in result, "La respuesta debe mantener los acentos esperados."
+
+    assert len(harness.metric_events) == 1
+    event = harness.metric_events[-1]
+    assert event["language"] == language
+    assert event["status"] == "success"
+    documents = event["kwargs"].get("collection_documents")
+    assert set(documents.keys()) == {"conversion_rules", "troubleshooting"}
+    for collection_name in ("conversion_rules", "troubleshooting"):
+        assert documents[collection_name] == len(harness.docs_for(collection_name))
+
+
+def test_response_uses_task_metadata_for_collection_selection(rag_test_harness):
+    """Metadata should restrict retrieval to the requested collection and variant."""
+
+    module, harness = rag_test_harness
+    harness.set_docs_for("legal_repository", "Cláusulas actualizadas para el contrato marco.")
+    harness.set_docs("Contexto general sin priorización.")
+
+    expected = "Respuesta legal detallada."
+
+    def _llm_callback(payload: dict) -> str:
+        assert payload["language"] == "es"
+        assert payload["prompt_variant"] == "legal"
+        return expected
+
+    harness.set_llm_callback(_llm_callback)
+    harness.reset_tracking()
+
+    metadata = {"collections": ["legal_repository"], "prompt_type": "legal"}
+    result = module.response(
+        "¿Cuál es la obligación contractual vigente?",
+        language="es",
+        task_type="legal_query",
+        metadata=metadata,
+    )
+
+    assert result == expected
+    assert harness.prompt_variants[-1] == "legal"
+    assert {retriever.collection_name for retriever in harness.retrievers} == {"legal_repository"}
+    assert harness.selected_collections == ["legal_repository"]
+
+    assert len(harness.metric_events) == 1
+    event = harness.metric_events[-1]
+    assert event["kwargs"].get("collection_documents") == {"legal_repository": len(harness.docs_for("legal_repository"))}
+
+
+def test_response_uses_task_type_hints_for_multimedia(rag_test_harness):
+    """Tasks with multimedia hints should pivot to the multimedia prompt and collection."""
+
+    module, harness = rag_test_harness
+    harness.set_docs_for("multimedia_assets", "Transcripción del video de lanzamiento.")
+
+    expected = "Resumen multimedia generado."
+
+    def _llm_callback(payload: dict) -> str:
+        assert payload["language"] == "es"
+        assert payload["prompt_variant"] == "multimedia"
+        return expected
+
+    harness.set_llm_callback(_llm_callback)
+    harness.reset_tracking()
+
+    result = module.response(
+        "Necesito un resumen del último video corporativo",
+        language="es",
+        task_type="media_summary",
+    )
+
+    assert result == expected
+    assert harness.prompt_variants[-1] == "multimedia"
+    assert {retriever.collection_name for retriever in harness.retrievers} == {"multimedia_assets"}
+    assert harness.selected_collections == ["multimedia_assets"]
+
+    assert len(harness.metric_events) == 1
+    event = harness.metric_events[-1]
+    assert event["kwargs"].get("collection_documents") == {"multimedia_assets": len(harness.docs_for("multimedia_assets"))}
+
+
+def test_response_falls_back_when_selected_collection_is_empty(rag_test_harness):
+    """If the requested collection has no documents the pipeline should fallback."""
+
+    module, harness = rag_test_harness
+    harness.set_docs("Contexto general consolidado.")
+    harness.set_docs_for("multimedia_assets")  # sin documentos disponibles
+
+    expected = "Respuesta documental alternativa."
+
+    def _llm_callback(payload: dict) -> str:
+        assert payload["language"] == "es"
+        assert payload["prompt_variant"] == "documental"
+        return expected
+
+    harness.set_llm_callback(_llm_callback)
+    harness.reset_tracking()
+
+    result = module.response(
+        "Comparte los lineamientos vigentes",
+        language="es",
+        task_type="document_query",
+        metadata={"collections": ["multimedia_assets"]},
+    )
+
+    assert result == expected
+    assert harness.prompt_variants[-1] == "documental"
+    assert {
+        retriever.collection_name for retriever in harness.retrievers
+    } == {"conversion_rules", "troubleshooting", "legal_repository"}
+    assert set(harness.selected_collections) == {
+        "conversion_rules",
+        "troubleshooting",
+        "legal_repository",
+    }
+
+    assert len(harness.metric_events) == 1
+    event = harness.metric_events[-1]
+    documents = event["kwargs"].get("collection_documents")
+    assert set(documents.keys()) == {
+        "conversion_rules",
+        "troubleshooting",
+        "legal_repository",
+    }
+    for collection_name in documents:
+        assert documents[collection_name] == len(harness.docs_for(collection_name))

@@ -15,11 +15,19 @@ class AgentTask:
 
     task_type: str
     payload: Mapping[str, Any]
+    metadata: Mapping[str, Any] | None = None
 
     def get(self, key: str, default: Any | None = None) -> Any | None:
         """Expose the underlying payload like a dictionary."""
 
         return self.payload.get(key, default)
+
+    def get_metadata(self, key: str, default: Any | None = None) -> Any | None:
+        """Access optional metadata associated with the task."""
+
+        if self.metadata is None:
+            return default
+        return self.metadata.get(key, default)
 
 
 @dataclass
