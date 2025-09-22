@@ -165,6 +165,8 @@ services:
       ANCLORA_JWT_AUDIENCE: ${ANCLORA_JWT_AUDIENCE:-}
       ANCLORA_JWT_ISSUER: ${ANCLORA_JWT_ISSUER:-}
       PROMETHEUS_METRICS_PORT: 9000
+      # Disable Streamlit telemetry to prevent capture() error
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: false
     deploy:
       resources:
         limits:
