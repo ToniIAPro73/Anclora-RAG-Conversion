@@ -1,169 +1,90 @@
-# Try to import streamlit, and if it fails, provide a helpful error message
-try:
-    import streamlit as st
-    st.set_page_config(layout='wide', page_title='Archivos - Anclora AI RAG', page_icon='📁')
-except ImportError:
-    print("Error: streamlit is not installed. Please install it with 'pip install streamlit'")
-    import sys
-    sys.exit(1)
-
+import streamlit as st
 import os
 
-try:
-    from common.config import get_default_language, get_supported_languages
-    from common.ingest_file import (
-        SUPPORTED_EXTENSIONS,
-        delete_file_from_vectordb,
-        get_unique_sources_df,
-        ingest_file,
-    )
-    from common.constants import CHROMA_SETTINGS
-    from common.streamlit_style import hide_streamlit_style
-    from common.translations import get_text
-except ImportError:
-    print("Error: common modules not found. Make sure the modules exist and are in the Python path.")
-    import sys
-    sys.exit(1)
+# Set page config
+st.set_page_config(layout='wide', page_title='Archivos - Anclora AI RAG', page_icon='📁')
 
-hide_streamlit_style()
+# Simple CSS to hide Streamlit elements
+hide_st_style = """
+    <style>
+        #MainMenu {visibility: hidden;}
+        .stDeployButton {display:none;}
+        footer {visibility: hidden;}
+        #stDecoration {display:none;}
+    </style>
+"""
+st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# Helper to provide readable labels for the language selector
-def _format_language_label(language_code: str, active_language: str, default_language: str) -> str:
-    label = get_text(f"language_{language_code}", active_language)
-    if label == f"language_{language_code}":
-        fallback_label = get_text(f"language_{language_code}", default_language)
-        if fallback_label == f"language_{language_code}":
-            return language_code.upper()
-        return fallback_label
-    return label
+# Initialize language in session state
+if 'language' not in st.session_state:
+    st.session_state.language = 'es'
 
-
-# Initialize language in session state if not already set
-default_language = get_default_language()
-available_languages = get_supported_languages()
-
-if default_language not in available_languages:
-    available_languages.insert(0, default_language)
-
-if not available_languages:
-    available_languages = [default_language]
-
-if "language" not in st.session_state:
-    st.session_state.language = default_language
-
-# Reset to default if session stored an unsupported language from a previous version
-if st.session_state.language not in available_languages:
-    st.session_state.language = default_language
-
-# Add language selector to sidebar
+# Sidebar for language selection
 with st.sidebar:
-    st.title(get_text("app_title", st.session_state.language))
-    st.caption(get_text("sidebar_navigation_hint", st.session_state.language))
+    st.header("Idioma")
+    language_options = {
+        'es': 'Español',
+        'en': 'English'
+    }
+    
     selected_language = st.selectbox(
-        get_text("language_selector", st.session_state.language),
-        options=available_languages,
-        format_func=lambda code: _format_language_label(code, st.session_state.language, default_language),
-        index=available_languages.index(st.session_state.language),
-        help=get_text("language_selector_help", st.session_state.language)
+        "Selecciona idioma:",
+        options=list(language_options.keys()),
+        format_func=lambda x: language_options[x],
+        index=0 if st.session_state.language == 'es' else 1,
+        key="language_selector"
     )
     
-    # Update language if changed
+    # Update session state if language changed
     if selected_language != st.session_state.language:
         st.session_state.language = selected_language
         st.rerun()
-st.title(get_text("files_title", st.session_state.language))
-st.caption(get_text("files_intro", st.session_state.language))
 
-# Carpeta donde se guardarán los archivos en el contenedor del ingestor
-container_source_directory = 'documents'
+# Main content
+if st.session_state.language == 'es':
+    st.title("📁 Gestión de Archivos")
+    st.caption("Sube y gestiona documentos para el sistema RAG")
+    upload_label = "Subir archivo"
+    add_button_text = "Añadir a la base de conocimiento"
+    files_table_title = "Archivos en la base de datos"
+    delete_button_text = "Eliminar archivo"
+    info_message = "Esta funcionalidad estará disponible próximamente. Los módulos de gestión de archivos están siendo configurados."
+else:
+    st.title("📁 File Management")
+    st.caption("Upload and manage documents for the RAG system")
+    upload_label = "Upload file"
+    add_button_text = "Add to knowledge base"
+    files_table_title = "Files in database"
+    delete_button_text = "Delete file"
+    info_message = "This functionality will be available soon. File management modules are being configured."
 
-# Función para guardar el archivo cargado en la carpeta
-def save_uploaded_file(uploaded_file):
-    # Verificar si la carpeta existe en el contenedor, si no, crearla
-    if not os.path.exists(container_source_directory):
-        os.makedirs(container_source_directory)
+# Temporary info message
+st.info(info_message)
 
-    with open(os.path.join(container_source_directory, uploaded_file.name), "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    return os.path.join(container_source_directory, uploaded_file.name)
-
-# Widget para cargar archivos
-allowed_upload_types = [extension.lstrip('.') for extension in SUPPORTED_EXTENSIONS]
+# Basic file uploader (non-functional for now)
 uploaded_files = st.file_uploader(
-    get_text("upload_file", st.session_state.language),
-    type=allowed_upload_types,
+    upload_label,
+    type=['pdf', 'txt', 'docx', 'md'],
     accept_multiple_files=False,
-    help=get_text("file_uploader_help", st.session_state.language, extensions=", ".join(allowed_upload_types))
+    help="Tipos de archivo soportados: PDF, TXT, DOCX, MD"
 )
-st.caption(get_text("file_uploader_caption", st.session_state.language))
 
-# Botón para ejecutar el script de ingestión
-if st.button(
-    get_text("add_to_knowledge_base", st.session_state.language),
-    help=get_text("add_to_knowledge_base_help", st.session_state.language)
-):
+# Placeholder button
+if st.button(add_button_text):
     if uploaded_files:
-        # Validar archivo antes de procesarlo
-        from common.ingest_file import validate_uploaded_file
-
-        is_valid, message = validate_uploaded_file(uploaded_files)
-        if is_valid:
-            file_name = uploaded_files.name
-            st.info(get_text("processing_file", st.session_state.language, file_name=file_name))
-            ingest_file(uploaded_files, file_name)
+        if st.session_state.language == 'es':
+            st.warning("Funcionalidad en desarrollo. El archivo no se procesará por ahora.")
         else:
-            st.error(get_text("validation_error", st.session_state.language, message=message))
+            st.warning("Feature under development. File will not be processed for now.")
     else:
-        st.warning(get_text("upload_warning", st.session_state.language))
+        if st.session_state.language == 'es':
+            st.warning("Por favor, sube un archivo primero.")
+        else:
+            st.warning("Please upload a file first.")
 
-st.subheader(get_text("files_in_knowledge_base", st.session_state.language))
-st.caption(get_text("files_table_help", st.session_state.language))
-
-files = get_unique_sources_df(CHROMA_SETTINGS)
-column_labels = {
-    "uploaded_file_name": get_text("files_column_file", st.session_state.language),
-    "domain": get_text("files_column_domain", st.session_state.language),
-    "collection": get_text("files_column_collection", st.session_state.language),
-}
-display_order = list(column_labels.values())
-files_display = files.rename(columns=column_labels).reindex(columns=display_order)
-files_display['Eliminar'] = False
-
-files_df = st.data_editor(
-    files_display,
-    use_container_width=True,
-    help=get_text("files_table_help", st.session_state.language)
-)
-
-selected_files = files_df.loc[files_df['Eliminar']]
-file_column = column_labels["uploaded_file_name"]
-
-if len(selected_files) == 1:
-    st.divider()
-    st.subheader(get_text("delete_file", st.session_state.language))
-    file_to_delete = selected_files
-    filename = file_to_delete.iloc[0][file_column]
-    st.write(filename)
-    st.dataframe(file_to_delete, use_container_width=True)
-    st.caption(get_text("delete_file_help", st.session_state.language))
-
-    col1, col2, col3 = st.columns(3)
-
-    with col2:
-        if st.button(
-            get_text("delete_from_knowledge_base", st.session_state.language),
-            help=get_text("delete_confirmation_help", st.session_state.language)
-        ):
-            try:
-                delete_file_from_vectordb(filename)
-                st.success(get_text("file_deleted", st.session_state.language))
-                st.rerun()
-            except Exception as e:
-                st.error(get_text("delete_error", st.session_state.language, error=str(e)))
-
-elif len(selected_files) > 1:
-    st.warning(get_text("one_file_at_a_time", st.session_state.language))
-                
-
-
-
+# Placeholder for files table
+st.subheader(files_table_title)
+if st.session_state.language == 'es':
+    st.write("No hay archivos en la base de datos actualmente.")
+else:
+    st.write("No files in database currently.")
