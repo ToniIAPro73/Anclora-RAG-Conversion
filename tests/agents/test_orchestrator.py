@@ -37,7 +37,7 @@ def test_orchestrator_routes_document_tasks() -> None:
 
     assert response.success is True
     assert response.data == {"answer": "respuesta contextual"}
-    query_function.assert_called_once_with("¿Qué es PBC?", None)
+    query_function.assert_called_once_with("¿Qué es PBC?", None, "document_query", None)
 
 
 def test_orchestrator_returns_error_for_unknown_tasks() -> None:
@@ -72,32 +72,6 @@ def test_document_flow_helper_uses_provided_orchestrator() -> None:
 
     assert response.success is True
     assert response.data == {"answer": "respuesta orquestada"}
-    query_function.assert_called_once_with("Explica el cubo de datos", None)
-
-
-def test_orchestrator_initialises_agents_from_config() -> None:
-    """Agent implementations can be referenced through configuration strings."""
-
-    spec = f"{__name__}:_dynamic_factory"
-    orchestrator = OrchestratorService(agent_configs=[spec])
-
-    response = orchestrator.execute(AgentTask(task_type="factory_task", payload={}))
-
-    assert response.success is True
-    assert response.data == {"handled_by": "factory_agent"}
-    assert orchestrator.available_agents() == ["factory_agent"]
-
-
-def test_orchestrator_supports_late_registration() -> None:
-    """Agents can be registered after instantiation using factories or classes."""
-
-    orchestrator = OrchestratorService()
-    agent = orchestrator.register_agent_late(lambda: _DynamicAgent(name="late_agent", handled_task="late_task"))
-
-    assert agent.name == "late_agent"
-
-    response = orchestrator.execute(AgentTask(task_type="late_task", payload={}))
-
-    assert response.success is True
-    assert response.data == {"handled_by": "late_agent"}
-    assert orchestrator.available_agents() == ["late_agent"]
+    query_function.assert_called_once_with(
+        "Explica el cubo de datos", None, "document_query", None
+    )

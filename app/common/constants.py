@@ -62,6 +62,7 @@ class CollectionConfig:
 
     domain: str
     description: str
+    prompt_type: str = "documental"
 
 
 CHROMA_COLLECTIONS: Mapping[str, CollectionConfig] = {
@@ -71,6 +72,7 @@ CHROMA_COLLECTIONS: Mapping[str, CollectionConfig] = {
             "Colección orientada a manuales, guías y documentación de referencia "
             "utilizada durante los procesos de conversión y capacitación."
         ),
+        prompt_type="documental",
     ),
     "troubleshooting": CollectionConfig(
         domain="code",
@@ -78,6 +80,7 @@ CHROMA_COLLECTIONS: Mapping[str, CollectionConfig] = {
             "Snippets de código, ejemplos y procedimientos de diagnóstico para "
             "dar soporte en escenarios de troubleshooting."
         ),
+        prompt_type="documental",
     ),
     "multimedia_assets": CollectionConfig(
         domain="multimedia",
@@ -85,6 +88,15 @@ CHROMA_COLLECTIONS: Mapping[str, CollectionConfig] = {
             "Material audiovisual transcrito como subtítulos o descripciones "
             "para enriquecer respuestas con contenido multimedia."
         ),
+        prompt_type="multimedia",
+    ),
+    "legal_repository": CollectionConfig(
+        domain="legal",
+        description=(
+            "Cuerpos normativos, cláusulas y lineamientos de cumplimiento para "
+            "responder consultas legales o regulatorias."
+        ),
+        prompt_type="legal",
     ),
     "format_specs": CollectionConfig(
         domain="formats",

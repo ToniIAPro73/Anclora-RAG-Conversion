@@ -72,6 +72,35 @@ def test_document_agent_records_invalid(monkeypatch: pytest.MonkeyPatch) -> None
     assert calls == [("document_agent", "document_query", "invalid")]
 
 
+def test_document_agent_passes_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The query function must receive the task metadata and type."""
+
+    captured: dict[str, object] = {}
+
+    def fake_query(question: str, language: str | None, task_type: str | None, metadata: dict | None) -> str:
+        captured["question"] = question
+        captured["language"] = language
+        captured["task_type"] = task_type
+        captured["metadata"] = metadata
+        return "respuesta"
+
+    agent = DocumentAgent(query_function=fake_query)
+    task_metadata = {"collections": ["legal_repository"], "prompt_type": "legal"}
+    task = AgentTask(
+        task_type="legal_query",
+        payload={"question": "¿Cuál es el estado?", "language": "es"},
+        metadata=task_metadata,
+    )
+
+    response = agent.handle(task)
+
+    assert response.success is True
+    assert captured["question"] == "¿Cuál es el estado?"
+    assert captured["language"] == "es"
+    assert captured["task_type"] == "legal_query"
+    assert captured["metadata"] == task_metadata
+
+
 def test_media_agent_records_flows(monkeypatch: pytest.MonkeyPatch) -> None:
     """MediaAgent instrumentation should track both success and invalid paths."""
 
