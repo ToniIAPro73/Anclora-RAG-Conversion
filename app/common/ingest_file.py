@@ -6,7 +6,8 @@ import os
 import tempfile
 import uuid
 from contextlib import contextmanager
-from typing import List, Tuple
+from threading import Lock
+from typing import List, Tuple, Optional
 
 import pandas as pd
 import streamlit as st
@@ -80,8 +81,22 @@ class ProcessedFile:
 
 # Load environment variables
 embeddings_model_name = os.environ.get("EMBEDDINGS_MODEL_NAME", "all-MiniLM-L6-v2")
-# Create embeddings
-embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
+
+_embeddings_lock: Lock = Lock()
+_embeddings_instance: Optional[HuggingFaceEmbeddings] = None
+
+
+def get_embeddings() -> HuggingFaceEmbeddings:
+    """Return a cached instance of the embeddings model."""
+
+    global _embeddings_instance
+    if _embeddings_instance is None:
+        with _embeddings_lock:
+            if _embeddings_instance is None:
+                _embeddings_instance = HuggingFaceEmbeddings(
+                    model_name=embeddings_model_name
+                )
+    return _embeddings_instance
 
 # Ensure the ingestors see the latest loader implementations when the module is re-imported
 refresh_document_loaders(force=True)
@@ -270,6 +285,7 @@ def ingest_file(uploaded_file, file_name):
 
         texts = result.documents
         ingestor = result.ingestor
+        embeddings = get_embeddings()
 
         spinner_message = f"Creando embeddings para {file_name}..."
         if does_vectorstore_exist(CHROMA_SETTINGS, ingestor.collection_name):
@@ -324,6 +340,7 @@ __all__ = [
     "SUPPORTED_EXTENSIONS",
     "delete_file_from_vectordb",
     "does_vectorstore_exist",
+    "get_embeddings",
     "get_unique_sources_df",
     "ingest_file",
     "ProcessedFile",
