@@ -141,6 +141,41 @@ def test_get_unique_sources_df_uses_metadata_only(monkeypatch, request: pytest.F
     chroma_module = importlib.import_module(module_name)
     request.addfinalizer(lambda: sys.modules.pop(module_name, None))
 
+    common_pkg = sys.modules.get("common")
+    created_common_pkg = common_pkg is None
+    if created_common_pkg:
+        common_pkg = types.ModuleType("common")
+        sys.modules["common"] = common_pkg
+
+        def _remove_common_pkg() -> None:  # pragma: no cover - cleanup helper
+            sys.modules.pop("common", None)
+
+        request.addfinalizer(_remove_common_pkg)
+
+    def _restore_common_attr(attr_name: str, original: object) -> None:  # pragma: no cover - cleanup helper
+        if original is None:
+            common_pkg.__dict__.pop(attr_name, None)
+        else:
+            setattr(common_pkg, attr_name, original)
+
+    previous_attr = getattr(common_pkg, "chroma_db_settings", None)
+    setattr(common_pkg, "chroma_db_settings", chroma_module)
+    request.addfinalizer(lambda attr="chroma_db_settings", original=previous_attr: _restore_common_attr(attr, original))
+    sys.modules["common.chroma_db_settings"] = chroma_module
+    request.addfinalizer(lambda: sys.modules.pop("common.chroma_db_settings", None))
+
+    ingest_module_name = "app.common.ingest_file"
+    monkeypatch.delitem(sys.modules, ingest_module_name, raising=False)
+    ingest_module = importlib.import_module(ingest_module_name)
+    request.addfinalizer(lambda: sys.modules.pop(ingest_module_name, None))
+    sys.modules["common.ingest_file"] = ingest_module
+    previous_ingest_attr = getattr(common_pkg, "ingest_file", None)
+    setattr(common_pkg, "ingest_file", ingest_module)
+    request.addfinalizer(lambda: sys.modules.pop("common.ingest_file", None))
+    request.addfinalizer(lambda attr="ingest_file", original=previous_ingest_attr: _restore_common_attr(attr, original))
+    get_unique_sources = ingest_module.get_unique_sources_df
+    assert get_unique_sources is chroma_module.get_unique_sources_df
+
     configs = {
         "alpha_docs": _CollectionConfig(domain="documents", description="Alpha"),
         "beta_code": _CollectionConfig(domain="code", description="Beta"),
@@ -177,7 +212,7 @@ def test_get_unique_sources_df_uses_metadata_only(monkeypatch, request: pytest.F
 
     client = _FakeChromaClient(fake_collections)
 
-    df = chroma_module.get_unique_sources_df(client)
+    df = get_unique_sources(client)
 
     assert list(df.columns) == ["uploaded_file_name", "domain", "collection"]
     assert len(df) == len(_expected_records({

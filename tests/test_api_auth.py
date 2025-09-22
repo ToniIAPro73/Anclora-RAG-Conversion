@@ -92,6 +92,8 @@ def api_client_factory(monkeypatch: pytest.MonkeyPatch) -> Callable[[str], TestC
 
                 return _StubSeries()
 
+        ingest_stub.get_unique_sources_df = lambda *args, **kwargs: _StubDataFrame()
+
         chroma_stub = types.ModuleType("common.chroma_db_settings")
         chroma_stub.get_unique_sources_df = lambda *args, **kwargs: _StubDataFrame()
         monkeypatch.setitem(sys.modules, "common.chroma_db_settings", chroma_stub)
