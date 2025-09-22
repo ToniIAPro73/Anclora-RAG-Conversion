@@ -23,4 +23,4 @@ eval:
 .PHONY: regression-agents
 ## Ejecuta el harness de regresión para agentes y verifica latencia/calidad
 regression-agents:
-	pytest tests/regression/test_agent_harness.py -q
+	$(PYTHON) -m tests.regression.agent_suite

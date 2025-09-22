@@ -4,9 +4,10 @@ import importlib
 import sys
 import types
 from collections import Counter
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, List
+from typing import Any, Callable, Iterator, List
 
 import pytest
 
@@ -88,8 +89,7 @@ class _Harness:
             self.context_breakdown = dict(context_info)
 
 
-@pytest.fixture
-def rag_test_harness(monkeypatch):
+def _rag_test_harness_impl(monkeypatch: pytest.MonkeyPatch):
     """Patch the langchain module so ``response`` can run without external services."""
 
     project_root = Path(__file__).resolve().parents[2]
@@ -166,6 +166,7 @@ def rag_test_harness(monkeypatch):
         "conversion_rules": SimpleNamespace(domain="documents"),
         "troubleshooting": SimpleNamespace(domain="code"),
         "multimedia_assets": SimpleNamespace(domain="multimedia"),
+        "legal_repository": SimpleNamespace(domain="legal", prompt_type="legal"),
     }
     constants_stub.DOMAIN_TO_COLLECTION = {
         config.domain: name for name, config in constants_stub.CHROMA_COLLECTIONS.items()
@@ -207,6 +208,9 @@ def rag_test_harness(monkeypatch):
     module = importlib.import_module("app.common.langchain_module")
 
     harness = _Harness()
+
+    setattr(module, "testing_mode", True)
+    setattr(module, "chroma_client", module.CHROMA_SETTINGS)
 
     class _FakeRunnable:
         def __init__(self, func: Callable[[str], object]) -> None:
@@ -316,7 +320,9 @@ def rag_test_harness(monkeypatch):
     monkeypatch.setattr(module, "Ollama", _FakeLLM)
     monkeypatch.setattr(module, "StrOutputParser", lambda: _FakeParser())
     monkeypatch.setattr(module, "RunnablePassthrough", _fake_runnable_passthrough)
-    monkeypatch.setattr(module, "parse_arguments", lambda: SimpleNamespace(mute_stream=True))
+    parse_args_stub = lambda: SimpleNamespace(mute_stream=True)
+    monkeypatch.setattr(module, "parse_arguments", parse_args_stub)
+    monkeypatch.setattr(module, "parse_args", parse_args_stub, raising=False)
     monkeypatch.setattr(module, "CHROMA_SETTINGS", _FakeChromaSettings())
 
     def _fast_detect_language(text: str) -> str:
@@ -357,4 +363,46 @@ def rag_test_harness(monkeypatch):
         sys.modules.pop("app.common.langchain_module", None)
 
 
-__all__ = ["rag_test_harness", "_Harness", "_FakeDoc"]
+@contextmanager
+def rag_test_harness_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[tuple[Any, _Harness]]:
+    """Expose the regression harness as a reusable context manager."""
+
+    generator = _rag_test_harness_impl(monkeypatch)
+    try:
+        value = next(generator)
+        yield value
+    finally:
+        generator.close()
+
+
+@pytest.fixture
+def rag_test_harness(monkeypatch: pytest.MonkeyPatch):
+    """Pytest fixture exposing the regression harness."""
+
+    with rag_test_harness_context(monkeypatch) as value:
+        yield value
+
+
+def build_regression_harness() -> tuple[Any, _Harness, Callable[[], None]]:
+    """Create the regression harness outside of the pytest runtime."""
+
+    monkeypatch = pytest.MonkeyPatch()
+    context = rag_test_harness_context(monkeypatch)
+    module, harness = context.__enter__()
+
+    def _finalize() -> None:
+        context.__exit__(None, None, None)
+        monkeypatch.undo()
+
+    return module, harness, _finalize
+
+
+__all__ = [
+    "rag_test_harness",
+    "rag_test_harness_context",
+    "build_regression_harness",
+    "_Harness",
+    "_FakeDoc",
+]

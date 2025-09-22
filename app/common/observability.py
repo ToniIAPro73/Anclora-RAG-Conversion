@@ -5,13 +5,14 @@ import logging
 import os
 import threading
 from collections import defaultdict
-from typing import Mapping, Optional
+from typing import Any, Mapping, Optional
 
 logger = logging.getLogger(__name__)
 
 try:  # pragma: no cover - optional dependency
-    from prometheus_client import Counter, Gauge, Histogram, start_http_server
+    from prometheus_client import REGISTRY, Counter, Gauge, Histogram, start_http_server
 except Exception:  # pragma: no cover - fallback path when dependency is missing
+    REGISTRY = None  # type: ignore[assignment]
     Counter = Gauge = Histogram = None  # type: ignore[assignment]
     start_http_server = None  # type: ignore[assignment]
 
@@ -21,6 +22,7 @@ _METRIC_PREFIX = os.getenv("PROMETHEUS_METRIC_PREFIX", "anclora").strip()
 
 _server_lock = threading.Lock()
 _server_started = False
+_METRIC_CACHE: dict[str, Any] = {}
 
 
 class _NoopCollector:
@@ -45,18 +47,64 @@ def _metric_name(name: str) -> str:
     return f"{_METRIC_PREFIX}_{name}"
 
 
-def _build_metric(factory, name: str, documentation: str, labelnames: tuple[str, ...] = (), buckets: Optional[tuple[float, ...]] = None):
+def _get_registered_metric(metric_name: str) -> Any | None:
+    """Return a previously created metric instance if it exists."""
+
+    cached = _METRIC_CACHE.get(metric_name)
+    if cached is not None:
+        return cached
+
+    if not _METRICS_ENABLED or REGISTRY is None:
+        return None
+
+    registry = REGISTRY
+    try:
+        collectors = getattr(registry, "_names_to_collectors")  # type: ignore[attr-defined]
+    except AttributeError:  # pragma: no cover - defensive branch
+        return None
+
+    collector = collectors.get(metric_name) if isinstance(collectors, Mapping) else None
+    if collector is not None:
+        _METRIC_CACHE[metric_name] = collector
+    return collector
+
+
+def _build_metric(
+    factory,
+    name: str,
+    documentation: str,
+    labelnames: tuple[str, ...] = (),
+    buckets: Optional[tuple[float, ...]] = None,
+):
     if not _METRICS_ENABLED:
         return _NoopCollector()
 
     metric_name = _metric_name(name)
+    existing = _get_registered_metric(metric_name)
+    if existing is not None:
+        logger.debug("Reutilizando colector existente para la métrica %s", metric_name)
+        return existing
+
     try:
         if buckets is not None and factory is Histogram:
-            return factory(metric_name, documentation, labelnames=labelnames, buckets=buckets)
-        return factory(metric_name, documentation, labelnames=labelnames)
+            metric = factory(metric_name, documentation, labelnames=labelnames, buckets=buckets)
+        else:
+            metric = factory(metric_name, documentation, labelnames=labelnames)
     except Exception as exc:  # pragma: no cover - defensive branch
+        fallback = _get_registered_metric(metric_name)
+        if fallback is not None:
+            logger.debug(
+                "Se reutilizó el colector existente para %s tras una excepción: %s",
+                metric_name,
+                exc,
+            )
+            return fallback
+
         logger.warning("No se pudo crear la métrica %s: %s", metric_name, exc)
         return _NoopCollector()
+
+    _METRIC_CACHE[metric_name] = metric
+    return metric
 
 
 _RAG_REQUESTS = _build_metric(
