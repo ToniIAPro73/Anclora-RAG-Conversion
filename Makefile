@@ -6,12 +6,12 @@ EVAL_DATASETS := tests/fixtures/sample_responses_es.json tests/fixtures/sample_r
 .PHONY: test
 ## Ejecuta toda la batería de pruebas de Pytest, incluyendo los pipelines simulados
 test:
-pytest
+	pytest
 
 .PHONY: test-converter
 ## Ejecuta únicamente las pruebas del conversor y verificación de metadatos
 test-converter:
-pytest tests/converter
+	pytest tests/converter
 
 .PHONY: eval
 ## Ejecuta la evaluación de respuestas RAG con métricas BLEU y ROUGE-L
@@ -19,3 +19,8 @@ pytest tests/converter
 eval:
 	$(PYTHON) scripts/evaluate_responses.py --datasets $(EVAL_DATASETS) \
 		--bleu-threshold $(BLEU_THRESHOLD) --rouge-threshold $(ROUGE_THRESHOLD)
+
+.PHONY: regression-agents
+## Ejecuta el harness de regresión para agentes y verifica latencia/calidad
+regression-agents:
+	pytest tests/regression/test_agent_harness.py -q

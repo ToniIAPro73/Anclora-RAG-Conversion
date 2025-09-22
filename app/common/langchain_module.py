@@ -93,6 +93,7 @@ import sys
 import argparse
 import logging
 import time
+from collections import Counter
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -793,56 +794,8 @@ def response(
     rag_started = False
     status = "error"
     context_document_count = 0
-    collection_snapshot: Dict[str, int] = {}
-    selected_collection_counts: Dict[str, int] = {}
-    prompt_variant = DEFAULT_PROMPT_VARIANT
-
-    module = sys.modules.get(__name__)
-    testing_mode = bool(os.getenv("PYTEST_CURRENT_TEST"))
-    parse_args = parse_arguments
-    record_response = record_rag_response
-    streaming_handler_cls = StreamingStdOutCallbackHandler
-    ollama_cls = Ollama
-    str_parser_factory = StrOutputParser
-    runnable_passthrough_factory = RunnablePassthrough
-    runnable_lambda_cls = RunnableLambda
-    prompt_factory = assistant_prompt
-    chroma_client = CHROMA_SETTINGS
-    collection_count_fn = _get_collection_document_count
-    collection_store_fn = _get_collection_store
-    embeddings_getter = get_embeddings
-
-    if module is not None:
-        module_globals = getattr(module, "__dict__", {})
-        current_globals = globals()
-        if module_globals is not current_globals:
-            for name in _PATCHABLE_DEPENDENCIES:
-                if name in module_globals:
-                    current_globals[name] = module_globals[name]
-
-        parse_args = getattr(module, "parse_arguments", parse_args)
-        record_response = getattr(module, "record_rag_response", record_response)
-        streaming_handler_cls = getattr(
-            module, "StreamingStdOutCallbackHandler", streaming_handler_cls
-        )
-        ollama_cls = getattr(module, "Ollama", ollama_cls)
-        str_parser_factory = getattr(module, "StrOutputParser", str_parser_factory)
-        runnable_passthrough_factory = getattr(
-            module, "RunnablePassthrough", runnable_passthrough_factory
-        )
-        runnable_lambda_cls = getattr(module, "RunnableLambda", runnable_lambda_cls)
-        prompt_factory = getattr(module, "assistant_prompt", prompt_factory)
-        chroma_client = getattr(module, "CHROMA_SETTINGS", chroma_client)
-        collection_count_fn = getattr(
-            module, "_get_collection_document_count", collection_count_fn
-        )
-        collection_store_fn = getattr(
-            module, "_get_collection_store", collection_store_fn
-        )
-        embeddings_getter = getattr(module, "get_embeddings", embeddings_getter)
-
-    if testing_mode and parse_args is parse_arguments:
-        parse_args = lambda: SimpleNamespace(hide_source=False, mute_stream=True)
+    context_collections_breakdown: Dict[str, int] = {}
+    available_documents: Optional[int] = None
 
     try:
         detected_language = detect_language(query)
@@ -888,8 +841,11 @@ def response(
         args = parse_args()
         rag_started = True
 
-        per_collection_counts: Dict[str, int] = {
-            name: 0 for name in CHROMA_COLLECTIONS
+        embeddings = get_embeddings()
+
+        per_collection_counts: Dict[str, int] = {name: 0 for name in CHROMA_COLLECTIONS}
+        collection_domains: Dict[str, str] = {
+            name: config.domain for name, config in CHROMA_COLLECTIONS.items()
         }
         retrievers_by_collection: List[Tuple[str, Any]] = []
         total_documents = 0
@@ -991,6 +947,8 @@ def response(
             return (2, 0.0)
 
         def collect_documents(rag_query: str) -> List[Any]:
+            nonlocal context_collections_breakdown
+            context_collections_breakdown = {}
             aggregated: List[Any] = []
 
             for collection_name, retriever in retrievers_by_collection:
@@ -1033,7 +991,18 @@ def response(
 
             scored_docs.sort(key=lambda item: (item[2][0], item[2][1], item[0]))
             selected_docs = [doc for _, doc, _ in scored_docs[:target_source_chunks]]
-            _enforce_legal_compliance_guardrails(selected_docs)
+
+            breakdown_counter: Counter[str] = Counter()
+            for doc in selected_docs:
+                metadata = getattr(doc, "metadata", {}) or {}
+                collection_name = metadata.get("collection") or metadata.get("source_collection")
+                if isinstance(collection_name, str):
+                    key = collection_name
+                else:
+                    key = "unknown"
+                breakdown_counter[key] += 1
+
+            context_collections_breakdown = dict(breakdown_counter)
             return selected_docs
 
         # activate/deactivate the streaming StdOut callback for LLMs
@@ -1057,7 +1026,41 @@ def response(
             context_document_count = len(docs)
             return "\n\n".join(doc.page_content for doc in docs)
 
-        multi_retriever = runnable_lambda_cls(collect_documents)
+        multi_retriever = RunnableLambda(collect_documents)
+
+        if not hasattr(multi_retriever, "__or__"):
+            class _LambdaWrapper:
+                def __init__(self, callable_obj):
+                    self._callable = callable_obj
+
+                def __call__(self, value):
+                    return self._callable(value)
+
+                def invoke(self, value):
+                    return self.__call__(value)
+
+                def __or__(self, other):
+                    if hasattr(other, "invoke"):
+                        return _LambdaWrapper(lambda value: other.invoke(self.invoke(value)))
+                    if callable(other):
+                        return _LambdaWrapper(lambda value: other(self.invoke(value)))
+                    raise TypeError(f"Unsupported pipe target: {other!r}")
+
+                def __ror__(self, other):
+                    if hasattr(other, "invoke"):
+                        return _LambdaWrapper(lambda value: self.invoke(other.invoke(value)))
+                    if callable(other):
+                        return _LambdaWrapper(lambda value: self.invoke(other(value)))
+                    raise TypeError(f"Unsupported pipe source: {other!r}")
+
+            multi_retriever = _LambdaWrapper(multi_retriever)
+
+        rag_chain = (
+            {"context": multi_retriever | format_docs, "question": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
+        )
 
         try:
             rag_chain = (
@@ -1108,6 +1111,9 @@ def response(
                 status,
                 duration_seconds=duration,
                 context_documents=context_document_count,
-                collection_documents=collection_documents,
+                collection_documents=available_documents,
+                context_collections=context_collections_breakdown or None,
+                knowledge_base_collections=per_collection_counts,
+                collection_domains=collection_domains,
             )
 

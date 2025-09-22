@@ -16,7 +16,10 @@ def test_observability_helpers_accept_basic_inputs() -> None:
         "success",
         duration_seconds=0.1,
         context_documents=3,
-        collection_documents={"conversion_rules": 5, "legal_repository": 2},
+        collection_documents=10,
+        context_collections={"conversion_rules": 2, "troubleshooting": 1},
+        knowledge_base_collections={"conversion_rules": 5, "troubleshooting": 4},
+        collection_domains={"conversion_rules": "documents", "troubleshooting": "code"},
     )
     record_agent_invocation("document_agent", "document_query", "success", duration_seconds=0.05, language="es")
     record_ingestion("documents", ".pdf", "success", duration_seconds=0.2, document_count=5)

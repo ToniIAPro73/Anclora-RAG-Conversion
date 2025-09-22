@@ -127,7 +127,7 @@ def _build_prompt_content(language: str) -> str:
 Question: {{question}}
 Context: {{context}}
 
-# Instrucciones especificas
+# Instrucciones específicas
 """
         + "\n".join(f"- {guideline}" for guideline in guidelines)
         + f"""
@@ -225,3 +225,21 @@ def is_language_supported(language: str) -> bool:
         True if the language is supported, False otherwise
     """
     return language.lower().strip() in SUPPORTED_LANGUAGES
+
+
+def _extract_prompt_text(template: ChatPromptTemplate) -> str:
+    messages = getattr(template, "messages", None)
+    if isinstance(messages, (list, tuple)) and messages:
+        if isinstance(messages[0], str) and len(messages) >= 2:
+            return str(messages[1])
+        first_entry = messages[0]
+        if isinstance(first_entry, (list, tuple)) and len(first_entry) >= 2:
+            return str(first_entry[1])
+    return str(template)
+
+
+# Backwards compatible aliases used in integration tests
+ES_PROMPT_TEMPLATE = assistant_prompt(SPANISH_LANGUAGE_CODE)
+EN_PROMPT_TEMPLATE = assistant_prompt(ENGLISH_LANGUAGE_CODE)
+ES_PROMPT = _extract_prompt_text(ES_PROMPT_TEMPLATE)
+EN_PROMPT = _extract_prompt_text(EN_PROMPT_TEMPLATE)

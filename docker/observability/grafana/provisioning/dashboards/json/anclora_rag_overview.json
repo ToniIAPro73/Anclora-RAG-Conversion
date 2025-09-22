@@ -108,36 +108,99 @@
         "uid": "prometheus"
       },
       "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {"color": "green", "value": null},
-              {"color": "orange", "value": 5000},
-              {"color": "red", "value": 10000}
-            ]
-          }
-        },
+        "defaults": {"unit": "ops"},
         "overrides": []
       },
       "gridPos": {"h": 6, "w": 12, "x": 0, "y": 16},
-      "id": 4,
+      "id": 6,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}
+        "legend": {"displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi"}
       },
       "targets": [
         {
-          "expr": "max(anclora_knowledge_base_documents)",
+          "expr": "sum(rate(anclora_rag_collection_usage_total[5m])) by (collection, domain)",
+          "legendFormat": "{{collection}} ({{domain}})",
           "refId": "A"
         }
       ],
-      "title": "Documentos en la base de conocimiento",
-      "type": "stat"
+      "title": "Uso de colecciones RAG",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {"unit": "docs"},
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 16},
+      "id": 7,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(anclora_rag_domain_context_documents_sum[5m])) by (domain)",
+          "legendFormat": "{{domain}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Cobertura de contexto por dominio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {"unit": "docs"},
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 22},
+      "id": 4,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "sum(anclora_knowledge_base_documents) by (collection, domain)",
+          "legendFormat": "{{collection}} ({{domain}})",
+          "refId": "A"
+        }
+      ],
+      "title": "Documentos por colección",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {"unit": "docs"},
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 22},
+      "id": 8,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "sum(anclora_knowledge_base_domain_documents) by (domain)",
+          "legendFormat": "{{domain}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Documentos por dominio",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -148,7 +211,7 @@
         "defaults": {"unit": "ops"},
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 16},
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 28},
       "id": 5,
       "options": {
         "legend": {"displayMode": "list", "placement": "bottom"},
@@ -180,5 +243,5 @@
   "timezone": "",
   "title": "Anclora RAG Observability",
   "uid": "anclora-rag-overview",
-  "version": 1
+  "version": 2
 }
