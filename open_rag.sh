@@ -22,4 +22,4 @@ if [[ -z "${ANCLORA_API_TOKENS:-}" && -z "${ANCLORA_JWT_SECRET:-}" ]]; then
   fi
 fi
 
-docker-compose up -d "$@"
+docker compose "$@" up -d
