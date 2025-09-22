@@ -54,6 +54,7 @@ import re
 import argparse
 import logging
 import time
+from threading import Lock
 from typing import Optional
 
 # Configurar logging
@@ -136,6 +137,23 @@ def parse_arguments():
         return argparse.Namespace(hide_source=False, mute_stream=False)
 
 
+_embeddings_lock: Lock = Lock()
+_embeddings_instance: Optional[HuggingFaceEmbeddings] = None
+
+
+def get_embeddings() -> HuggingFaceEmbeddings:
+    """Return a cached embeddings instance shared across requests."""
+
+    global _embeddings_instance
+    if _embeddings_instance is None:
+        with _embeddings_lock:
+            if _embeddings_instance is None:
+                _embeddings_instance = HuggingFaceEmbeddings(
+                    model_name=embeddings_model_name
+                )
+    return _embeddings_instance
+
+
 def response(query: str, language: Optional[str] = None) -> str:
     """
     Genera una respuesta usando RAG (Retrieval-Augmented Generation).
@@ -203,7 +221,7 @@ def response(query: str, language: Optional[str] = None) -> str:
         args = parse_arguments()
         rag_started = True
 
-        embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
+        embeddings = get_embeddings()
 
         db = Chroma(client=CHROMA_SETTINGS, embedding_function=embeddings)
 
