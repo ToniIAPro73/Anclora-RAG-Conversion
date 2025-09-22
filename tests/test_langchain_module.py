@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.common.constants import CHROMA_COLLECTIONS
 from app.common.langchain_module import detect_language, response
 
 
@@ -33,12 +34,26 @@ class FakeRunnable:
 
 
 class FakeRetriever:
-    def __init__(self) -> None:
+    def __init__(self, collection_name: str, documents: list[SimpleNamespace]) -> None:
+        self.collection_name = collection_name
+        self._documents = documents
         self.queries: list[str] = []
+
+    def invoke(self, rag_query: str):
+        return self.__call__(rag_query)
 
     def __call__(self, rag_query: str):
         self.queries.append(rag_query)
-        return [SimpleNamespace(page_content="Contexto simulado")]
+        copied_documents: list[SimpleNamespace] = []
+        for doc in self._documents:
+            metadata = getattr(doc, "metadata", None)
+            copied_documents.append(
+                SimpleNamespace(
+                    page_content=getattr(doc, "page_content", "Contexto simulado"),
+                    metadata=dict(metadata) if isinstance(metadata, dict) else {},
+                )
+            )
+        return copied_documents
 
     def __or__(self, formatter):
         return FakeRunnable(lambda rag_query: formatter(self(rag_query)))
@@ -71,7 +86,11 @@ class FakeParser:
 
 
 def _configure_rag_environment(
-    monkeypatch: pytest.MonkeyPatch, *, embeddings_factory
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    embeddings_factory,
+    collection_counts: dict[str, int] | None = None,
+    collection_documents: dict[str, list[SimpleNamespace]] | None = None,
 ) -> tuple[list[FakeRetriever], list[object]]:
     def fake_get_text(key: str, language: str, **_: object) -> str:
         return f"{key}:{language}"
@@ -89,12 +108,49 @@ def _configure_rag_environment(
         "app.common.langchain_module.HuggingFaceEmbeddings", embeddings_factory
     )
 
+    if collection_counts is None:
+        counts_by_collection = {name: 2 for name in CHROMA_COLLECTIONS}
+    else:
+        counts_by_collection = dict(collection_counts)
+        for name in CHROMA_COLLECTIONS:
+            counts_by_collection.setdefault(name, 0)
+
+    if collection_documents is None:
+        documents_by_collection = {
+            name: [
+                SimpleNamespace(
+                    page_content=f"Contexto simulado {name}",
+                    metadata={"distance": float(index)},
+                )
+            ]
+            for index, name in enumerate(CHROMA_COLLECTIONS)
+        }
+    else:
+        documents_by_collection = {
+            name: list(docs)
+            for name, docs in collection_documents.items()
+        }
+
+    def _documents_for(collection_name: str) -> list[SimpleNamespace]:
+        docs = documents_by_collection.get(collection_name)
+        if docs:
+            return docs
+        return [
+            SimpleNamespace(
+                page_content=f"Contexto simulado {collection_name}",
+                metadata={"distance": 0.0},
+            )
+        ]
+
     class FakeCollection:
+        def __init__(self, name: str) -> None:
+            self._name = name
+
         def count(self) -> int:
-            return 2
+            return counts_by_collection.get(self._name, 0)
 
     fake_client = SimpleNamespace(
-        get_collection=lambda name: FakeCollection(),
+        get_collection=lambda name: FakeCollection(name),
     )
     monkeypatch.setattr("app.common.langchain_module.CHROMA_SETTINGS", fake_client)
 
@@ -102,8 +158,15 @@ def _configure_rag_environment(
     chroma_embeddings: list[object] = []
 
     class FakeChroma:
-        def __init__(self, *_, embedding_function=None, **__):
-            self.retriever = FakeRetriever()
+        def __init__(
+            self,
+            *_,
+            collection_name: str | None = None,
+            embedding_function=None,
+            **__,
+        ):
+            name = collection_name or "vectordb"
+            self.retriever = FakeRetriever(name, _documents_for(name))
             created_retrievers.append(self.retriever)
             chroma_embeddings.append(embedding_function)
 
@@ -124,6 +187,10 @@ def _configure_rag_environment(
     )
     monkeypatch.setattr(
         "app.common.langchain_module.StrOutputParser", lambda: FakeParser()
+    )
+    monkeypatch.setattr(
+        "app.common.langchain_module.RunnableLambda",
+        lambda func: FakeRunnable(func),
     )
 
     return created_retrievers, chroma_embeddings
@@ -184,7 +251,11 @@ def test_response_long_greeting_invokes_rag(monkeypatch: pytest.MonkeyPatch) -> 
     result = response(query)
 
     assert result == "fake_llm_response:Hola necesito el informe trimestral"
-    assert retrievers[-1].queries == [query]
+    assert len(retrievers) == len(CHROMA_COLLECTIONS)
+    assert all(retriever.queries == [query] for retriever in retrievers)
+    assert {
+        retriever.collection_name for retriever in retrievers
+    } == set(CHROMA_COLLECTIONS)
 
 
 def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -209,6 +280,43 @@ def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) ->
     assert first_result == "fake_llm_response:Hola necesito el informe trimestral"
     assert second_result == "fake_llm_response:Hola necesito el informe trimestral"
     assert len(instantiations) == 1
-    assert len(chroma_embeddings) == 2
-    assert chroma_embeddings[0] is chroma_embeddings[1]
+    expected_instances = len(CHROMA_COLLECTIONS) * 2
+    assert len(chroma_embeddings) == expected_instances
+    assert len(retrievers) == expected_instances
+    assert all(embedding is chroma_embeddings[0] for embedding in chroma_embeddings)
     assert all(retriever.queries == [query] for retriever in retrievers)
+
+
+def test_response_uses_documents_from_additional_collections(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cuando ``vectordb`` está vacío se deben usar otras colecciones disponibles."""
+
+    query = "Necesito material multimedia para la campaña"
+    monkeypatch.setattr("app.common.langchain_module._embeddings_instance", None)
+
+    retrievers, _ = _configure_rag_environment(
+        monkeypatch,
+        embeddings_factory=lambda model_name: SimpleNamespace(model_name=model_name),
+        collection_counts={
+            "conversion_rules": 0,
+            "troubleshooting": 0,
+            "multimedia_assets": 1,
+            "vectordb": 0,
+        },
+        collection_documents={
+            "multimedia_assets": [
+                SimpleNamespace(
+                    page_content="Documento multimedia",
+                    metadata={"distance": 0.05},
+                )
+            ]
+        },
+    )
+
+    result = response(query)
+
+    assert result == "fake_llm_response:Necesito material multimedia para la campaña"
+    assert len(retrievers) == 1
+    assert retrievers[0].collection_name == "multimedia_assets"
+    assert retrievers[0].queries == [query]
