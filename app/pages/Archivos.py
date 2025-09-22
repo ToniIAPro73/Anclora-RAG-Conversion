@@ -7,13 +7,6 @@ except ImportError:
     import sys
     sys.exit(1)
 
-try:
-    from langchain_community.embeddings import HuggingFaceEmbeddings  # type: ignore
-except ImportError:
-    print("Error: langchain_community module not found. Please install it with 'pip install langchain-community==0.0.34'")
-    import sys
-    sys.exit(1)
-
 import os
 
 try:
@@ -80,7 +73,6 @@ with st.sidebar:
         st.rerun()
 # Define the Chroma settings
 collection = CHROMA_SETTINGS.get_or_create_collection(name='vectordb')
-embeddings = HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')
 
 st.title(get_text("files_title", st.session_state.language))
 st.caption(get_text("files_intro", st.session_state.language))
