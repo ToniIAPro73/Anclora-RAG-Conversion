@@ -14,14 +14,51 @@ except ImportError:
     import sys
     sys.exit(1)
 
+RunnableLambda = None  # type: ignore[assignment]
+
 try:
     from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
     from langchain_core.output_parsers import StrOutputParser
-    from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+    from langchain_core.runnables import RunnablePassthrough
+    try:
+        from langchain_core.runnables import RunnableLambda as _RunnableLambda
+    except ImportError:
+        _RunnableLambda = None
+    else:
+        RunnableLambda = _RunnableLambda
 except ImportError:
     print("Error: langchain_core module not found. Please install it with 'pip install langchain-core'")
     import sys
     sys.exit(1)
+
+if RunnableLambda is None:  # pragma: no cover - fallback for older langchain versions
+    class _CallableRunnable:
+        def __init__(self, func):
+            self._func = func
+
+        def invoke(self, value):
+            return self._func(value)
+
+        def __call__(self, value):
+            return self._func(value)
+
+        def __or__(self, other):
+            if hasattr(other, "invoke"):
+                return _CallableRunnable(lambda value: other.invoke(self.invoke(value)))
+            if callable(other):
+                return _CallableRunnable(lambda value: other(self.invoke(value)))
+            return NotImplemented
+
+        def __ror__(self, other):
+            if hasattr(other, "invoke"):
+                return _CallableRunnable(lambda value: self.invoke(other.invoke(value)))
+            if callable(other):
+                return _CallableRunnable(lambda value: self.invoke(other(value)))
+            return NotImplemented
+
+    class RunnableLambda(_CallableRunnable):
+        """Ligero reemplazo de ``RunnableLambda`` cuando la dependencia no lo expone."""
+
 
 try:
     from common.chroma_db_settings import Chroma
@@ -56,7 +93,7 @@ import logging
 import time
 from dataclasses import dataclass
 from threading import Lock
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # Configurar logging
 logging.basicConfig(
@@ -334,19 +371,131 @@ def response(query: str, language: Optional[str] = None) -> str:
 
         embeddings = get_embeddings()
 
-        collection_states = _prepare_collection_states(embeddings)
-        total_documents = sum(state.document_count for state in collection_states)
+        per_collection_counts: Dict[str, int] = {
+            name: 0 for name in CHROMA_COLLECTIONS
+        }
+        retrievers_by_collection: List[Tuple[str, Any]] = []
+        total_documents = 0
+
+        for collection_name in CHROMA_COLLECTIONS:
+            try:
+                collection = CHROMA_SETTINGS.get_collection(collection_name)
+            except Exception as exc:
+                logger.warning(
+                    "No se pudo obtener la colección '%s': %s",
+                    collection_name,
+                    exc,
+                )
+                continue
+
+            try:
+                doc_count = collection.count()
+            except Exception as exc:
+                logger.warning(
+                    "No se pudo verificar la cantidad de documentos en '%s': %s",
+                    collection_name,
+                    exc,
+                )
+                continue
+
+            per_collection_counts[collection_name] = doc_count
+            total_documents += doc_count
+
+            if doc_count == 0:
+                continue
+
+            try:
+                vector_store = Chroma(
+                    client=CHROMA_SETTINGS,
+                    collection_name=collection_name,
+                    embedding_function=embeddings,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "No se pudo inicializar el vectorstore para '%s': %s",
+                    collection_name,
+                    exc,
+                )
+                continue
+
+            retriever = vector_store.as_retriever(
+                search_kwargs={"k": target_source_chunks}
+            )
+            retrievers_by_collection.append((collection_name, retriever))
+
         available_documents = total_documents
+        logger.info(
+            "Documentos en la base de conocimiento por colección: %s",
+            ", ".join(
+                f"{name}:{per_collection_counts.get(name, 0)}"
+                for name in CHROMA_COLLECTIONS
+            ),
+        )
 
         if total_documents == 0:
             status = "empty"
             return _translate("no_documents", language_code)
 
-        retriever = RunnableLambda(
-            lambda rag_query: _retrieve_from_collections(
-                rag_query, collection_states, target_source_chunks
-            )
-        )
+        def _document_priority(doc: Any) -> Tuple[int, float]:
+            metadata = getattr(doc, "metadata", {}) or {}
+            distance = metadata.get("distance")
+            if isinstance(distance, (int, float)):
+                return (0, float(distance))
+
+            score = metadata.get("score")
+            if isinstance(score, (int, float)):
+                return (1, -float(score))
+
+            similarity = metadata.get("similarity")
+            if isinstance(similarity, (int, float)):
+                return (1, -float(similarity))
+
+            return (2, 0.0)
+
+        def collect_documents(rag_query: str) -> List[Any]:
+            aggregated: List[Any] = []
+
+            for collection_name, retriever in retrievers_by_collection:
+                try:
+                    results = retriever.invoke(rag_query)
+                except AttributeError:
+                    try:
+                        results = retriever.get_relevant_documents(rag_query)
+                    except Exception as retrieval_error:  # pragma: no cover - defensive
+                        logger.warning(
+                            "No se pudo recuperar documentos de la colección '%s': %s",
+                            collection_name,
+                            retrieval_error,
+                        )
+                        continue
+                except Exception as retrieval_error:
+                    logger.warning(
+                        "No se pudo recuperar documentos de la colección '%s': %s",
+                        collection_name,
+                        retrieval_error,
+                    )
+                    continue
+
+                if not results:
+                    continue
+
+                for doc in results:
+                    metadata = getattr(doc, "metadata", None)
+                    if isinstance(metadata, dict):
+                        metadata.setdefault("collection", collection_name)
+                    aggregated.append(doc)
+
+            if not aggregated:
+                return []
+
+            scored_docs: List[Tuple[int, Any, Tuple[int, float]]] = [
+                (index, doc, _document_priority(doc))
+                for index, doc in enumerate(aggregated)
+            ]
+
+            scored_docs.sort(key=lambda item: (item[2][0], item[2][1], item[0]))
+            return [doc for _, doc, _ in scored_docs[:target_source_chunks]]
+
         # activate/deactivate the streaming StdOut callback for LLMs
         callbacks = [] if args.mute_stream else [StreamingStdOutCallbackHandler()]
 
@@ -363,8 +512,10 @@ def response(query: str, language: Optional[str] = None) -> str:
             context_document_count = len(docs)
             return "\n\n".join(doc.page_content for doc in docs)
 
+        multi_retriever = RunnableLambda(collect_documents)
+
         rag_chain = (
-            {"context": retriever | format_docs, "question": RunnablePassthrough()}
+            {"context": multi_retriever | format_docs, "question": RunnablePassthrough()}
             | prompt
             | llm
             | StrOutputParser()
