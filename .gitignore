@@ -6,3 +6,20 @@ documents
 logs
 .venv
 tests.ipynb
+
+# ChromaDB files
+*.sqlite3
+*.sqlite
+*.db
+*chroma.sqlite*
+app/:memory:/
+
+# Docker volumes and data
+docker-data/
+volumes/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
