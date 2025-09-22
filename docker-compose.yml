@@ -9,7 +9,7 @@
 # - Prometheus + Grafana for monitoring
 # =============================================================================
 
-#version: '3.8'
+version: '3.8'
 
 # Environment variables loaded from .env file
 x-environment: &default-environment
