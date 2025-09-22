@@ -91,6 +91,7 @@ import re
 import argparse
 import logging
 import time
+from dataclasses import dataclass
 from threading import Lock
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -176,6 +177,116 @@ def parse_arguments():
 
 _embeddings_lock: Lock = Lock()
 _embeddings_instance: Optional[HuggingFaceEmbeddings] = None
+
+_collections_lock: Lock = Lock()
+_collections_cache: Dict[str, Chroma] = {}
+
+
+@dataclass(frozen=True)
+class _CollectionState:
+    """Metadata for una colección de Chroma configurada."""
+
+    name: str
+    store: Chroma
+    document_count: int
+
+
+def _get_collection_store(
+    collection_name: str, embeddings: HuggingFaceEmbeddings
+) -> Chroma:
+    """Return a cached :class:`Chroma` instance for *collection_name*."""
+
+    with _collections_lock:
+        store = _collections_cache.get(collection_name)
+        if store is None:
+            store = Chroma(
+                collection_name=collection_name,
+                embedding_function=embeddings,
+                client=CHROMA_SETTINGS,
+            )
+            _collections_cache[collection_name] = store
+    return store
+
+
+def _get_collection_document_count(collection_name: str) -> int:
+    """Return the number of documents stored in *collection_name*."""
+
+    try:
+        collection = CHROMA_SETTINGS.get_collection(collection_name)
+    except Exception as exc:  # pragma: no cover - defensive log path
+        logger.warning(
+            "No se pudo obtener la colección '%s' desde Chroma: %s",
+            collection_name,
+            exc,
+        )
+        return 0
+
+    try:
+        return collection.count()
+    except Exception as exc:  # pragma: no cover - defensive log path
+        logger.warning(
+            "No se pudo obtener el tamaño de la colección '%s': %s",
+            collection_name,
+            exc,
+        )
+        return 0
+
+
+def _prepare_collection_states(
+    embeddings: HuggingFaceEmbeddings,
+) -> List[_CollectionState]:
+    """Instantiate vector stores and collect metadata for configured collections."""
+
+    states: List[_CollectionState] = []
+    for collection_name in CHROMA_COLLECTIONS.keys():
+        store = _get_collection_store(collection_name, embeddings)
+        document_count = _get_collection_document_count(collection_name)
+        states.append(
+            _CollectionState(
+                name=collection_name,
+                store=store,
+                document_count=document_count,
+            )
+        )
+        logger.info(
+            "Colección '%s' contiene %s documentos",
+            collection_name,
+            document_count,
+        )
+    return states
+
+
+def _retrieve_from_collections(
+    query: str,
+    states: Sequence[_CollectionState],
+    max_results: int,
+) -> List[object]:
+    """Collect documents from all configured collections sorted by distance."""
+
+    scored_documents: List[Tuple[object, float]] = []
+    for state in states:
+        if state.document_count == 0:
+            continue
+        try:
+            documents_with_scores = state.store.similarity_search_with_score(
+                query,
+                k=max(max_results, 1),
+            )
+        except Exception as exc:  # pragma: no cover - defensive log path
+            logger.warning(
+                "No se pudieron recuperar documentos de la colección '%s': %s",
+                state.name,
+                exc,
+            )
+            continue
+
+        for document, distance in documents_with_scores:
+            if document is None:
+                continue
+            scored_documents.append((document, distance))
+
+    scored_documents.sort(key=lambda item: item[1])
+    return [doc for doc, _ in scored_documents[:max_results]]
 
 
 def get_embeddings() -> HuggingFaceEmbeddings:

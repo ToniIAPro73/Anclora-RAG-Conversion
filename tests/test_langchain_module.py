@@ -1,5 +1,6 @@
 """Tests for helpers in ``app.common.langchain_module``."""
 
+from threading import Lock
 from types import SimpleNamespace
 
 import pytest
@@ -32,7 +33,6 @@ class FakeRunnable:
             return FakeRunnable(lambda value: self.invoke(other(value)))
         return NotImplemented
 
-
 class FakeRetriever:
     def __init__(self, collection_name: str, documents: list[SimpleNamespace]) -> None:
         self.collection_name = collection_name
@@ -58,19 +58,25 @@ class FakeRetriever:
     def __or__(self, formatter):
         return FakeRunnable(lambda rag_query: formatter(self(rag_query)))
 
-
 class FakePrompt:
     def __init__(self, language: str) -> None:
         self.language = language
+        self.last_context: str | None = None
+        self.last_question: str | None = None
 
     def __ror__(self, mapping):
-        return FakeRunnable(
-            lambda rag_query: {
+        def _runner(rag_query: str):
+            context = mapping["context"].invoke(rag_query)
+            question = mapping["question"].invoke(rag_query)
+            self.last_context = context
+            self.last_question = question
+            return {
                 "language": self.language,
-                "context": mapping["context"].invoke(rag_query),
-                "question": mapping["question"].invoke(rag_query),
+                "context": context,
+                "question": question,
             }
-        )
+
+        return FakeRunnable(_runner)
 
 
 class FakeLLM:
@@ -92,6 +98,7 @@ def _configure_rag_environment(
     collection_counts: dict[str, int] | None = None,
     collection_documents: dict[str, list[SimpleNamespace]] | None = None,
 ) -> tuple[list[FakeRetriever], list[object]]:
+
     def fake_get_text(key: str, language: str, **_: object) -> str:
         return f"{key}:{language}"
 
@@ -154,7 +161,7 @@ def _configure_rag_environment(
     )
     monkeypatch.setattr("app.common.langchain_module.CHROMA_SETTINGS", fake_client)
 
-    created_retrievers: list[FakeRetriever] = []
+    vectorstores: dict[str, object] = {}
     chroma_embeddings: list[object] = []
 
     class FakeChroma:
@@ -170,17 +177,43 @@ def _configure_rag_environment(
             created_retrievers.append(self.retriever)
             chroma_embeddings.append(embedding_function)
 
-        def as_retriever(self, **_):
-            return self.retriever
+        def similarity_search_with_score(
+            self, query: str, k: int, **__: object
+        ) -> list[tuple[SimpleNamespace, float]]:
+            self.queries.append((query, k))
+            results: list[tuple[SimpleNamespace, float]] = []
+            for content, score in docs_by_collection.get(self.collection_name, []):
+                results.append(
+                    (
+                        SimpleNamespace(
+                            page_content=content,
+                            metadata={"collection": self.collection_name},
+                        ),
+                        score,
+                    )
+                )
+            return results[:k]
 
     monkeypatch.setattr("app.common.langchain_module.Chroma", FakeChroma)
+    monkeypatch.setattr(
+        "app.common.langchain_module.RunnableLambda",
+        lambda func: FakeRunnable(func),
+    )
     monkeypatch.setattr(
         "app.common.langchain_module.RunnablePassthrough",
         lambda: FakeRunnable(lambda value: value),
     )
+
+    created_prompts: list[FakePrompt] = []
+
+    def _fake_prompt_factory(language: str) -> FakePrompt:
+        prompt = FakePrompt(language)
+        created_prompts.append(prompt)
+        return prompt
+
     monkeypatch.setattr(
         "app.common.langchain_module.assistant_prompt",
-        lambda language: FakePrompt(language),
+        _fake_prompt_factory,
     )
     monkeypatch.setattr(
         "app.common.langchain_module.Ollama", lambda *args, **kwargs: FakeLLM()
@@ -193,7 +226,7 @@ def _configure_rag_environment(
         lambda func: FakeRunnable(func),
     )
 
-    return created_retrievers, chroma_embeddings
+    return vectorstores, chroma_embeddings, created_prompts
 
 
 @pytest.mark.parametrize(
@@ -243,7 +276,7 @@ def test_response_long_greeting_invokes_rag(monkeypatch: pytest.MonkeyPatch) -> 
     query = "Hola necesito el informe trimestral"
     monkeypatch.setattr("app.common.langchain_module._embeddings_instance", None)
 
-    retrievers, _ = _configure_rag_environment(
+    vectorstores, _, _ = _configure_rag_environment(
         monkeypatch,
         embeddings_factory=lambda model_name: SimpleNamespace(model_name=model_name),
     )
@@ -257,7 +290,6 @@ def test_response_long_greeting_invokes_rag(monkeypatch: pytest.MonkeyPatch) -> 
         retriever.collection_name for retriever in retrievers
     } == set(CHROMA_COLLECTIONS)
 
-
 def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) -> None:
     """El helper ``get_embeddings`` debe inicializar el modelo una única vez."""
 
@@ -270,7 +302,7 @@ def test_response_reuses_embeddings_instance(monkeypatch: pytest.MonkeyPatch) ->
         instantiations.append(model_name)
         return SimpleNamespace(model_name=model_name)
 
-    retrievers, chroma_embeddings = _configure_rag_environment(
+    vectorstores, chroma_embeddings, _ = _configure_rag_environment(
         monkeypatch, embeddings_factory=fake_embeddings
     )
 
