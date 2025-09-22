@@ -16,7 +16,7 @@ except Exception:  # pragma: no cover - fallback loader for tests
             with open(self.file_path, "r", encoding=self.encoding) as handle:
                 return [Document(page_content=handle.read(), metadata={"source": self.file_path})]
 
-from .base import BaseFileIngestor
+from ..base import BaseFileIngestor
 
 CODE_LOADERS = {
     ".py": (TextLoader, {"encoding": "utf8"}),
@@ -45,4 +45,8 @@ def create_code_ingestor() -> BaseFileIngestor:
 
 CodeIngestor = create_code_ingestor()
 
-__all__ = ["CodeIngestor", "create_code_ingestor", "CODE_COLLECTION"]
+__all__ = [
+    "CODE_COLLECTION",
+    "CodeIngestor",
+    "create_code_ingestor",
+]

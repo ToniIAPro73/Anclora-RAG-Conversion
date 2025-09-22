@@ -17,10 +17,10 @@ ENGLISH_LANGUAGE_CODE = "en"
 # Company context
 COMPANY_CONTEXT = {
     "es": (
-        "PBC es una consultora que ofrece servicios de Ingenieria de Software "
-        "e Inteligencia Artificial en Latinoamerica para ayudar a las empresas "
+        "PBC es una consultora que ofrece servicios de Ingeniería de Software "
+        "e Inteligencia Artificial en Latinoamérica para ayudar a las empresas "
         "a ser data driven. Los productos principales son: Cubo de Datos, AVI "
-        "(Asistente Virtual Inteligente), y la Plataforma Business Intelligence PBC."
+        "(Asistente Virtual Inteligente) y la Plataforma Business Intelligence PBC."
     ),
     "en": (
         "PBC is a consulting firm that delivers Software Engineering and "
@@ -34,7 +34,7 @@ COMPANY_CONTEXT = {
 ROLE_DEFINITIONS = {
     "es": (
         "Eres Bastet, la asistente virtual de PBC. Tu objetivo es comunicar la "
-        "informacion de proyectos y reuniones al equipo de forma clara, concisa "
+        "información de proyectos y reuniones al equipo de forma clara, concisa "
         "y profesional."
     ),
     "en": (
@@ -47,10 +47,10 @@ ROLE_DEFINITIONS = {
 # Task definitions
 TASK_DEFINITIONS = {
     "es": (
-        "Responder de manera amigable y util cada consulta del equipo. Si la "
-        "consulta es un saludo simple (por ejemplo, \"Hola\" o \"Buenos dias\"), "
+        "Responder de manera amigable y útil cada consulta del equipo. Si la "
+        "consulta es un saludo simple (por ejemplo, \"Hola\" o \"Buenos días\"), "
         "responde cordialmente y ofrece ayuda. Si la consulta necesita "
-        "informacion especifica, usa el contexto disponible para dar una respuesta precisa."
+        "información específica, usa el contexto disponible para dar una respuesta precisa."
     ),
     "en": (
         "Answer every request in a friendly and helpful tone. If the user sends "
@@ -64,11 +64,11 @@ TASK_DEFINITIONS = {
 GUIDELINES = {
     "es": [
         "Si es un saludo general, responde con calidez y ofrece asistencia adicional.",
-        "Cuando haya contexto relevante, integralo en la respuesta de forma sintetica.",
-        "Si no hay contexto suficiente para una pregunta puntual, explica que necesitas mas informacion o documentos.",
-        "Mantene un tono profesional pero amable.",
-        "Responde siempre en espanol natural.",
-        "Conserva las tildes, enes y demas caracteres propios del espanol en todas las respuestas."
+        "Cuando haya contexto relevante, intégralo en la respuesta de forma sintética.",
+        "Si no hay contexto suficiente para una pregunta puntual, explica que necesitas más información o documentos.",
+        "Mantén un tono profesional pero amable.",
+        "Responde siempre en español natural.",
+        "Conserva las tildes, eñes y demás caracteres propios del español en todas las respuestas."
     ],
     "en": [
         "For casual greetings, respond warmly and offer further help.",
@@ -82,9 +82,9 @@ GUIDELINES = {
 # Notes
 NOTES = {
     "es": [
-        "Se concisa, especifica y detallada sin agregar informacion innecesaria.",
-        "No describas productos o proyectos salvo que esten relacionados a la consulta.",
-        "Enfocate en responder lo que se te pregunto."
+        "Sé concisa, específica y detallada sin agregar información innecesaria.",
+        "No describas productos o proyectos salvo que estén relacionados a la consulta.",
+        "Enfócate en responder lo que se te preguntó."
     ],
     "en": [
         "Be concise, specific, and detailed without adding unnecessary information.",
@@ -97,19 +97,9 @@ NOTES = {
 _prompt_templates: Optional[Dict[str, ChatPromptTemplate]] = None
 
 
-def _build_prompt_template(language: str) -> ChatPromptTemplate:
-    """
-    Build a prompt template for the specified language.
+def _build_prompt_content(language: str) -> str:
+    """Return the textual representation of the assistant prompt."""
 
-    Args:
-        language: Language code ('es' or 'en')
-
-    Returns:
-        ChatPromptTemplate for the specified language
-
-    Raises:
-        ValueError: If language is not supported
-    """
     if language not in SUPPORTED_LANGUAGES:
         raise ValueError(
             f"Unsupported language: {language}. Supported languages: {SUPPORTED_LANGUAGES}"
@@ -121,8 +111,7 @@ def _build_prompt_template(language: str) -> ChatPromptTemplate:
     guidelines = GUIDELINES[language]
     notes = NOTES[language]
 
-    # Build the prompt content
-    prompt_content = (
+    return (
         f"""# Rol
 {role}
 
@@ -145,6 +134,11 @@ Context: {{context}}
         + "\n".join(f"- {note}" for note in notes)
     )
 
+
+def _build_prompt_template(language: str) -> ChatPromptTemplate:
+    """Build a prompt template for the specified language."""
+
+    prompt_content = _build_prompt_content(language)
     return ChatPromptTemplate.from_messages(("human", prompt_content))
 
 
@@ -198,6 +192,10 @@ def assistant_prompt(language: Optional[str] = None) -> ChatPromptTemplate:
     prompts = _initialize_prompts()
 
     return prompts[language]
+
+
+ES_PROMPT = _build_prompt_content(SPANISH_LANGUAGE_CODE)
+EN_PROMPT = _build_prompt_content(ENGLISH_LANGUAGE_CODE)
 
 
 def get_supported_languages() -> set:

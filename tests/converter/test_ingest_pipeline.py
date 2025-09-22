@@ -34,7 +34,8 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
 
     for module_name in [
         "app.common.ingest_file",
-        "app.agents.documents",
+        "app.agents.document_agent",
+        "app.agents.document_agent.ingestor",
         "common.constants",
         "common.chroma_db_settings",
     ]:
@@ -244,7 +245,7 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
 
     module = importlib.import_module("app.common.ingest_file")
 
-    doc_module = importlib.import_module("app.agents.documents")
+    doc_module = importlib.import_module("app.agents.document_agent.ingestor")
     for ext, (loader_cls, loader_kwargs) in list(doc_module.DOCUMENT_LOADERS.items()):
         doc_module.DOCUMENT_LOADERS[ext] = (_make_loader(loader_cls.__name__), loader_kwargs)
     doc_module.DocumentIngestor = doc_module.create_document_ingestor()

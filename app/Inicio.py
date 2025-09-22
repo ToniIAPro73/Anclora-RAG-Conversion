@@ -1,5 +1,8 @@
 import streamlit as st
 
+from app.agents.base import AgentTask
+from app.agents.orchestrator import create_default_orchestrator
+
 # Set page config
 st.set_page_config(layout='wide', page_title='Anclora AI RAG', page_icon='🤖')
 
@@ -14,6 +17,14 @@ try:
 except ImportError as e:
     st.error(f"Error importing modules: {e}")
     st.stop()
+
+
+def _get_orchestrator():
+    """Retrieve the orchestrator instance stored in the session state."""
+
+    if "orchestrator" not in st.session_state:
+        st.session_state.orchestrator = create_default_orchestrator()
+    return st.session_state.orchestrator
 
 # Initialize language in session state
 if 'language' not in st.session_state:
@@ -76,6 +87,7 @@ if prompt := st.chat_input(chat_placeholder):
 
     # Display assistant response in chat message container
     with st.chat_message("assistant"):
+        language = st.session_state.language
         try:
             assistant_response = response(prompt, st.session_state.language)
             inspection = _privacy_monitor.inspect_response_citations(assistant_response)

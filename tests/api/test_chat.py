@@ -1,7 +1,10 @@
-"""Tests for the FastAPI chat endpoint ensuring UTF-8 payload support."""
+"""Tests for the FastAPI endpoints powered by the orchestrator."""
+
+from __future__ import annotations
 
 import sys
 import types
+from typing import Callable
 
 import httpx
 from fastapi.testclient import TestClient
@@ -33,8 +36,22 @@ from common.privacy import SensitiveCitationReport
 AUTH_HEADERS = {"Authorization": "Bearer your-api-key-here"}
 
 
-def _build_client(monkeypatch) -> TestClient:
-    """Return a ``TestClient`` with the RAG response stubbed."""
+class _FakeOrchestrator:
+    """Minimal orchestrator double delegating to a handler callable."""
+
+    def __init__(self, handler: Callable[[AgentTask], AgentResponse]) -> None:
+        self._handler = handler
+        self.calls: list[AgentTask] = []
+
+    def execute(self, task: AgentTask) -> AgentResponse:
+        self.calls.append(task)
+        return self._handler(task)
+
+
+def _build_client(
+    monkeypatch, handler: Callable[[AgentTask], AgentResponse]
+) -> tuple[TestClient, _FakeOrchestrator]:
+    """Return a ``TestClient`` with the orchestrator stubbed."""
 
     original_client_init = httpx.Client.__init__
 
@@ -43,48 +60,70 @@ def _build_client(monkeypatch) -> TestClient:
         return original_client_init(self, *args, **kwargs)
 
     monkeypatch.setattr(httpx.Client, "__init__", _patched_client_init)
+    monkeypatch.setattr(api_endpoints, "_ORCHESTRATOR", None, raising=False)
 
-    def _fake_response(message: str, language: str = "es") -> str:
-        # Preserve the original message to validate Unicode handling.
-        return f"Respuesta eco: {message}"
+    orchestrator = _FakeOrchestrator(handler)
+    monkeypatch.setattr(api_endpoints, "get_orchestrator", lambda: orchestrator)
+    monkeypatch.setattr(api_endpoints, "_ORCHESTRATOR", orchestrator, raising=False)
 
-    monkeypatch.setattr(api_endpoints, "response", _fake_response)
-    return TestClient(api_endpoints.app)
+    return TestClient(api_endpoints.app), orchestrator
 
 
 def test_chat_accepts_accented_spanish_messages(monkeypatch) -> None:
     """La respuesta debe preservar caracteres acentuados en español."""
 
-    client = _build_client(monkeypatch)
+    def _handler(task: AgentTask) -> AgentResponse:
+        answer = f"Respuesta eco: {task.get('question')}"
+        return AgentResponse(
+            success=True,
+            data={"answer": answer},
+            metadata={"language": task.get("language"), "task_type": task.task_type},
+        )
+
+    client, orchestrator = _build_client(monkeypatch, _handler)
     payload = {"message": "¿Cuál es el estado del análisis?", "language": "es"}
 
     response = client.post("/chat", json=payload, headers=AUTH_HEADERS)
 
     assert response.status_code == 200
     data = response.json()
-    assert data["response"] == "Respuesta eco: ¿Cuál es el estado del análisis?"
-    assert data["status"] == "success"
-    assert "timestamp" in data
+    assert data["success"] is True
+    assert data["data"]["answer"] == "Respuesta eco: ¿Cuál es el estado del análisis?"
+    assert data["metadata"]["language"] == "es"
+    assert data["metadata"]["task_type"] == "document_query"
+    assert "timestamp" in data["metadata"]
     assert "¿Cuál es el estado del análisis?" in response.text
+    assert len(orchestrator.calls) == 1
+    task = orchestrator.calls[0]
+    assert task.task_type == "document_query"
+    assert task.get("language") == "es"
 
 
 def test_chat_returns_utf8_characters_for_english_queries(monkeypatch) -> None:
     """The endpoint should emit UTF-8 characters (ñ, á) without escaping them."""
 
-    client = _build_client(monkeypatch)
+    def _handler(task: AgentTask) -> AgentResponse:
+        answer = f"Respuesta eco: {task.get('question')}"
+        return AgentResponse(
+            success=True,
+            data={"answer": answer},
+            metadata={"language": task.get("language"), "task_type": task.task_type},
+        )
+
+    client, _ = _build_client(monkeypatch, _handler)
     payload = {"message": "Summarize the jalapeño situation on Día 1", "language": "en"}
 
     response = client.post("/chat", json=payload, headers=AUTH_HEADERS)
 
     assert response.status_code == 200
     data = response.json()
-    assert data["response"] == "Respuesta eco: Summarize the jalapeño situation on Día 1"
-    assert data["status"] == "success"
+    assert data["success"] is True
+    assert data["data"]["answer"] == "Respuesta eco: Summarize the jalapeño situation on Día 1"
+    assert data["metadata"]["language"] == "en"
     # Ensure UTF-8 characters remain readable instead of escaped sequences.
     assert "jalapeño" in response.text
     assert "Día 1" in response.text
     assert response.headers["content-type"].startswith("application/json")
-
 
 def test_chat_returns_guardrail_message_for_legal_conflicts(monkeypatch) -> None:
     """Guardrail violations should produce a translated warning response."""
