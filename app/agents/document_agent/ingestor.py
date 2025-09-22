@@ -6,7 +6,11 @@ from typing import Dict, List, Tuple
 
 from common.text_normalization import Document
 
+<<<<<<< HEAD:app/agents/documents.py
 from .base import BaseFileIngestor, IngestionTarget
+=======
+from ..base import BaseFileIngestor
+>>>>>>> master:app/agents/document_agent/ingestor.py
 
 
 PLAIN_TEXT_FALLBACK = False
@@ -224,6 +228,7 @@ def create_document_ingestor() -> BaseFileIngestor:
 DocumentIngestor = create_document_ingestor()
 
 __all__ = [
+<<<<<<< HEAD:app/agents/documents.py
     "BEST_PRACTICES_COLLECTION",
     "DocumentIngestor",
     "DOCUMENTS_COLLECTION",
@@ -231,4 +236,11 @@ __all__ = [
     "FORMAT_SPECIFICATIONS_COLLECTION",
     "LEGAL_COMPLIANCE_COLLECTION",
     "create_document_ingestor",
+=======
+    "DOCUMENTS_COLLECTION",
+    "DocumentIngestor",
+    "EmailFallbackLoader",
+    "create_document_ingestor",
+    "refresh_document_loaders",
+>>>>>>> master:app/agents/document_agent/ingestor.py
 ]

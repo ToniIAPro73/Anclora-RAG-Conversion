@@ -60,7 +60,11 @@ def _install_streamlit_stub(monkeypatch) -> None:
             return False
 
     def _selectbox(label, options, format_func=lambda value: value, index=0, help=None, **_kwargs):
+<<<<<<< HEAD
         del label, format_func, help
+=======
+        del label, format_func, help, _kwargs
+>>>>>>> master
         if not options:
             return None
         if not isinstance(index, int) or index < 0 or index >= len(options):
@@ -71,6 +75,7 @@ def _install_streamlit_stub(monkeypatch) -> None:
     streamlit_module.session_state = _SessionState()
     streamlit_module.set_page_config = lambda *args, **kwargs: None
     streamlit_module.sidebar = _Sidebar()
+    streamlit_module.header = lambda *args, **kwargs: None
     streamlit_module.title = lambda *args, **kwargs: None
     streamlit_module.caption = lambda *args, **kwargs: None
     streamlit_module.header = lambda *args, **kwargs: None

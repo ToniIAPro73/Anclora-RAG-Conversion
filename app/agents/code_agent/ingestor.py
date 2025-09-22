@@ -16,7 +16,11 @@ except Exception:  # pragma: no cover - fallback loader for tests
             with open(self.file_path, "r", encoding=self.encoding) as handle:
                 return [Document(page_content=handle.read(), metadata={"source": self.file_path})]
 
+<<<<<<< HEAD:app/agents/code.py
 from .base import BaseFileIngestor, IngestionTarget
+=======
+from ..base import BaseFileIngestor
+>>>>>>> master:app/agents/code_agent/ingestor.py
 
 CODE_LOADERS = {
     ".py": (TextLoader, {"encoding": "utf8"}),
@@ -58,7 +62,10 @@ CodeIngestor = create_code_ingestor()
 
 __all__ = [
     "CODE_COLLECTION",
+<<<<<<< HEAD:app/agents/code.py
     "CODE_TARGETS",
+=======
+>>>>>>> master:app/agents/code_agent/ingestor.py
     "CodeIngestor",
     "create_code_ingestor",
 ]

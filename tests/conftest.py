@@ -114,6 +114,35 @@ def _install_langchain_stubs() -> None:
             StreamingStdOutCallbackHandler=_StreamingStdOutCallbackHandler,
         )
 
+        _install_stub_submodule(
+            "langchain_core.documents",
+            Document=type("Document", (), {}),
+        )
+        _install_stub_submodule(
+            "langchain_core.embeddings",
+            Embeddings=type("Embeddings", (), {}),
+        )
+        _install_stub_submodule(
+            "langchain_core.vectorstores",
+            VectorStore=type("VectorStore", (), {}),
+        )
+
+        def _xor_args(*_args, **_kwargs):  # type: ignore[override]
+            def _decorator(func):
+                return func
+
+            return _decorator
+
+        _install_stub_submodule("langchain_core.utils", xor_args=_xor_args)
+
+        def _maximal_marginal_relevance(*_args, **_kwargs):  # type: ignore[override]
+            return []
+
+        _install_stub_submodule(
+            "langchain_community.vectorstores.utils",
+            maximal_marginal_relevance=_maximal_marginal_relevance,
+        )
+
         class _StrOutputParser:
             def __call__(self, value: object) -> object:
                 return value

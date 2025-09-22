@@ -145,8 +145,29 @@ def test_files_are_routed_to_expected_collection(monkeypatch, filename, expected
         assert document.metadata["collection"] == expected_collection
         assert document.metadata["domain"] == expected_domain
         assert document.metadata["uploaded_file_name"] == filename
+<<<<<<< HEAD
         assert document.metadata["source_extension"] == filename.rsplit(".", 1)[-1]
         tags = document.metadata.get("tags", [])
         assert expected_domain in tags
         assert expected_collection in tags
         assert filename.rsplit(".", 1)[-1] in tags
+=======
+
+
+@pytest.mark.parametrize(
+    "domain, expected_collection",
+    [
+        ("documents", "conversion_rules"),
+        ("code", "troubleshooting"),
+        ("multimedia", "multimedia_assets"),
+        ("formats", "format_specs"),
+        ("guides", "knowledge_guides"),
+        ("compliance", "compliance_archive"),
+    ],
+)
+def test_domain_to_collection_contains_expected_mappings(domain, expected_collection):
+    from app.common.constants import CHROMA_COLLECTIONS, DOMAIN_TO_COLLECTION
+
+    assert DOMAIN_TO_COLLECTION[domain] == expected_collection
+    assert CHROMA_COLLECTIONS[expected_collection].domain == domain
+>>>>>>> master

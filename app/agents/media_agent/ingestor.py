@@ -15,7 +15,11 @@ except Exception:  # pragma: no cover - fallback loader for tests
             with open(self.file_path, "r", encoding=self.encoding) as handle:
                 return [Document(page_content=handle.read(), metadata={"source": self.file_path})]
 
+<<<<<<< HEAD:app/agents/multimedia.py
 from .base import BaseFileIngestor, IngestionTarget
+=======
+from ..base import BaseFileIngestor
+>>>>>>> master:app/agents/media_agent/ingestor.py
 
 MULTIMEDIA_LOADERS = {
     ".srt": (TextLoader, {"encoding": "utf8"}),
@@ -50,7 +54,10 @@ MultimediaIngestor = create_multimedia_ingestor()
 
 __all__ = [
     "MULTIMEDIA_COLLECTION",
+<<<<<<< HEAD:app/agents/multimedia.py
     "MULTIMEDIA_TARGETS",
+=======
+>>>>>>> master:app/agents/media_agent/ingestor.py
     "MultimediaIngestor",
     "create_multimedia_ingestor",
 ]
