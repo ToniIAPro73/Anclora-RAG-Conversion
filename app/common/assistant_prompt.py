@@ -17,8 +17,8 @@ ENGLISH_LANGUAGE_CODE = "en"
 # Company context
 COMPANY_CONTEXT = {
     "es": (
-        "PBC es una consultora que ofrece servicios de Ingenieria de Software "
-        "e Inteligencia Artificial en Latinoamerica para ayudar a las empresas "
+        "PBC es una consultora que ofrece servicios de Ingeniería de Software "
+        "e Inteligencia Artificial en Latinoamérica para ayudar a las empresas "
         "a ser data driven. Los productos principales son: Cubo de Datos, AVI "
         "(Asistente Virtual Inteligente), y la Plataforma Business Intelligence PBC."
     ),
@@ -34,7 +34,7 @@ COMPANY_CONTEXT = {
 ROLE_DEFINITIONS = {
     "es": (
         "Eres Bastet, la asistente virtual de PBC. Tu objetivo es comunicar la "
-        "informacion de proyectos y reuniones al equipo de forma clara, concisa "
+        "información de proyectos y reuniones al equipo de forma clara, concisa "
         "y profesional."
     ),
     "en": (
@@ -47,10 +47,10 @@ ROLE_DEFINITIONS = {
 # Task definitions
 TASK_DEFINITIONS = {
     "es": (
-        "Responder de manera amigable y util cada consulta del equipo. Si la "
-        "consulta es un saludo simple (por ejemplo, \"Hola\" o \"Buenos dias\"), "
+        "Responder de manera amigable y útil cada consulta del equipo. Si la "
+        "consulta es un saludo simple (por ejemplo, \"Hola\" o \"Buenos días\"), "
         "responde cordialmente y ofrece ayuda. Si la consulta necesita "
-        "informacion especifica, usa el contexto disponible para dar una respuesta precisa."
+        "información específica, usa el contexto disponible para dar una respuesta precisa."
     ),
     "en": (
         "Answer every request in a friendly and helpful tone. If the user sends "
@@ -64,11 +64,11 @@ TASK_DEFINITIONS = {
 GUIDELINES = {
     "es": [
         "Si es un saludo general, responde con calidez y ofrece asistencia adicional.",
-        "Cuando haya contexto relevante, integralo en la respuesta de forma sintetica.",
-        "Si no hay contexto suficiente para una pregunta puntual, explica que necesitas mas informacion o documentos.",
-        "Mantene un tono profesional pero amable.",
-        "Responde siempre en espanol natural.",
-        "Conserva las tildes, enes y demas caracteres propios del espanol en todas las respuestas."
+        "Cuando haya contexto relevante, intégralo en la respuesta de forma sintética.",
+        "Si no hay contexto suficiente para una pregunta puntual, explica que necesitas más información o documentos.",
+        "Mantén un tono profesional pero amable.",
+        "Responde siempre en español natural.",
+        "Conserva las tildes, eñes y demás caracteres propios del español en todas las respuestas."
     ],
     "en": [
         "For casual greetings, respond warmly and offer further help.",
@@ -82,9 +82,9 @@ GUIDELINES = {
 # Notes
 NOTES = {
     "es": [
-        "Se concisa, especifica y detallada sin agregar informacion innecesaria.",
-        "No describas productos o proyectos salvo que esten relacionados a la consulta.",
-        "Enfocate en responder lo que se te pregunto."
+        "Sé concisa, específica y detallada sin agregar información innecesaria.",
+        "No describas productos o proyectos salvo que estén relacionados a la consulta.",
+        "Enfócate en responder lo que se te preguntó."
     ],
     "en": [
         "Be concise, specific, and detailed without adding unnecessary information.",
@@ -132,7 +132,7 @@ def _build_prompt_template(language: str) -> ChatPromptTemplate:
 Question: {{question}}
 Context: {{context}}
 
-# Instrucciones especificas
+# Instrucciones específicas
 """
         + "\n".join(f"- {guideline}" for guideline in guidelines)
         + f"""
@@ -221,3 +221,21 @@ def is_language_supported(language: str) -> bool:
         True if the language is supported, False otherwise
     """
     return language.lower().strip() in SUPPORTED_LANGUAGES
+
+
+def _extract_prompt_text(template: ChatPromptTemplate) -> str:
+    messages = getattr(template, "messages", None)
+    if isinstance(messages, (list, tuple)) and messages:
+        if isinstance(messages[0], str) and len(messages) >= 2:
+            return str(messages[1])
+        first_entry = messages[0]
+        if isinstance(first_entry, (list, tuple)) and len(first_entry) >= 2:
+            return str(first_entry[1])
+    return str(template)
+
+
+# Backwards compatible aliases used in integration tests
+ES_PROMPT_TEMPLATE = assistant_prompt(SPANISH_LANGUAGE_CODE)
+EN_PROMPT_TEMPLATE = assistant_prompt(ENGLISH_LANGUAGE_CODE)
+ES_PROMPT = _extract_prompt_text(ES_PROMPT_TEMPLATE)
+EN_PROMPT = _extract_prompt_text(EN_PROMPT_TEMPLATE)

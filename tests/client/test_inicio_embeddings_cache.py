@@ -59,8 +59,9 @@ def _install_streamlit_stub(monkeypatch) -> None:
         def __exit__(self, exc_type, exc, tb) -> bool:  # noqa: D401 - context protocol
             return False
 
-    def _selectbox(label, options, format_func=lambda value: value, index=0, help=None):
+    def _selectbox(label, options, format_func=lambda value: value, index=0, help=None, key=None):
         del label, format_func, help
+        _ = key
         if not options:
             return None
         if not isinstance(index, int) or index < 0 or index >= len(options):
@@ -72,6 +73,7 @@ def _install_streamlit_stub(monkeypatch) -> None:
     streamlit_module.set_page_config = lambda *args, **kwargs: None
     streamlit_module.sidebar = _Sidebar()
     streamlit_module.title = lambda *args, **kwargs: None
+    streamlit_module.header = lambda *args, **kwargs: None
     streamlit_module.caption = lambda *args, **kwargs: None
     streamlit_module.markdown = lambda *args, **kwargs: None
     streamlit_module.selectbox = _selectbox

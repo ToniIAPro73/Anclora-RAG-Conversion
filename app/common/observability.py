@@ -4,7 +4,8 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from typing import Optional
+from collections import defaultdict
+from typing import Mapping, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,32 @@ _RAG_CONTEXT = _build_metric(
     ("language",),
     buckets=(0, 1, 2, 3, 4, 5, 10, 20, 50, 100),
 )
+_RAG_COLLECTION_USAGE = _build_metric(
+    Counter,
+    "rag_collection_usage_total",
+    "Consultas RAG en las que participó cada colección.",
+    ("collection", "domain", "language", "status"),
+)
+_RAG_COLLECTION_CONTEXT = _build_metric(
+    Histogram,
+    "rag_collection_context_documents",
+    "Cantidad de documentos aportados por colección en cada respuesta.",
+    ("collection", "domain", "language"),
+    buckets=(0, 1, 2, 3, 4, 5, 10, 20, 50, 100),
+)
+_RAG_DOMAIN_USAGE = _build_metric(
+    Counter,
+    "rag_domain_usage_total",
+    "Consultas RAG en las que participó cada dominio de conocimiento.",
+    ("domain", "language", "status"),
+)
+_RAG_DOMAIN_CONTEXT = _build_metric(
+    Histogram,
+    "rag_domain_context_documents",
+    "Documentos utilizados por dominio en el contexto de las respuestas RAG.",
+    ("domain", "language"),
+    buckets=(0, 1, 2, 3, 4, 5, 10, 20, 50, 100),
+)
 
 _AGENT_REQUESTS = _build_metric(
     Counter,
@@ -125,7 +152,13 @@ _KNOWLEDGE_BASE_SIZE = _build_metric(
     Gauge,
     "knowledge_base_documents",
     "Cantidad de documentos disponibles en la base de conocimiento por colección.",
-    ("collection",),
+    ("collection", "domain"),
+)
+_KNOWLEDGE_BASE_DOMAIN_SIZE = _build_metric(
+    Gauge,
+    "knowledge_base_domain_documents",
+    "Cantidad total de documentos disponibles por dominio de conocimiento.",
+    ("domain",),
 )
 
 
@@ -168,12 +201,30 @@ def _normalise_language(language: Optional[str]) -> str:
     return str(language).strip().lower() or "unknown"
 
 
+def _resolve_domain(
+    collection: Optional[str],
+    collection_domains: Optional[Mapping[str, str]],
+) -> str:
+    if not collection:
+        return "unknown"
+    if not collection_domains:
+        return "unknown"
+    direct = collection_domains.get(collection)
+    if direct:
+        return str(direct)
+    lowered = collection.lower()
+    return str(collection_domains.get(lowered, "unknown"))
+
+
 def record_rag_response(
     language: Optional[str],
     status: str,
     duration_seconds: Optional[float] = None,
     context_documents: Optional[int] = None,
     collection_documents: Optional[int] = None,
+    context_collections: Optional[Mapping[str, int]] = None,
+    knowledge_base_collections: Optional[Mapping[str, int]] = None,
+    collection_domains: Optional[Mapping[str, str]] = None,
 ) -> None:
     """Record the outcome of a RAG response pipeline."""
 
@@ -189,8 +240,51 @@ def record_rag_response(
     if context_documents is not None:
         _RAG_CONTEXT.labels(language=normalised_language).observe(max(float(context_documents), 0.0))
 
-    if collection_documents is not None:
-        _KNOWLEDGE_BASE_SIZE.labels(collection="vectordb").set(max(float(collection_documents), 0.0))
+    if context_collections:
+        domain_totals: dict[str, float] = defaultdict(float)
+        for collection, count in context_collections.items():
+            docs = max(float(count), 0.0)
+            collection_label = str(collection).strip() or "unknown"
+            domain_label = _resolve_domain(collection_label, collection_domains)
+            _RAG_COLLECTION_USAGE.labels(
+                collection=collection_label,
+                domain=domain_label,
+                language=normalised_language,
+                status=status,
+            ).inc()
+            _RAG_COLLECTION_CONTEXT.labels(
+                collection=collection_label,
+                domain=domain_label,
+                language=normalised_language,
+            ).observe(docs)
+            domain_totals[domain_label] += docs
+
+        for domain_label, docs in domain_totals.items():
+            _RAG_DOMAIN_USAGE.labels(
+                domain=domain_label,
+                language=normalised_language,
+                status=status,
+            ).inc()
+            _RAG_DOMAIN_CONTEXT.labels(
+                domain=domain_label,
+                language=normalised_language,
+            ).observe(docs)
+
+    if knowledge_base_collections:
+        per_domain_totals: dict[str, float] = defaultdict(float)
+        for collection, count in knowledge_base_collections.items():
+            docs = max(float(count), 0.0)
+            collection_label = str(collection).strip() or "unknown"
+            domain_label = _resolve_domain(collection_label, collection_domains)
+            _KNOWLEDGE_BASE_SIZE.labels(collection=collection_label, domain=domain_label).set(docs)
+            per_domain_totals[domain_label] += docs
+
+        for domain_label, docs in per_domain_totals.items():
+            _KNOWLEDGE_BASE_DOMAIN_SIZE.labels(domain=domain_label).set(docs)
+    elif collection_documents is not None:
+        _KNOWLEDGE_BASE_SIZE.labels(collection="vectordb", domain="unknown").set(
+            max(float(collection_documents), 0.0)
+        )
 
 
 def record_agent_invocation(

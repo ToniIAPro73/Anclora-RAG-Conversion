@@ -6,7 +6,7 @@ Este módulo describe cómo aprovechar la instrumentación basada en métricas P
 
 Los flujos principales exponen métricas cuando la librería `prometheus_client` está disponible:
 
-- **Consultas RAG** (`app/common/langchain_module.py`): latencia, volumen por estado y tamaño del contexto recuperado.
+- **Consultas RAG** (`app/common/langchain_module.py`): latencia, volumen por estado, tamaño del contexto recuperado y desglose por colección/dominio de los documentos consultados.
 - **Agentes** (`app/agents/`): ejecuciones por agente, estado y latencia por tarea.
 - **Ingestión de archivos** (`BaseFileIngestor`): duración por extensión y conteo de documentos generados.
 - **Orquestador**: decisiones de ruteo exitosas o sin agente asignado.
@@ -20,13 +20,18 @@ Las métricas se activan cuando se define el puerto de publicación mediante la 
 | `anclora_rag_requests_total` | Consultas procesadas por el pipeline RAG. | `language`, `status` |
 | `anclora_rag_request_latency_seconds` | Histograma de latencias del pipeline. | `language`, `status` |
 | `anclora_rag_context_documents` | Documentos utilizados como contexto en cada consulta. | `language` |
+| `anclora_rag_collection_usage_total` | Consultas en las que participó cada colección. | `collection`, `domain`, `language`, `status` |
+| `anclora_rag_collection_context_documents` | Documentos aportados por colección en el contexto recuperado. | `collection`, `domain`, `language` |
+| `anclora_rag_domain_usage_total` | Consultas en las que participó cada dominio funcional. | `domain`, `language`, `status` |
+| `anclora_rag_domain_context_documents` | Documentos aportados por dominio. | `domain`, `language` |
 | `anclora_agent_requests_total` | Tareas atendidas por agente. | `agent`, `task_type`, `status`, `language` |
 | `anclora_agent_latency_seconds` | Histograma de latencias por agente. | `agent`, `task_type`, `status`, `language` |
 | `anclora_ingestion_operations_total` | Ingestiones ejecutadas por dominio/extensión. | `domain`, `extension`, `status` |
 | `anclora_ingestion_duration_seconds` | Histograma de duración de ingestiones. | `domain`, `extension`, `status` |
 | `anclora_ingestion_documents` | Documentos producidos en cada ingestión. | `domain`, `extension`, `status` |
 | `anclora_orchestrator_routing_total` | Decisiones del orquestador. | `task_type`, `result` |
-| `anclora_knowledge_base_documents` | Gauge con el tamaño de la colección vectorial. | `collection` |
+| `anclora_knowledge_base_documents` | Documentos disponibles por colección de conocimiento. | `collection`, `domain` |
+| `anclora_knowledge_base_domain_documents` | Documentos totales por dominio de conocimiento. | `domain` |
 
 ## Uso local sin contenedores
 
@@ -67,11 +72,45 @@ El dashboard se aprovisiona automáticamente en Grafana dentro de la carpeta ra�
 
 1. **Consultas RAG por estado**: volumen por minuto segmentado por `status`.
 2. **Latencia RAG (P95/P50)**: percentiles calculados a partir del histograma de latencia.
-3. **Actividad de agentes**: comparación entre ejecuciones exitosas y fallidas por agente.
-4. **Documentos en la base de conocimiento**: gauge con el tamaño publicado por `CHROMA_SETTINGS`.
-5. **Ingestiones por dominio**: ritmo de ingestión segmentado por dominio de archivo.
+3. **Uso de colecciones RAG**: evolución temporal de las colecciones que aportan documentos a las respuestas.
+4. **Cobertura por dominio**: desglose de documentos aportados por cada dominio funcional.
+5. **Actividad de agentes**: comparación entre ejecuciones exitosas y fallidas por agente.
+6. **Documentos en la base de conocimiento**: series por colección/dominio que reflejan el tamaño de la base.
+7. **Ingestiones por dominio**: ritmo de ingestión segmentado por dominio de archivo.
 
 El dashboard puede ampliarse añadiendo nuevos paneles; basta con colocar archivos JSON adicionales en `docker/observability/grafana/provisioning/dashboards/json` y reiniciar el servicio de Grafana.
+
+## Harness de regresión y CI
+
+Las pruebas en `tests/regression/test_agent_harness.py` utilizan `AgentRegressionHarness` para ejecutar consultas representativas sobre los agentes disponibles. Cada escenario valida tres aspectos clave:
+
+1. **Latencia**: se compara el tiempo total de ejecución con umbrales configurables por escenario (`max_latency`).
+2. **Cobertura de contexto**: se verifican el número mínimo de documentos recuperados (`min_context_docs`) y la distribución por colección/dominio (`expected_collections`, `expected_domains`).
+3. **Calidad**: se aplican heurísticos o _snapshots_ (`quality_check`, `expected_answer`) sobre la respuesta del agente.
+
+Ejecutar el harness desde la línea de comandos genera las mismas garantías que en CI:
+
+```bash
+pytest tests/regression/test_agent_harness.py -q
+```
+
+El objetivo es que todos los escenarios concluyan sin advertencias (`result.passed`), lo que implica que la latencia está dentro de los umbrales y que las respuestas cumplen los criterios definidos. El `Makefile` expone un _target_ dedicado (`make regression-agents`) para integrar este chequeo en pipelines de CI/CD.
+
+## Exportación de métricas a Prometheus y Grafana
+
+El script opcional `scripts/observability/export_metrics.py` permite capturar instantáneas de métricas o dashboards sin depender del stack Docker:
+
+- `--prometheus-url` descarga el _payload_ del _endpoint_ `/metrics` y lo vuelca a un fichero `.prom`.
+- `--grafana-url`, junto con `--grafana-api-key` y `--dashboard-uid`, exporta dashboards aprovisionados vía API.
+
+Ejemplos:
+
+```bash
+python scripts/observability/export_metrics.py --prometheus-url http://localhost:9000/metrics --output snapshot.prom
+python scripts/observability/export_metrics.py --grafana-url http://localhost:3000 \
+       --grafana-api-key $GRAFANA_TOKEN --dashboard-uid anclora-rag-overview \
+       --output grafana-dashboard.json
+```
 
 ## Buenas prácticas
 

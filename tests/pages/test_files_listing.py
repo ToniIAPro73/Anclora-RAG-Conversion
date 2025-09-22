@@ -47,6 +47,10 @@ def _install_langchain_stubs(monkeypatch) -> None:
     vectorstores_pkg = sys.modules.get(
         "langchain_community.vectorstores", types.ModuleType("langchain_community.vectorstores")
     )
+    embeddings_pkg = sys.modules.get(
+        "langchain_community.embeddings", types.ModuleType("langchain_community.embeddings")
+    )
+    llms_pkg = sys.modules.get("langchain_community.llms", types.ModuleType("langchain_community.llms"))
     utils_submodule = types.ModuleType("langchain_community.vectorstores.utils")
 
     def _maximal_marginal_relevance(*_args, **_kwargs):  # type: ignore[override]
@@ -54,7 +58,11 @@ def _install_langchain_stubs(monkeypatch) -> None:
 
     utils_submodule.maximal_marginal_relevance = _maximal_marginal_relevance  # type: ignore[attr-defined]
     vectorstores_pkg.utils = utils_submodule  # type: ignore[attr-defined]
+    embeddings_pkg.HuggingFaceEmbeddings = object  # type: ignore[attr-defined]
+    llms_pkg.Ollama = object  # type: ignore[attr-defined]
     community_module.vectorstores = vectorstores_pkg  # type: ignore[attr-defined]
+    community_module.embeddings = embeddings_pkg  # type: ignore[attr-defined]
+    community_module.llms = llms_pkg  # type: ignore[attr-defined]
 
     monkeypatch.setitem(sys.modules, "langchain_core", langchain_core)
     monkeypatch.setitem(sys.modules, "langchain_core.documents", documents_module)
@@ -63,6 +71,8 @@ def _install_langchain_stubs(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "langchain_core.vectorstores", vectorstores_module)
     monkeypatch.setitem(sys.modules, "langchain_community", community_module)
     monkeypatch.setitem(sys.modules, "langchain_community.vectorstores", vectorstores_pkg)
+    monkeypatch.setitem(sys.modules, "langchain_community.embeddings", embeddings_pkg)
+    monkeypatch.setitem(sys.modules, "langchain_community.llms", llms_pkg)
     monkeypatch.setitem(
         sys.modules, "langchain_community.vectorstores.utils", utils_submodule
     )

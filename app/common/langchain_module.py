@@ -91,6 +91,7 @@ import re
 import argparse
 import logging
 import time
+from collections import Counter
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -320,6 +321,7 @@ def response(query: str, language: Optional[str] = None) -> str:
     rag_started = False
     status = "error"
     context_document_count = 0
+    context_collections_breakdown: Dict[str, int] = {}
     available_documents: Optional[int] = None
 
     try:
@@ -371,8 +373,9 @@ def response(query: str, language: Optional[str] = None) -> str:
 
         embeddings = get_embeddings()
 
-        per_collection_counts: Dict[str, int] = {
-            name: 0 for name in CHROMA_COLLECTIONS
+        per_collection_counts: Dict[str, int] = {name: 0 for name in CHROMA_COLLECTIONS}
+        collection_domains: Dict[str, str] = {
+            name: config.domain for name, config in CHROMA_COLLECTIONS.items()
         }
         retrievers_by_collection: List[Tuple[str, Any]] = []
         total_documents = 0
@@ -453,6 +456,8 @@ def response(query: str, language: Optional[str] = None) -> str:
             return (2, 0.0)
 
         def collect_documents(rag_query: str) -> List[Any]:
+            nonlocal context_collections_breakdown
+            context_collections_breakdown = {}
             aggregated: List[Any] = []
 
             for collection_name, retriever in retrievers_by_collection:
@@ -494,7 +499,20 @@ def response(query: str, language: Optional[str] = None) -> str:
             ]
 
             scored_docs.sort(key=lambda item: (item[2][0], item[2][1], item[0]))
-            return [doc for _, doc, _ in scored_docs[:target_source_chunks]]
+            selected_docs = [doc for _, doc, _ in scored_docs[:target_source_chunks]]
+
+            breakdown_counter: Counter[str] = Counter()
+            for doc in selected_docs:
+                metadata = getattr(doc, "metadata", {}) or {}
+                collection_name = metadata.get("collection") or metadata.get("source_collection")
+                if isinstance(collection_name, str):
+                    key = collection_name
+                else:
+                    key = "unknown"
+                breakdown_counter[key] += 1
+
+            context_collections_breakdown = dict(breakdown_counter)
+            return selected_docs
 
         # activate/deactivate the streaming StdOut callback for LLMs
         callbacks = [] if args.mute_stream else [StreamingStdOutCallbackHandler()]
@@ -513,6 +531,33 @@ def response(query: str, language: Optional[str] = None) -> str:
             return "\n\n".join(doc.page_content for doc in docs)
 
         multi_retriever = RunnableLambda(collect_documents)
+
+        if not hasattr(multi_retriever, "__or__"):
+            class _LambdaWrapper:
+                def __init__(self, callable_obj):
+                    self._callable = callable_obj
+
+                def __call__(self, value):
+                    return self._callable(value)
+
+                def invoke(self, value):
+                    return self.__call__(value)
+
+                def __or__(self, other):
+                    if hasattr(other, "invoke"):
+                        return _LambdaWrapper(lambda value: other.invoke(self.invoke(value)))
+                    if callable(other):
+                        return _LambdaWrapper(lambda value: other(self.invoke(value)))
+                    raise TypeError(f"Unsupported pipe target: {other!r}")
+
+                def __ror__(self, other):
+                    if hasattr(other, "invoke"):
+                        return _LambdaWrapper(lambda value: self.invoke(other.invoke(value)))
+                    if callable(other):
+                        return _LambdaWrapper(lambda value: self.invoke(other(value)))
+                    raise TypeError(f"Unsupported pipe source: {other!r}")
+
+            multi_retriever = _LambdaWrapper(multi_retriever)
 
         rag_chain = (
             {"context": multi_retriever | format_docs, "question": RunnablePassthrough()}
@@ -542,5 +587,8 @@ def response(query: str, language: Optional[str] = None) -> str:
                 duration_seconds=duration,
                 context_documents=context_document_count,
                 collection_documents=available_documents,
+                context_collections=context_collections_breakdown or None,
+                knowledge_base_collections=per_collection_counts,
+                collection_domains=collection_domains,
             )
 
