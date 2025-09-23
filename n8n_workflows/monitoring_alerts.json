@@ -1,0 +1,102 @@
+{
+  "name": "Anclora RAG - System Monitoring & Alerts",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/5 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "health-check-trigger",
+      "name": "Health Check (Every 5min)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/health",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "api-health-check",
+      "name": "API Health Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8080/health",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "ui-health-check",
+      "name": "UI Health Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:6333/health",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "vector-db-check",
+      "name": "Vector DB Health Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analizar estado de salud del sistema\nconst inputs = $input.all();\n\nconst services = {\n  api: { name: 'Anclora API', status: 'unknown', response_time: 0 },\n  ui: { name: 'Streamlit UI', status: 'unknown', response_time: 0 },\n  vector_db: { name: 'Qdrant Vector DB', status: 'unknown', response_time: 0 }\n};\n\nconst alerts = [];\nlet overall_status = 'healthy';\n\n// Procesar respuestas de health checks\ninputs.forEach((input, index) => {\n  const serviceKey = ['api', 'ui', 'vector_db'][index];\n  const service = services[serviceKey];\n  \n  if (input.json && input.json.status) {\n    service.status = input.json.status === 'ok' ? 'healthy' : 'unhealthy';\n    service.response_time = input.json.response_time || 0;\n    \n    // Generar alertas si es necesario\n    if (service.status === 'unhealthy') {\n      alerts.push({\n        severity: 'critical',\n        service: service.name,\n        message: `${service.name} está inaccesible`,\n        timestamp: new Date().toISOString()\n      });\n      overall_status = 'critical';\n    } else if (service.response_time > 5000) {\n      alerts.push({\n        severity: 'warning',\n        service: service.name,\n        message: `${service.name} responde lentamente (${service.response_time}ms)`,\n        timestamp: new Date().toISOString()\n      });\n      if (overall_status === 'healthy') overall_status = 'warning';\n    }\n  } else {\n    service.status = 'unhealthy';\n    alerts.push({\n      severity: 'critical',\n      service: service.name,\n      message: `${service.name} no responde`,\n      timestamp: new Date().toISOString()\n    });\n    overall_status = 'critical';\n  }\n});\n\n// Verificar uso de recursos del sistema\nconst systemMetrics = {\n  cpu_usage: Math.random() * 100, // Simulated - replace with real metrics\n  memory_usage: Math.random() * 100,\n  disk_usage: Math.random() * 100,\n  active_connections: Math.floor(Math.random() * 50)\n};\n\n// Alertas de recursos\nif (systemMetrics.cpu_usage > 80) {\n  alerts.push({\n    severity: 'warning',\n    service: 'System Resources',\n    message: `Alto uso de CPU: ${systemMetrics.cpu_usage.toFixed(1)}%`,\n    timestamp: new Date().toISOString()\n  });\n}\n\nif (systemMetrics.memory_usage > 85) {\n  alerts.push({\n    severity: 'warning',\n    service: 'System Resources',\n    message: `Alto uso de memoria: ${systemMetrics.memory_usage.toFixed(1)}%`,\n    timestamp: new Date().toISOString()\n  });\n}\n\nif (systemMetrics.disk_usage > 90) {\n  alerts.push({\n    severity: 'critical',\n    service: 'System Resources',\n    message: `Espacio en disco crítico: ${systemMetrics.disk_usage.toFixed(1)}%`,\n    timestamp: new Date().toISOString()\n  });\n}\n\nreturn {\n  json: {\n    overall_status: overall_status,\n    services: services,\n    system_metrics: systemMetrics,\n    alerts: alerts,\n    timestamp: new Date().toISOString(),\n    needs_notification: alerts.length > 0\n  }\n};"
+      },
+      "id": "health-analyzer",
+      "name": "Analyze System Health",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-alerts",
+              "leftValue": "={{ $json.needs_notification }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ]
+        }
+      },
+      "id": "alert-filter",
+      "name": "Check if Alerts Needed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {\n          "channel": "#anclora-alerts",\n          "username": "Anclora Monitor",\n          "icon_emoji": ":warning:",\n          "attachments": [\n            {\n              "color": "={{ $json.overall_status === 'critical' ? 'danger' : 'warning' }}",\n              "title": "🚨 Anclora System Alert",\n              "text": "Se han detectado {{ $json.alerts.length }} problemas en el sistema",\n              "fields": "={{ $json.alerts.map(alert => ({ title: alert.service, value: alert.message, short: true })) }}",\n              "footer": "Anclora Monitoring",\n              "ts": "={{ Math.floor(Date.now() / 1000) }}"\n            }\n          ]\n        }\n      },\n      "id": "slack-alert",\n      "name": "Send Slack Alert",\n      "type": "n8n-nodes-base.httpRequest",\n      "typeVersion": 4.1,\n      "position": [1120, 200]\n    },\n    {\n      "parameters": {\n        "authentication": "genericCredentialType",\n        "genericAuthType": "httpHeaderAuth",\n        "url": "https://api.sendgrid.com/v3/mail/send",\n        "sendHeaders": true,\n        "headerParameters": {\n          "parameters": [\n            {\n              "name": "Authorization",\n              "value": "Bearer {{ $credentials.sendGridApi.apiKey }}"\n            },\n            {\n              "name": "Content-Type",\n              "value": "application/json"\n            }\n          ]\n        },\n        "sendBody": true,\n        "contentType": "json",\n        "body": {\n          "personalizations": [\n            {\n              "to": [\n                {\n                  "email": "admin@anclora.com",\n                  "name": "Anclora Admin"\n                }\n              ],\n              "subject": "🚨 Anclora System Alert - {{ $json.overall_status }}"\n            }\n          ],\n          "from": {\n            "email": "monitor@anclora.com",\n            "name": "Anclora Monitor"\n          },\n          "content": [\n            {\n              "type": "text/html",\n              "value": "<h2>🚨 Anclora System Alert</h2><p>Estado general: <strong>{{ $json.overall_status }}</strong></p><h3>Alertas detectadas:</h3><ul>{{ $json.alerts.map(alert => `<li><strong>${alert.service}:</strong> ${alert.message}</li>`).join('') }}</ul><p>Timestamp: {{ $json.timestamp }}</p>"\n            }\n          ]\n        }\n      },\n      "id": "email-alert",\n      "name": "Send Email Alert",\n      "type": "n8n-nodes-base.httpRequest",\n      "typeVersion": 4.1,\n      "position": [1120, 300]\n    },\n    {\n      "parameters": {\n        "url": "http://localhost:8000/api/v1/monitoring/log-health",\n        "authentication": "genericCredentialType",\n        "genericAuthType": "httpHeaderAuth",\n        "sendHeaders": true,\n        "headerParameters": {\n          "parameters": [\n            {\n              "name": "Authorization",\n              "value": "Bearer {{ $credentials.ancloraApi.token }}"\n            }\n          ]\n        },\n        "sendBody": true,\n        "contentType": "json",\n        "body": {\n          "overall_status": "={{ $json.overall_status }}",\n          "services": "={{ $json.services }}",\n          "system_metrics": "={{ $json.system_metrics }}",\n          "alerts": "={{ $json.alerts }}",\n          "timestamp": "={{ $json.timestamp }}"\n        }\n      },\n      "id": "log-health",\n      "name": "Log Health Status",\n      "type": "n8n-nodes-base.httpRequest",\n      "typeVersion": 4.1,\n      "position": [1340, 300]\n    }\n  ],\n  "connections": {\n    "Health Check (Every 5min)": {\n      "main": [\n        [\n          {\n            "node": "API Health Check",\n            "type": "main",\n            "index": 0\n          },\n          {\n            "node": "UI Health Check",\n            "type": "main",\n            "index": 0\n          },\n          {\n            "node": "Vector DB Health Check",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "API Health Check": {\n      "main": [\n        [\n          {\n            "node": "Analyze System Health",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "UI Health Check": {\n      "main": [\n        [\n          {\n            "node": "Analyze System Health",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Vector DB Health Check": {\n      "main": [\n        [\n          {\n            "node": "Analyze System Health",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Analyze System Health": {\n      "main": [\n        [\n          {\n            "node": "Check if Alerts Needed",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Check if Alerts Needed": {\n      "main": [\n        [\n          {\n            "node": "Send Slack Alert",\n            "type": "main",\n            "index": 0\n          },\n          {\n            "node": "Send Email Alert",\n            "type": "main",\n            "index": 0\n          }\n        ],\n        [\n          {\n            "node": "Log Health Status",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Send Slack Alert": {\n      "main": [\n        [\n          {\n            "node": "Log Health Status",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Send Email Alert": {\n      "main": [\n        [\n          {\n            "node": "Log Health Status",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    }\n  },\n  "active": true,\n  "settings": {\n    "executionOrder": "v1"\n  },\n  "versionId": "1.0.0",\n  "meta": {\n    "templateCredsSetupCompleted": true\n  },\n  "id": "anclora-monitoring-alerts",\n  "tags": [\n    {\n      "createdAt": "2024-01-01T00:00:00.000Z",\n      "updatedAt": "2024-01-01T00:00:00.000Z",\n      "id": "anclora-rag",\n      "name": "Anclora RAG"\n    }\n  ]\n}

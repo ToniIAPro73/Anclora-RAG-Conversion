@@ -1,0 +1,108 @@
+{
+  "name": "Anclora RAG - Learning & Optimization System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "learning-trigger",
+      "name": "Learning Analysis (Every 6h)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/learning/analyze-patterns",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.ancloraApi.token }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "analysis_type",
+              "value": "pattern_optimization"
+            },
+            {
+              "name": "min_usage_threshold",
+              "value": "3"
+            }
+          ]
+        }
+      },
+      "id": "pattern-analyzer",
+      "name": "Analyze Conversion Patterns",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Procesar análisis de patrones y generar optimizaciones\nconst analysisData = $input.first().json;\n\nconst optimizations = [];\nconst alerts = [];\n\n// Analizar patrones de bajo rendimiento\nif (analysisData.patterns) {\n  analysisData.patterns.forEach(pattern => {\n    \n    // Patrón con baja tasa de éxito\n    if (pattern.success_rate < 0.8) {\n      optimizations.push({\n        type: 'performance_improvement',\n        pattern_id: pattern.pattern_id,\n        current_success_rate: pattern.success_rate,\n        recommendation: 'Revisar secuencia de agentes y agregar validaciones',\n        priority: 'high',\n        estimated_improvement: '15-25%'\n      });\n    }\n    \n    // Patrón con tiempo de procesamiento alto\n    if (pattern.avg_processing_time > 60) {\n      optimizations.push({\n        type: 'speed_optimization',\n        pattern_id: pattern.pattern_id,\n        current_time: pattern.avg_processing_time,\n        recommendation: 'Implementar procesamiento en paralelo o cache',\n        priority: 'medium',\n        estimated_improvement: '30-40% reducción tiempo'\n      });\n    }\n    \n    // Patrón muy utilizado pero sin optimizar\n    if (pattern.usage_count > 20 && pattern.optimization_score < 0.7) {\n      optimizations.push({\n        type: 'high_usage_optimization',\n        pattern_id: pattern.pattern_id,\n        usage_count: pattern.usage_count,\n        recommendation: 'Crear patrón especializado para este caso frecuente',\n        priority: 'high',\n        estimated_improvement: 'Mejora significativa en experiencia usuario'\n      });\n    }\n  });\n}\n\n// Detectar tendencias preocupantes\nif (analysisData.trends) {\n  if (analysisData.trends.success_rate_trend < -0.05) {\n    alerts.push({\n      type: 'declining_performance',\n      message: 'Tendencia decreciente en tasa de éxito detectada',\n      severity: 'warning',\n      action_required: 'Revisar cambios recientes en el sistema'\n    });\n  }\n  \n  if (analysisData.trends.processing_time_trend > 0.1) {\n    alerts.push({\n      type: 'increasing_latency',\n      message: 'Aumento en tiempos de procesamiento detectado',\n      severity: 'warning',\n      action_required: 'Verificar recursos del sistema y optimizar'\n    });\n  }\n}\n\n// Identificar oportunidades de nuevos patrones\nconst newPatternOpportunities = [];\nif (analysisData.unoptimized_conversions && analysisData.unoptimized_conversions.length > 5) {\n  newPatternOpportunities.push({\n    type: 'new_pattern_opportunity',\n    count: analysisData.unoptimized_conversions.length,\n    recommendation: 'Crear nuevos patrones para conversiones sin optimizar',\n    potential_impact: 'Alto - muchas conversiones podrían beneficiarse'\n  });\n}\n\nreturn {\n  json: {\n    analysis_timestamp: new Date().toISOString(),\n    optimizations_found: optimizations.length,\n    alerts_generated: alerts.length,\n    optimizations: optimizations,\n    alerts: alerts,\n    new_pattern_opportunities: newPatternOpportunities,\n    summary: {\n      total_patterns_analyzed: analysisData.patterns ? analysisData.patterns.length : 0,\n      high_priority_optimizations: optimizations.filter(o => o.priority === 'high').length,\n      medium_priority_optimizations: optimizations.filter(o => o.priority === 'medium').length\n    }\n  }\n};"
+      },
+      "id": "optimization-processor",
+      "name": "Process Optimization Opportunities",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-optimizations",
+              "leftValue": "={{ $json.optimizations_found }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "number",
+                "operation": "larger"
+              }
+            }
+          ]
+        }
+      },
+      "id": "optimization-filter",
+      "name": "Check for Optimizations",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/learning/apply-optimizations",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.ancloraApi.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {\n          "optimizations": "={{ $json.optimizations }}",\n          "auto_apply": true,\n          "backup_current_patterns": true,\n          "test_mode": false\n        }\n      },\n      "id": "apply-optimizations",\n      "name": "Apply Automatic Optimizations",\n      "type": "n8n-nodes-base.httpRequest",\n      "typeVersion": 4.1,\n      "position": [1120, 200]\n    },\n    {\n      "parameters": {\n        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",\n        "sendBody": true,\n        "contentType": "json",\n        "body": {\n          "channel": "#anclora-learning",\n          "username": "Anclora Learning Bot",\n          "icon_emoji": ":brain:",\n          "attachments": [\n            {\n              "color": "good",\n              "title": "🧠 Optimizaciones de Aprendizaje Aplicadas",\n              "text": "El sistema ha identificado y aplicado {{ $json.optimizations_found }} optimizaciones automáticas",\n              "fields": [\n                {\n                  "title": "Optimizaciones de Alta Prioridad",\n                  "value": "{{ $json.summary.high_priority_optimizations }}",\n                  "short": true\n                },\n                {\n                  "title": "Optimizaciones de Media Prioridad",\n                  "value": "{{ $json.summary.medium_priority_optimizations }}",\n                  "short": true\n                },\n                {\n                  "title": "Patrones Analizados",\n                  "value": "{{ $json.summary.total_patterns_analyzed }}",\n                  "short": true\n                },\n                {\n                  "title": "Alertas Generadas",\n                  "value": "{{ $json.alerts_generated }}",\n                  "short": true\n                }\n              ],\n              "footer": "Anclora Learning System",\n              "ts": "={{ Math.floor(Date.now() / 1000) }}"\n            }\n          ]\n        }\n      },\n      "id": "slack-notification",\n      "name": "Notify Optimization Results",\n      "type": "n8n-nodes-base.httpRequest",\n      "typeVersion": 4.1,\n      "position": [1120, 300]\n    },\n    {\n      "parameters": {\n        "conditions": {\n          "options": {\n            "caseSensitive": true,\n            "leftValue": "",\n            "typeValidation": "strict"\n          },\n          "conditions": [\n            {\n              "id": "has-alerts",\n              "leftValue": "={{ $json.alerts_generated }}",\n              "rightValue": "0",\n              "operator": {\n                "type": "number",\n                "operation": "larger"\n              }\n            }\n          ]\n        }\n      },\n      "id": "alert-filter",\n      "name": "Check for Alerts",\n      "type": "n8n-nodes-base.if",\n      "typeVersion": 1,\n      "position": [1120, 400]\n    },\n    {\n      "parameters": {\n        "authentication": "genericCredentialType",\n        "genericAuthType": "httpHeaderAuth",\n        "url": "https://api.sendgrid.com/v3/mail/send",\n        "sendHeaders": true,\n        "headerParameters": {\n          "parameters": [\n            {\n              "name": "Authorization",\n              "value": "Bearer {{ $credentials.sendGridApi.apiKey }}"\n            },\n            {\n              "name": "Content-Type",\n              "value": "application/json"\n            }\n          ]\n        },\n        "sendBody": true,\n        "contentType": "json",\n        "body": {\n          "personalizations": [\n            {\n              "to": [\n                {\n                  "email": "admin@anclora.com",\n                  "name": "Anclora Admin"\n                }\n              ],\n              "subject": "🚨 Alertas del Sistema de Aprendizaje Anclora"\n            }\n          ],\n          "from": {\n            "email": "learning@anclora.com",\n            "name": "Anclora Learning System"\n          },\n          "content": [\n            {\n              "type": "text/html",\n              "value": "<h2>🧠 Alertas del Sistema de Aprendizaje</h2><p>Se han detectado {{ $json.alerts_generated }} alertas que requieren atención:</p><ul>{{ $json.alerts.map(alert => `<li><strong>${alert.type}:</strong> ${alert.message}<br><em>Acción requerida: ${alert.action_required}</em></li>`).join('') }}</ul><p>Revisa el dashboard de aprendizaje para más detalles.</p>"\n            }\n          ]\n        }\n      },\n      "id": "email-alerts",\n      "name": "Send Alert Email",\n      "type": "n8n-nodes-base.httpRequest",\n      "typeVersion": 4.1,\n      "position": [1340, 400]\n    },\n    {\n      "parameters": {\n        "url": "http://localhost:8000/api/v1/learning/log-optimization-cycle",\n        "authentication": "genericCredentialType",\n        "genericAuthType": "httpHeaderAuth",\n        "sendHeaders": true,\n        "headerParameters": {\n          "parameters": [\n            {\n              "name": "Authorization",\n              "value": "Bearer {{ $credentials.ancloraApi.token }}"\n            }\n          ]\n        },\n        "sendBody": true,\n        "contentType": "json",\n        "body": {\n          "cycle_timestamp": "={{ $json.analysis_timestamp }}",\n          "optimizations_applied": "={{ $json.optimizations_found }}",\n          "alerts_generated": "={{ $json.alerts_generated }}",\n          "patterns_analyzed": "={{ $json.summary.total_patterns_analyzed }}",\n          "cycle_summary": "={{ $json.summary }}",\n          "next_cycle_scheduled": "={{ $now.plus({hours: 6}).toISO() }}"\n        }\n      },\n      "id": "log-cycle",\n      "name": "Log Optimization Cycle",\n      "type": "n8n-nodes-base.httpRequest",\n      "typeVersion": 4.1,\n      "position": [1560, 300]\n    }\n  ],\n  "connections": {\n    "Learning Analysis (Every 6h)": {\n      "main": [\n        [\n          {\n            "node": "Analyze Conversion Patterns",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Analyze Conversion Patterns": {\n      "main": [\n        [\n          {\n            "node": "Process Optimization Opportunities",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Process Optimization Opportunities": {\n      "main": [\n        [\n          {\n            "node": "Check for Optimizations",\n            "type": "main",\n            "index": 0\n          },\n          {\n            "node": "Check for Alerts",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Check for Optimizations": {\n      "main": [\n        [\n          {\n            "node": "Apply Automatic Optimizations",\n            "type": "main",\n            "index": 0\n          },\n          {\n            "node": "Notify Optimization Results",\n            "type": "main",\n            "index": 0\n          }\n        ],\n        [\n          {\n            "node": "Log Optimization Cycle",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Check for Alerts": {\n      "main": [\n        [\n          {\n            "node": "Send Alert Email",\n            "type": "main",\n            "index": 0\n          }\n        ],\n        []\n      ]\n    },\n    "Apply Automatic Optimizations": {\n      "main": [\n        [\n          {\n            "node": "Log Optimization Cycle",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Notify Optimization Results": {\n      "main": [\n        [\n          {\n            "node": "Log Optimization Cycle",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Send Alert Email": {\n      "main": [\n        [\n          {\n            "node": "Log Optimization Cycle",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    }\n  },\n  "active": true,\n  "settings": {\n    "executionOrder": "v1"\n  },\n  "versionId": "1.0.0",\n  "meta": {\n    "templateCredsSetupCompleted": true\n  },\n  "id": "anclora-learning-optimization",\n  "tags": [\n    {\n      "createdAt": "2024-01-01T00:00:00.000Z",\n      "updatedAt": "2024-01-01T00:00:00.000Z",\n      "id": "anclora-rag",\n      "name": "Anclora RAG"\n    }\n  ]\n}

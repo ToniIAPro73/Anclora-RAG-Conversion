@@ -1,0 +1,380 @@
+{
+  "name": "Anclora RAG - Hybrid Document Processing Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "process-document",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Document Upload Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "anclora-document-upload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "file-validation",
+              "leftValue": "={{ $json.file.mimetype }}",
+              "rightValue": "application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "size-validation", 
+              "leftValue": "={{ $json.file.size }}",
+              "rightValue": "52428800",
+              "operator": {
+                "type": "number",
+                "operation": "smaller"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "file-validator",
+      "name": "File Validator",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://www.virustotal.com/vtapi/v2/file/scan",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $credentials.virusTotalApi.apiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{ $json.file.buffer }}"
+            }
+          ]
+        }
+      },
+      "id": "malware-scanner",
+      "name": "VirusTotal Malware Scanner",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300],
+      "credentials": {
+        "virusTotalApi": {
+          "id": "virus-total-creds",
+          "name": "VirusTotal API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "clean-file",
+              "leftValue": "={{ $json.positives }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "number",
+                "operation": "equal"
+              }
+            }
+          ]
+        }
+      },
+      "id": "security-check",
+      "name": "Security Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/documents/extract-text",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.ancloraApi.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{ $json.file }}"
+            },
+            {
+              "name": "user_id",
+              "value": "={{ $json.user_id }}"
+            }
+          ]
+        }
+      },
+      "id": "text-extractor",
+      "name": "Text Extractor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/documents/create-embeddings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.ancloraApi.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "document_id": "={{ $json.document_id }}",
+          "text_content": "={{ $json.extracted_text }}",
+          "chunk_size": 1000,
+          "chunk_overlap": 200
+        }
+      },
+      "id": "embedding-generator",
+      "name": "Embedding Generator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/analytics/update-metrics",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.ancloraApi.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "event_type": "document_processed",
+          "user_id": "={{ $json.user_id }}",
+          "document_id": "={{ $json.document_id }}",
+          "processing_time": "={{ $json.processing_time }}",
+          "file_size": "={{ $json.file_size }}",
+          "file_type": "={{ $json.file_type }}"
+        }
+      },
+      "id": "analytics-updater",
+      "name": "Analytics Updater",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": {
+          "success": true,
+          "message": "Document processed successfully",
+          "document_id": "={{ $json.document_id }}",
+          "processing_time": "={{ $json.processing_time }}",
+          "embeddings_created": "={{ $json.embeddings_count }}"
+        }
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": {
+          "success": false,
+          "error": "File validation failed",
+          "message": "File type not supported or file too large",
+          "supported_types": ["PDF", "DOCX", "TXT"],
+          "max_size": "50MB"
+        },
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "validation-error",
+      "name": "Validation Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": {
+          "success": false,
+          "error": "Security threat detected",
+          "message": "File contains malware or suspicious content",
+          "action": "File quarantined for security review"
+        },
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "security-error",
+      "name": "Security Error Response", 
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 500]
+    }
+  ],
+  "connections": {
+    "Document Upload Webhook": {
+      "main": [
+        [
+          {
+            "node": "File Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File Validator": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal Malware Scanner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validation Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal Malware Scanner": {
+      "main": [
+        [
+          {
+            "node": "Security Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Security Check": {
+      "main": [
+        [
+          {
+            "node": "Text Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Security Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Extractor": {
+      "main": [
+        [
+          {
+            "node": "Embedding Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embedding Generator": {
+      "main": [
+        [
+          {
+            "node": "Analytics Updater",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analytics Updater": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1.0.0",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "anclora-document-processing",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "anclora-rag",
+      "name": "Anclora RAG"
+    }
+  ]
+}

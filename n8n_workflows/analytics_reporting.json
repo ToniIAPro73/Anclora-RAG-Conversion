@@ -1,0 +1,132 @@
+{
+  "name": "Anclora RAG - Analytics & Reporting System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-trigger",
+      "name": "Daily Analytics Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 200]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression", 
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-trigger",
+      "name": "Weekly Report Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 1 * *"
+            }
+          ]
+        }
+      },
+      "id": "monthly-trigger",
+      "name": "Monthly Report Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 400]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/analytics/collect-metrics",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.ancloraApi.token }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "period",
+              "value": "={{ $json.report_period || 'daily' }}"
+            },
+            {
+              "name": "start_date",
+              "value": "={{ $json.start_date || $now.minus({days: 1}).toISODate() }}"
+            },
+            {
+              "name": "end_date", 
+              "value": "={{ $json.end_date || $now.toISODate() }}"
+            }
+          ]
+        }
+      },
+      "id": "metrics-collector",
+      "name": "Collect Analytics Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Procesar y analizar métricas\nconst metrics = $input.first().json;\n\n// Calcular KPIs principales\nconst kpis = {\n  total_documents: metrics.documents_processed || 0,\n  total_queries: metrics.queries_executed || 0,\n  avg_processing_time: metrics.avg_processing_time || 0,\n  success_rate: ((metrics.successful_processes || 0) / (metrics.total_processes || 1) * 100).toFixed(2),\n  user_satisfaction: metrics.avg_user_rating || 0,\n  security_threats_blocked: metrics.malware_detected || 0,\n  top_document_types: metrics.document_types || [],\n  peak_usage_hours: metrics.peak_hours || [],\n  error_rate: ((metrics.failed_processes || 0) / (metrics.total_processes || 1) * 100).toFixed(2)\n};\n\n// Generar insights automáticos\nconst insights = [];\n\nif (parseFloat(kpis.success_rate) < 90) {\n  insights.push({\n    type: 'warning',\n    message: `Tasa de éxito del ${kpis.success_rate}% está por debajo del objetivo (90%)`,\n    recommendation: 'Revisar logs de errores y optimizar pipeline de procesamiento'\n  });\n}\n\nif (kpis.security_threats_blocked > 0) {\n  insights.push({\n    type: 'security',\n    message: `${kpis.security_threats_blocked} amenazas de seguridad bloqueadas`,\n    recommendation: 'Sistema de seguridad funcionando correctamente'\n  });\n}\n\nif (kpis.avg_processing_time > 60) {\n  insights.push({\n    type: 'performance',\n    message: `Tiempo promedio de procesamiento: ${kpis.avg_processing_time}s`,\n    recommendation: 'Considerar optimización de algoritmos o upgrade de infraestructura'\n  });\n}\n\n// Preparar datos para el reporte\nconst reportData = {\n  period: $json.report_period || 'daily',\n  generated_at: new Date().toISOString(),\n  kpis: kpis,\n  insights: insights,\n  raw_metrics: metrics,\n  charts_data: {\n    documents_trend: metrics.documents_by_day || [],\n    queries_trend: metrics.queries_by_day || [],\n    user_activity: metrics.active_users_by_day || [],\n    format_distribution: metrics.document_formats || []\n  }\n};\n\nreturn { json: reportData };"
+      },
+      "id": "data-processor",
+      "name": "Process Analytics Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar reporte HTML\nconst data = $input.first().json;\n\nconst htmlReport = `\n<!DOCTYPE html>\n<html>\n<head>\n    <title>Anclora RAG - Reporte ${data.period}</title>\n    <style>\n        body { font-family: Arial, sans-serif; margin: 20px; }\n        .header { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 20px; border-radius: 8px; }\n        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }\n        .kpi-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; text-align: center; }\n        .kpi-value { font-size: 2em; font-weight: bold; color: #1e293b; }\n        .kpi-label { color: #64748b; font-size: 0.9em; }\n        .insights { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; }\n        .insight-item { margin: 10px 0; padding: 10px; background: white; border-radius: 4px; }\n        .warning { border-left-color: #ef4444; }\n        .security { border-left-color: #10b981; }\n        .performance { border-left-color: #3b82f6; }\n    </style>\n</head>\n<body>\n    <div class=\"header\">\n        <h1>📊 Anclora RAG Analytics</h1>\n        <p>Reporte ${data.period} - ${new Date(data.generated_at).toLocaleDateString('es-ES')}</p>\n    </div>\n    \n    <div class=\"kpi-grid\">\n        <div class=\"kpi-card\">\n            <div class=\"kpi-value\">${data.kpis.total_documents}</div>\n            <div class=\"kpi-label\">Documentos Procesados</div>\n        </div>\n        <div class=\"kpi-card\">\n            <div class=\"kpi-value\">${data.kpis.total_queries}</div>\n            <div class=\"kpi-label\">Consultas Ejecutadas</div>\n        </div>\n        <div class=\"kpi-card\">\n            <div class=\"kpi-value\">${data.kpis.success_rate}%</div>\n            <div class=\"kpi-label\">Tasa de Éxito</div>\n        </div>\n        <div class=\"kpi-card\">\n            <div class=\"kpi-value\">${data.kpis.avg_processing_time}s</div>\n            <div class=\"kpi-label\">Tiempo Promedio</div>\n        </div>\n        <div class=\"kpi-card\">\n            <div class=\"kpi-value\">${data.kpis.user_satisfaction}/5</div>\n            <div class=\"kpi-label\">Satisfacción Usuario</div>\n        </div>\n        <div class=\"kpi-card\">\n            <div class=\"kpi-value\">${data.kpis.security_threats_blocked}</div>\n            <div class=\"kpi-label\">Amenazas Bloqueadas</div>\n        </div>\n    </div>\n    \n    <div class=\"insights\">\n        <h3>🔍 Insights Automáticos</h3>\n        ${data.insights.map(insight => `\n            <div class=\"insight-item ${insight.type}\">\n                <strong>${insight.message}</strong><br>\n                <em>Recomendación: ${insight.recommendation}</em>\n            </div>\n        `).join('')}\n    </div>\n    \n    <div style=\"margin-top: 30px; text-align: center; color: #64748b;\">\n        <p>Generado automáticamente por Anclora RAG Analytics</p>\n    </div>\n</body>\n</html>\n`;\n\nreturn { \n  json: { \n    ...data, \n    html_report: htmlReport,\n    report_title: `Anclora RAG - Reporte ${data.period}`,\n    report_filename: `anclora-report-${data.period}-${new Date().toISOString().split('T')[0]}.html`\n  } \n};"
+      },
+      "id": "report-generator",
+      "name": "Generate HTML Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.sendGridApi.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",\n        "body": {\n          "personalizations": [\n            {\n              "to": [\n                {\n                  "email": "admin@anclora.com",\n                  "name": "Anclora Admin"\n                }\n              ],\n              "subject": "{{ $json.report_title }}"\n            }\n          ],\n          "from": {\n            "email": "analytics@anclora.com",\n            "name": "Anclora Analytics"\n          },\n          "content": [\n            {\n              "type": "text/html",\n              "value": "{{ $json.html_report }}"\n            }\n          ],\n          "attachments": [\n            {\n              "content": "{{ $json.html_report | base64 }}",\n              "filename": "{{ $json.report_filename }}",\n              "type": "text/html",\n              "disposition": "attachment"\n            }\n          ]\n        }\n      },\n      "id": "email-report",\n      "name": "Email Report",\n      "type": "n8n-nodes-base.httpRequest",\n      "typeVersion": 4.1,\n      "position": [1120, 300]\n    },\n    {\n      "parameters": {\n        "url": "http://localhost:8000/api/v1/analytics/save-report",\n        "authentication": "genericCredentialType",\n        "genericAuthType": "httpHeaderAuth",\n        "sendHeaders": true,\n        "headerParameters": {\n          "parameters": [\n            {\n              "name": "Authorization",\n              "value": "Bearer {{ $credentials.ancloraApi.token }}"\n            }\n          ]\n        },\n        "sendBody": true,\n        "contentType": "json",\n        "body": {\n          "report_type": "={{ $json.period }}",\n          "generated_at": "={{ $json.generated_at }}",\n          "kpis": "={{ $json.kpis }}",\n          "insights": "={{ $json.insights }}",\n          "html_content": "={{ $json.html_report }}",\n          "filename": "={{ $json.report_filename }}"\n        }\n      },\n      "id": "save-report",\n      "name": "Save Report to Database",\n      "type": "n8n-nodes-base.httpRequest",\n      "typeVersion": 4.1,\n      "position": [1340, 300]\n    }\n  ],\n  "connections": {\n    "Daily Analytics Trigger": {\n      "main": [\n        [\n          {\n            "node": "Collect Analytics Metrics",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Weekly Report Trigger": {\n      "main": [\n        [\n          {\n            "node": "Collect Analytics Metrics",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Monthly Report Trigger": {\n      "main": [\n        [\n          {\n            "node": "Collect Analytics Metrics",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Collect Analytics Metrics": {\n      "main": [\n        [\n          {\n            "node": "Process Analytics Data",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Process Analytics Data": {\n      "main": [\n        [\n          {\n            "node": "Generate HTML Report",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    },\n    "Generate HTML Report": {\n      "main": [\n        [\n          {\n            "node": "Email Report",\n            "type": "main",\n            "index": 0\n          },\n          {\n            "node": "Save Report to Database",\n            "type": "main",\n            "index": 0\n          }\n        ]\n      ]\n    }\n  },\n  "active": true,\n  "settings": {\n    "executionOrder": "v1"\n  },\n  "versionId": "1.0.0",\n  "meta": {\n    "templateCredsSetupCompleted": true\n  },\n  "id": "anclora-analytics-reporting",\n  "tags": [\n    {\n      "createdAt": "2024-01-01T00:00:00.000Z",\n      "updatedAt": "2024-01-01T00:00:00.000Z",\n      "id": "anclora-rag",\n      "name": "Anclora RAG"\n    }\n  ]\n}

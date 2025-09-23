@@ -1,0 +1,327 @@
+{
+  "name": "Anclora RAG - Smart Notification System",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-notification",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "notification-webhook",
+      "name": "Notification Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "anclora-notifications"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "notification-type",
+              "leftValue": "={{ $json.notification_type }}",
+              "rightValue": "document_processed,processing_error,usage_limit,feature_update,security_alert",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ]
+        }
+      },
+      "id": "notification-router",
+      "name": "Notification Type Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.sendGridApi.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "personalizations": [
+            {
+              "to": [
+                {
+                  "email": "={{ $json.user_email }}",
+                  "name": "={{ $json.user_name }}"
+                }
+              ],
+              "dynamic_template_data": {
+                "user_name": "={{ $json.user_name }}",
+                "document_name": "={{ $json.document_name }}",
+                "processing_time": "={{ $json.processing_time }}",
+                "document_url": "https://anclora.com/documents/{{ $json.document_id }}"
+              }
+            }
+          ],
+          "from": {
+            "email": "noreply@anclora.com",
+            "name": "Anclora RAG"
+          },
+          "template_id": "d-{{ $json.template_id }}"
+        }
+      },
+      "id": "email-sender",
+      "name": "Email Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.slack_webhook_url }}",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "channel": "#anclora-notifications",
+          "username": "Anclora Bot",
+          "icon_emoji": ":robot_face:",
+          "attachments": [
+            {
+              "color": "={{ $json.notification_type === 'processing_error' ? 'danger' : 'good' }}",
+              "title": "{{ $json.notification_title }}",
+              "text": "{{ $json.notification_message }}",
+              "fields": [
+                {
+                  "title": "Usuario",
+                  "value": "{{ $json.user_name }}",
+                  "short": true
+                },
+                {
+                  "title": "Documento",
+                  "value": "{{ $json.document_name }}",
+                  "short": true
+                },
+                {
+                  "title": "Timestamp",
+                  "value": "{{ $now }}",
+                  "short": true
+                }
+              ],
+              "actions": [
+                {
+                  "type": "button",
+                  "text": "Ver Dashboard",
+                  "url": "https://anclora.com/dashboard"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "id": "slack-sender",
+      "name": "Slack Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.twilio.com/2010-04-01/Accounts/{{ $credentials.twilioApi.accountSid }}/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "{{ $credentials.twilioApi.phoneNumber }}"
+            },
+            {
+              "name": "To",
+              "value": "={{ $json.user_phone }}"
+            },
+            {
+              "name": "Body",
+              "value": "🚨 Anclora Alert: {{ $json.notification_message }}"
+            }
+          ]
+        }
+      },
+      "id": "sms-sender",
+      "name": "SMS Notification (Critical Only)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 400],
+      "credentials": {
+        "twilioApi": {
+          "id": "twilio-creds",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/notifications/log",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.ancloraApi.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "user_id": "={{ $json.user_id }}",
+          "notification_type": "={{ $json.notification_type }}",
+          "channel": "email,slack,sms",
+          "status": "sent",
+          "timestamp": "={{ $now }}",
+          "metadata": {
+            "document_id": "={{ $json.document_id }}",
+            "template_used": "={{ $json.template_id }}"
+          }
+        }
+      },
+      "id": "notification-logger",
+      "name": "Log Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": {
+          "success": true,
+          "message": "Notifications sent successfully",
+          "channels_used": ["email", "slack", "sms"],
+          "timestamp": "={{ $now }}"
+        }
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Notification Trigger": {
+      "main": [
+        [
+          {
+            "node": "Notification Type Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notification Type Router": {
+      "main": [
+        [
+          {
+            "node": "Email Notification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SMS Notification (Critical Only)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Notification": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Notification": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS Notification (Critical Only)": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Notification": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1.0.0",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "anclora-notification-system",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "anclora-rag",
+      "name": "Anclora RAG"
+    }
+  ]
+}
