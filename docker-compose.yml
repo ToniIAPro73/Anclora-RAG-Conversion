@@ -17,6 +17,8 @@ x-environment: &default-environment
   EMBEDDINGS_MODEL_NAME: sentence-transformers/all-mpnet-base-v2
   TARGET_SOURCE_CHUNKS: 5
   PROMETHEUS_METRICS_HOST: 0.0.0.0
+  LLAMA_CLOUD_API_KEY: ${LLAMA_CLOUD_API_KEY:-}
+  WHISPER_MODEL: ${WHISPER_MODEL:-base}
 
 # Resource limits for production services
 x-resource-limits: &resource-limits

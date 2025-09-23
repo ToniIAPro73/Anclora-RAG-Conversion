@@ -30,6 +30,18 @@ CODE_LOADERS = {
     ".rb": (TextLoader, {"encoding": "utf8"}),
     ".rs": (TextLoader, {"encoding": "utf8"}),
     ".php": (TextLoader, {"encoding": "utf8"}),
+    # Database scripts
+    ".sql": (TextLoader, {"encoding": "utf8"}),
+    ".plsql": (TextLoader, {"encoding": "utf8"}),
+    ".psql": (TextLoader, {"encoding": "utf8"}),
+    ".mysql": (TextLoader, {"encoding": "utf8"}),
+    # Additional programming languages
+    ".r": (TextLoader, {"encoding": "utf8"}),
+    ".scala": (TextLoader, {"encoding": "utf8"}),
+    ".kotlin": (TextLoader, {"encoding": "utf8"}),
+    ".swift": (TextLoader, {"encoding": "utf8"}),
+    ".dart": (TextLoader, {"encoding": "utf8"}),
+    ".lua": (TextLoader, {"encoding": "utf8"}),
 }
 
 CODE_COLLECTION = "troubleshooting"

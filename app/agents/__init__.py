@@ -16,6 +16,12 @@ from .media_agent import (
     MultimediaIngestor,
     create_multimedia_ingestor,
 )
+from .archive_agent import (
+    ARCHIVE_COLLECTION,
+    ArchiveAgent,
+    ArchiveIngestor,
+    create_archive_ingestor,
+)
 from .content_analyzer_agent import ContentAnalyzerAgent, ContentAnalysis
 from .smart_converter_agent import SmartConverterAgent, ConversionResult
 from .orchestrator import OrchestratorService, create_default_orchestrator, document_query_flow
@@ -38,12 +44,16 @@ __all__ = [
     "MULTIMEDIA_COLLECTION",
     "MediaAgent",
     "MultimediaIngestor",
+    "ARCHIVE_COLLECTION",
+    "ArchiveAgent",
+    "ArchiveIngestor",
     "OrchestratorService",
     "SmartConverterAgent",
     "create_code_ingestor",
     "create_default_orchestrator",
     "create_document_ingestor",
     "create_multimedia_ingestor",
+    "create_archive_ingestor",
     "document_query_flow",
     "refresh_document_loaders",
 ]

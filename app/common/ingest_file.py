@@ -37,6 +37,7 @@ from agents import (
     CodeIngestor,
     DocumentIngestor,
     MultimediaIngestor,
+    ArchiveIngestor,
     refresh_document_loaders,
 )
 from collections.abc import Iterator, Sequence
@@ -97,6 +98,7 @@ INGESTORS: Tuple[BaseFileIngestor, ...] = (
     DocumentIngestor,
     CodeIngestor,
     MultimediaIngestor,
+    ArchiveIngestor,
 )
 
 SUPPORTED_EXTENSIONS = sorted({ext for ingestor in INGESTORS for ext in ingestor.extensions})
