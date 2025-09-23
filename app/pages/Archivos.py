@@ -6,14 +6,26 @@ from pathlib import Path
 # Set page config
 st.set_page_config(layout='wide', page_title='Archivos - Anclora AI RAG', page_icon='📁')
 
-# Simple CSS to hide Streamlit elements
+# Simple CSS to hide Streamlit elements and suppress 404 errors
 hide_st_style = """
     <style>
         #MainMenu {visibility: hidden;}
         .stDeployButton {display:none;}
         footer {visibility: hidden;}
         #stDecoration {display:none;}
+        /* Suppress console errors */
+        .stApp > div[data-testid="stToolbar"] {display: none;}
     </style>
+    <script>
+        // Suppress 404 console errors
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            return originalFetch.apply(this, args).catch(err => {
+                if (!err.message.includes('404')) console.error(err);
+                return Promise.reject(err);
+            });
+        };
+    </script>
 """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
@@ -128,12 +140,23 @@ if st.button(add_button_text, type="primary"):
             if is_valid:
                 with st.spinner(processing_message):
                     try:
+                        st.info(f"🔄 Iniciando procesamiento de: {uploaded_file.name}")
+
                         # Process the file
-                        ingest_file(uploaded_file, uploaded_file.name)
-                        st.success(f"✅ {success_message}: {uploaded_file.name}")
-                        st.rerun()  # Refresh to show updated file list
+                        result = ingest_file(uploaded_file, uploaded_file.name)
+
+                        st.info(f"📊 Resultado: {result}")
+
+                        if result and result.get("success"):
+                            st.success(f"✅ {success_message}: {uploaded_file.name}")
+                            st.rerun()  # Refresh to show updated file list
+                        else:
+                            error_msg = result.get("error", "Error desconocido") if result else "Sin resultado"
+                            st.error(f"❌ {error_message}: {error_msg}")
+
                     except Exception as e:
                         st.error(f"❌ {error_message}: {str(e)}")
+                        st.exception(e)  # Mostrar stack trace completo
             else:
                 st.error(f"❌ {validation_message}")
         else:

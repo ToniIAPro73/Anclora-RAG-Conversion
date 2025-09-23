@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     cmake \
     pkg-config \
     libopenblas-dev \
+    libmagic1 \
+    libmagic-dev \
+    file \
     && rm -rf /var/lib/apt/lists/*
 
 # Establecer el directorio de trabajo
@@ -20,8 +23,14 @@ COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
+# Descargar datos de NLTK necesarios
+RUN python -c "import nltk; nltk.download('punkt')"
+
 # Copiar el resto del codigo
 COPY . .
+
+# Configurar PYTHONPATH para que Python encuentre el módulo app
+ENV PYTHONPATH=/app
 
 # Configurar variables de entorno para Streamlit
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false

@@ -24,3 +24,4 @@ openai-whisper>=20231117
 ffmpeg-python>=0.2.0
 moviepy>=1.0.3
 python-magic>=0.4.27
+nltk>=3.8

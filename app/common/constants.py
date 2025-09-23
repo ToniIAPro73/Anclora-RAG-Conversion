@@ -11,7 +11,7 @@ from chromadb.config import Settings
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_CHROMA_HOST = "chroma"
+_DEFAULT_CHROMA_HOST = "localhost"
 _DEFAULT_CHROMA_PORT = 8000
 
 

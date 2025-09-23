@@ -404,7 +404,7 @@ if conversion_time_data:
             y=values,
             mode='lines',
             name=get_text('conversion_time'),
-            line=dict(color='#FF6B6B')
+            line=dict(color='#B8A9FF')  # Lavanda pastel suave
         ),
         row=1, col=1
     )
@@ -452,7 +452,7 @@ if quality_score_data:
             y=values,
             mode='lines',
             name=get_text('quality_score'),
-            line=dict(color='#96CEB4')
+            line=dict(color='#A8E6CF')  # Verde pastel suave
         ),
         row=2, col=2
     )
@@ -561,9 +561,9 @@ with col1:
         y='Cantidad',
         color='Resultado',
         color_discrete_map={
-            'Archivos Limpios': '#96CEB4',
-            'Archivos Sospechosos': '#FFEAA7',
-            'Archivos Bloqueados': '#E17055'
+            'Archivos Limpios': '#A8E6CF',    # Verde pastel suave
+            'Archivos Sospechosos': '#FFE4B5', # Amarillo pastel suave
+            'Archivos Bloqueados': '#F8BBD9'   # Rosa pastel suave
         }
     )
     st.plotly_chart(fig_scan, use_container_width=True)
@@ -620,7 +620,7 @@ with col1:
         y=forecast_queries,
         mode='lines',
         name='Pronóstico',
-        line=dict(color='#FF6B6B', dash='dash')
+        line=dict(color='#B8A9FF', dash='dash')  # Lavanda pastel suave
     ))
     
     fig_forecast.update_layout(height=400)
@@ -688,9 +688,9 @@ recommendations = [
 
 recommendations_df = pd.DataFrame(recommendations)
 
-# Color coding for priority
+# Color coding for priority - usando colores pasteles suaves
 def get_priority_color(priority):
-    colors = {'Alta': '🔴', 'Media': '🟡', 'Baja': '🟢'}
+    colors = {'Alta': '🟠', 'Media': '🟡', 'Baja': '🟢'}  # Naranja suave en lugar de rojo
     return colors.get(priority, '⚪')
 
 for _, rec in recommendations_df.iterrows():

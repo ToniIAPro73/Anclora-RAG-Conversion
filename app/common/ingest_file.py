@@ -7,6 +7,10 @@ import tempfile
 import uuid
 from contextlib import contextmanager
 from typing import Any, List, Tuple, Optional
+import threading
+import queue
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
 import streamlit as st
@@ -48,7 +52,7 @@ try:
     SECURITY_AVAILABLE = True
 except ImportError:
     SECURITY_AVAILABLE = False
-    st.warning("⚠️ Módulo de seguridad no disponible. Los archivos no serán escaneados por malware.")
+    # El mensaje se mostrará durante el procesamiento de archivos
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
@@ -77,6 +81,11 @@ from common.privacy import PrivacyManager
 get_unique_sources_df = _get_unique_sources_df
 
 logger = logging.getLogger(__name__)
+
+# Cola de procesamiento global con prioridad por tamaño
+processing_queue = queue.PriorityQueue()
+processing_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="ingest")
+processing_status = {}  # {file_id: {"status": "processing", "progress": 0.5, "result": None}}
 
 
 CHUNK_SIZE = 500
@@ -272,7 +281,9 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
                 os.unlink(temp_file_path)
 
     else:
+        # Escaneo deshabilitado - mostrar advertencia
         st.warning("⚠️ Escaneo de seguridad deshabilitado - Procesando sin verificación antimalware")
+        logger.warning(f"Procesando archivo sin escaneo de seguridad: {file_name}")
 
     # Continuar con procesamiento normal si el archivo es seguro
     documents, ingestor = load_single_document(uploaded_file, file_name)
@@ -297,8 +308,150 @@ def does_vectorstore_exist(settings, collection_name: str) -> bool:
         response = collection.get(include=["ids"])
         return bool(response.get("ids"))
 
+def ingest_file_priority(uploaded_file, file_name, file_size=None):
+    """Ingesta archivo con prioridad por tamaño (pequeños primero)."""
+
+    # Calcular tamaño si no se proporciona
+    if file_size is None:
+        if hasattr(uploaded_file, 'size'):
+            file_size = uploaded_file.size
+        else:
+            # Estimar tamaño leyendo el archivo
+            current_pos = uploaded_file.tell() if hasattr(uploaded_file, 'tell') else 0
+            uploaded_file.seek(0, 2)  # Ir al final
+            file_size = uploaded_file.tell()
+            uploaded_file.seek(current_pos)  # Volver a posición original
+
+    # Crear ID único para el archivo
+    file_id = f"{file_name}_{int(time.time())}"
+
+    # Prioridad: archivos más pequeños tienen prioridad más alta (número menor)
+    # Archivos < 1MB = prioridad 1, < 10MB = prioridad 2, >= 10MB = prioridad 3
+    if file_size < 1024 * 1024:  # < 1MB
+        priority = 1
+    elif file_size < 10 * 1024 * 1024:  # < 10MB
+        priority = 2
+    else:  # >= 10MB
+        priority = 3
+
+    # Inicializar status
+    processing_status[file_id] = {
+        "status": "queued",
+        "progress": 0.0,
+        "result": None,
+        "file_name": file_name,
+        "file_size": file_size,
+        "priority": priority,
+        "queued_at": time.time()
+    }
+
+    # Agregar a cola con prioridad
+    processing_queue.put((priority, time.time(), file_id, uploaded_file, file_name))
+
+    # Iniciar procesamiento si no está corriendo
+    _start_processing_worker()
+
+    logger.info(f"📋 Archivo {file_name} ({file_size/1024/1024:.1f}MB) agregado a cola con prioridad {priority}")
+
+    return file_id
+
 def ingest_file(uploaded_file, file_name):
-    """Process and ingest a file into the vector database."""
+    """Process and ingest a file into the vector database (método original)."""
+
+    try:
+        logger.info("Iniciando ingesta del archivo: %s", file_name)
+        result = process_file(uploaded_file, file_name)
+
+        if result.get("success"):
+            logger.info("Archivo ingerido exitosamente: %s", file_name)
+        else:
+            logger.error("Error al ingerir archivo: %s", file_name)
+
+        return result
+    except Exception as e:
+        logger.error("Error durante la ingesta del archivo %s: %s", file_name, str(e))
+        return {"success": False, "error": str(e)}
+
+def _start_processing_worker():
+    """Inicia el worker de procesamiento si no está corriendo."""
+
+    # Verificar si ya hay un worker corriendo
+    for thread in threading.enumerate():
+        if thread.name.startswith("ingest-worker"):
+            return  # Ya hay un worker corriendo
+
+    # Iniciar nuevo worker
+    worker_thread = threading.Thread(target=_processing_worker, name="ingest-worker", daemon=True)
+    worker_thread.start()
+
+def _processing_worker():
+    """Worker que procesa archivos de la cola por prioridad."""
+
+    logger.info("🔄 Worker de procesamiento iniciado")
+
+    while True:
+        try:
+            # Obtener siguiente archivo de la cola (bloquea hasta que haya uno)
+            priority, queued_time, file_id, uploaded_file, file_name = processing_queue.get(timeout=30)
+
+            # Actualizar status
+            processing_status[file_id]["status"] = "processing"
+            processing_status[file_id]["progress"] = 0.1
+
+            logger.info(f"⚡ Procesando {file_name} (prioridad {priority})")
+
+            try:
+                # Procesar archivo
+                result = process_file(uploaded_file, file_name)
+
+                # Actualizar status exitoso
+                processing_status[file_id]["status"] = "completed"
+                processing_status[file_id]["progress"] = 1.0
+                processing_status[file_id]["result"] = result
+
+                logger.info(f"✅ Completado: {file_name}")
+
+            except Exception as e:
+                # Actualizar status fallido
+                processing_status[file_id]["status"] = "failed"
+                processing_status[file_id]["progress"] = 0.0
+                processing_status[file_id]["result"] = {"success": False, "error": str(e)}
+
+                logger.error(f"❌ Error procesando {file_name}: {str(e)}")
+
+            # Marcar tarea como completada
+            processing_queue.task_done()
+
+        except queue.Empty:
+            # No hay más archivos en cola, terminar worker
+            logger.info("🔄 Worker terminado - no hay más archivos en cola")
+            break
+        except Exception as e:
+            logger.error(f"❌ Error en worker: {str(e)}")
+
+def get_processing_status(file_id):
+    """Obtiene el status de procesamiento de un archivo."""
+    return processing_status.get(file_id, {"status": "not_found", "progress": 0.0})
+
+def get_queue_status():
+    """Obtiene status general de la cola de procesamiento."""
+
+    queued = sum(1 for status in processing_status.values() if status["status"] == "queued")
+    processing = sum(1 for status in processing_status.values() if status["status"] == "processing")
+    completed = sum(1 for status in processing_status.values() if status["status"] == "completed")
+    failed = sum(1 for status in processing_status.values() if status["status"] == "failed")
+
+    return {
+        "queue_size": processing_queue.qsize(),
+        "queued": queued,
+        "processing": processing,
+        "completed": completed,
+        "failed": failed,
+        "total": len(processing_status)
+    }
+
+def _original_ingest_file(uploaded_file, file_name):
+    """Función original de ingesta (renombrada)."""
 
     try:
         logger.info("Iniciando ingesta del archivo: %s", file_name)

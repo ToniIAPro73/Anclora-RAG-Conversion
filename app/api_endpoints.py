@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from common.langchain_module import LegalComplianceGuardError, response
 from common.privacy import PrivacyManager
 from common.translations import get_text
-from app.security import AdvancedSecurityManager, SecurityPolicy
+from security import AdvancedSecurityManager, SecurityPolicy
 
 try:  # pragma: no cover - compatibilidad con httpx 0.28+
     import httpx
