@@ -32,18 +32,19 @@ Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) qu
 
 ### Dependencias
 
-**Dependencias Principales**:
+**Dependencias Principales** (Actualizadas a Pydantic v2):
 
-- langchain==0.1.16
-- langchain-community==0.0.34
-- chromadb==0.4.7
-- streamlit
+- langchain>=0.2.0
+- langchain-community>=0.2.0
+- chromadb==0.5.15
+- streamlit>=1.28.0
 - sentence_transformers
 - PyMuPDF==1.23.5
-- fastapi
+- fastapi>=0.111.0
 - uvicorn[standard]
 - python-multipart
-- pydantic==1.10.13
+- pydantic>=2.8.0
+- llama-parse>=0.4.0
 - ollama (vía Docker)
 
 **Servicios Externos**:
@@ -123,6 +124,62 @@ uvicorn app.api_endpoints:app --reload --port 8081
 ```
 
 También puedes ajustar `CHROMA_HOST` y `CHROMA_PORT` a los valores de cualquier instancia remota de ChromaDB que quieras reutilizar.
+
+## 🚀 Instalación y Configuración
+
+### Prerrequisitos
+- Python 3.11.8 (recomendado)
+- Docker y Docker Compose
+- Git
+
+### Configuración del Entorno
+
+1. **Clonar el repositorio:**
+   ```bash
+   git clone https://github.com/ToniIAPro73/basdonax-ai-rag.git
+   cd basdonax-ai-rag
+   ```
+
+2. **Configurar variables de entorno:**
+   ```bash
+   cp .env.example .env
+   # Editar .env con tus claves API
+   ```
+
+3. **Opción A: Usar entorno virtual (Recomendado para desarrollo):**
+   ```bash
+   # Crear entorno virtual con Python 3.11
+   python -m venv venv_rag --python=python3.11
+
+   # Activar entorno virtual (Windows)
+   activate_venv.bat
+
+   # Activar entorno virtual (Linux/Mac)
+   source venv_rag/bin/activate
+
+   # Instalar dependencias
+   pip install -r app/requirements.txt
+
+   # Verificar instalación
+   python test_environment.py
+   ```
+
+4. **Opción B: Ejecutar con Docker:**
+   ```bash
+   docker-compose up -d
+   ```
+
+### Dependencias Actualizadas
+
+El proyecto ahora utiliza **Pydantic v2** y versiones actualizadas de las dependencias principales:
+
+- **langchain>=0.2.0** (Framework LLM)
+- **langchain-community>=0.2.0** (Extensiones de LangChain)
+- **pydantic>=2.8.0** (Validación de datos)
+- **chromadb==0.5.15** (Base de datos vectorial)
+- **llama-parse>=0.4.0** (Procesamiento de documentos complejos en ZIP)
+- **fastapi>=0.111.0** (API REST)
+- **streamlit>=1.28.0** (Interfaz web)
 
 ### Archivos Principales
 

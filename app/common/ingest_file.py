@@ -88,6 +88,61 @@ processing_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="inge
 processing_status = {}  # {file_id: {"status": "processing", "progress": 0.5, "result": None}}
 
 
+# Configuración de chunking por dominio
+CHUNKING_CONFIG = {
+    "code": {
+        "chunk_size": 1200,
+        "chunk_overlap": 100,
+        "separators": [
+            "\n\nclass ",
+            "\n\ndef ",
+            "\n\nfunction ",
+            "\n\nasync def ",
+            "\n\n@",  # decoradores
+            "\n\n# ",  # comentarios principales
+            "\n\n// ",  # comentarios JS
+            "\n\n/*",  # comentarios bloque
+            "\n\nSELECT ",  # SQL
+            "\n\nCREATE ",
+            "\n\nALTER ",
+            "\n\n",
+            "\n",
+            " "
+        ]
+    },
+    "documents": {
+        "chunk_size": 800,
+        "chunk_overlap": 80,
+        "separators": [
+            "\n\n## ",
+            "\n\n### ",
+            "\n\n#### ",
+            "\n\n**",  # texto en negrita
+            "\n\n- ",  # listas
+            "\n\n1. ",  # listas numeradas
+            "\n\n",
+            "\n",
+            ". ",
+            " "
+        ]
+    },
+    "multimedia": {
+        "chunk_size": 600,
+        "chunk_overlap": 60,
+        "separators": [
+            "\n\n",
+            "\n",
+            " "
+        ]
+    },
+    "default": {
+        "chunk_size": 500,
+        "chunk_overlap": 50,
+        "separators": ["\n\n", "\n", " "]
+    }
+}
+
+# Configuración legacy para compatibilidad
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -132,6 +187,18 @@ def _get_ingestor_for_extension(extension: str) -> BaseFileIngestor:
         if ingestor.supports_extension(extension):
             return ingestor
     raise ValueError(f"Tipo de archivo no soportado: {extension}")
+
+
+def _get_text_splitter_for_domain(domain: str) -> RecursiveCharacterTextSplitter:
+    """Obtiene un text splitter configurado específicamente para el dominio dado."""
+
+    config = CHUNKING_CONFIG.get(domain, CHUNKING_CONFIG["default"])
+
+    return RecursiveCharacterTextSplitter(
+        chunk_size=config["chunk_size"],
+        chunk_overlap=config["chunk_overlap"],
+        separators=config["separators"]
+    )
 
 
 @contextmanager
@@ -291,10 +358,21 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
     if _collection_contains_file(collection, file_name):
         return ProcessResult([], ingestor, duplicate=True)
 
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
-    )
+    # Usar chunking específico por dominio
+    text_splitter = _get_text_splitter_for_domain(ingestor.domain)
     texts = text_splitter.split_documents(documents)
+
+    # Agregar metadatos de chunking para análisis
+    for i, text in enumerate(texts):
+        if hasattr(text, 'metadata') and text.metadata:
+            text.metadata.update({
+                "chunk_index": i,
+                "total_chunks": len(texts),
+                "chunking_domain": ingestor.domain,
+                "chunk_size_config": CHUNKING_CONFIG.get(ingestor.domain, CHUNKING_CONFIG["default"])["chunk_size"],
+                "chunk_overlap_config": CHUNKING_CONFIG.get(ingestor.domain, CHUNKING_CONFIG["default"])["chunk_overlap"]
+            })
+
     normalized = normalize_documents_nfc(texts)
     return ProcessResult(normalized, ingestor)
 

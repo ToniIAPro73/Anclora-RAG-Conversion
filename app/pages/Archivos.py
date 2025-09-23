@@ -6,28 +6,61 @@ from pathlib import Path
 # Set page config
 st.set_page_config(layout='wide', page_title='Archivos - Anclora AI RAG', page_icon='📁')
 
-# Simple CSS to hide Streamlit elements and suppress 404 errors
-hide_st_style = """
+# Add the parent directory to Python path for imports
+import sys
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# Importar colores de Anclora RAG
+from common.anclora_colors import apply_anclora_theme, ANCLORA_RAG_COLORS, create_colored_alert
+
+# Aplicar tema de colores Anclora RAG
+apply_anclora_theme()
+
+# CSS personalizado con colores Anclora RAG
+custom_style = f"""
     <style>
-        #MainMenu {visibility: hidden;}
-        .stDeployButton {display:none;}
-        footer {visibility: hidden;}
-        #stDecoration {display:none;}
-        /* Suppress console errors */
-        .stApp > div[data-testid="stToolbar"] {display: none;}
+        /* Ocultar elementos de Streamlit */
+        #MainMenu {{visibility: hidden;}}
+        .stDeployButton {{display:none;}}
+        footer {{visibility: hidden;}}
+        #stDecoration {{display:none;}}
+        .stApp > div[data-testid="stToolbar"] {{display: none;}}
+
+        /* 📁 Estilo para file uploader con colores Anclora RAG */
+        .stFileUploader > div {{
+            border: 2px dashed {ANCLORA_RAG_COLORS['primary_medium']} !important;
+            border-radius: 12px !important;
+            background-color: {ANCLORA_RAG_COLORS['primary_ultra_light']} !important;
+            color: {ANCLORA_RAG_COLORS['text_primary']} !important;
+            transition: all 0.3s ease !important;
+        }}
+
+        .stFileUploader > div:hover {{
+            border-color: {ANCLORA_RAG_COLORS['ai_accent']} !important;
+            background-color: {ANCLORA_RAG_COLORS['primary_light']} !important;
+        }}
+
+        /* 📊 Estilo para dataframes */
+        .stDataFrame {{
+            border: 2px solid {ANCLORA_RAG_COLORS['primary_light']} !important;
+            border-radius: 12px !important;
+        }}
     </style>
     <script>
         // Suppress 404 console errors
         const originalFetch = window.fetch;
-        window.fetch = function(...args) {
-            return originalFetch.apply(this, args).catch(err => {
+        window.fetch = function(...args) {{
+            return originalFetch.apply(this, args).catch(err => {{
                 if (!err.message.includes('404')) console.error(err);
                 return Promise.reject(err);
-            });
-        };
+            }});
+        }};
     </script>
 """
-st.markdown(hide_st_style, unsafe_allow_html=True)
+st.markdown(custom_style, unsafe_allow_html=True)
 
 # Initialize language in session state
 if 'language' not in st.session_state:
@@ -59,9 +92,37 @@ except ImportError as e:
     st.error(f"❌ Error al importar módulos de ingesta: {e}")
     st.info("🔧 Verificando configuración del sistema...")
 
+# CSS GLOBAL para sidebar antes de crear elementos
+st.markdown("""
+<style>
+/* FORZAR TODO en blanco en el sidebar */
+div[data-testid="stSidebar"] h3,
+div[data-testid="stSidebar"] .stMarkdown h3,
+section[data-testid="stSidebar"] h3,
+.sidebar h3 {
+    color: white !important;
+}
+
+div[data-testid="stSidebar"] .stSelectbox label,
+div[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] label {
+    color: white !important;
+    font-weight: 600 !important;
+}
+
+.sidebar .stSelectbox > div > div {
+    background-color: rgba(255,255,255,0.1) !important;
+    border: 2px solid #2EAFC4 !important;
+    border-radius: 8px !important;
+    color: white !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Sidebar for language selection
 with st.sidebar:
-    st.header("Idioma")
+    st.markdown("<h3>🌐 Idioma</h3>", unsafe_allow_html=True)
+
     language_options = {
         'es': 'Español',
         'en': 'English'
@@ -122,6 +183,41 @@ if INGEST_AVAILABLE:
     else:
         st.info(f"📋 **Supported file types:** {', '.join(supported_types)}")
 
+# CSS para el file uploader con estilo mejorado
+st.markdown(f"""
+<style>
+/* 📁 Label del file uploader - mismo color que label de arriba */
+.stFileUploader label {{
+    color: white !important;
+    font-weight: 600 !important;
+    font-size: 1.1rem !important;
+}}
+
+/* 📦 Recuadro del file uploader - mismo color que recuadro de arriba */
+.stFileUploader > div > div {{
+    background-color: {ANCLORA_RAG_COLORS['neutral_medium']} !important;
+    border: 2px solid white !important;
+    border-radius: 12px !important;
+    padding: 1.5rem !important;
+}}
+
+/* 🟢 Botón Browse files - estilo verde como selector de idiomas */
+.stFileUploader button {{
+    background-color: {ANCLORA_RAG_COLORS['primary_medium']} !important;
+    border: 2px solid {ANCLORA_RAG_COLORS['primary_medium']} !important;
+    border-radius: 8px !important;
+    color: white !important;
+    font-weight: 600 !important;
+    padding: 0.5rem 1rem !important;
+}}
+
+.stFileUploader button:hover {{
+    background-color: {ANCLORA_RAG_COLORS['primary_deep']} !important;
+    border-color: {ANCLORA_RAG_COLORS['primary_deep']} !important;
+}}
+</style>
+""", unsafe_allow_html=True)
+
 # File uploader
 uploaded_file = st.file_uploader(
     upload_label,
@@ -130,8 +226,29 @@ uploaded_file = st.file_uploader(
     help=f"Límite: 10MB. Tipos soportados: {', '.join(supported_types) if INGEST_AVAILABLE else 'PDF, TXT, DOCX, MD'}"
 )
 
-# Process file button
-if st.button(add_button_text, type="primary"):
+# Process file button con colores Anclora RAG
+st.markdown(f"""
+<style>
+.stButton > button {{
+    background: linear-gradient(135deg, {ANCLORA_RAG_COLORS['success_deep']} 0%, {ANCLORA_RAG_COLORS['success_medium']} 100%) !important;
+    border: 2px solid {ANCLORA_RAG_COLORS['success_deep']} !important;
+    border-radius: 12px !important;
+    color: #1a4d47 !important;  /* Verde oscuro para mejor legibilidad */
+    font-weight: 700 !important;
+    padding: 0.6rem 1.5rem !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+}}
+.stButton > button:hover {{
+    background: {ANCLORA_RAG_COLORS['success_deep']} !important;
+    color: #0f3027 !important;  /* Aún más oscuro en hover */
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15) !important;
+}}
+</style>
+""", unsafe_allow_html=True)
+
+if st.button(add_button_text):
     if uploaded_file:
         if INGEST_AVAILABLE:
             # Validate file first
@@ -164,8 +281,18 @@ if st.button(add_button_text, type="primary"):
     else:
         st.warning(f"⚠️ {upload_first_message}")
 
-# Display current files in database
-st.subheader(files_table_title)
+# Display current files in database - FORZAR color claro
+st.markdown(f"""
+<style>
+.files-title {{
+    color: {ANCLORA_RAG_COLORS['primary_medium']} !important;
+    font-size: 1.5rem !important;
+    font-weight: 600 !important;
+    margin-bottom: 1rem !important;
+}}
+</style>
+<h3 class="files-title">{files_table_title}</h3>
+""", unsafe_allow_html=True)
 
 if INGEST_AVAILABLE:
     try:

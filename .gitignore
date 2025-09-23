@@ -5,6 +5,7 @@ documents
 .mypy_cache
 logs
 .venv
+venv_rag/
 tests.ipynb
 
 # ChromaDB files

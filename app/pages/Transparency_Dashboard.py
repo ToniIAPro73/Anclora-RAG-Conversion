@@ -11,6 +11,17 @@ from plotly.subplots import make_subplots
 import numpy as np
 from datetime import datetime, timedelta
 import time
+import sys
+import os
+
+# Add the parent directory to Python path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# Importar colores de Anclora RAG
+from common.anclora_colors import apply_anclora_theme, ANCLORA_RAG_COLORS, CHART_COLORS
 
 # Configuración de la página
 st.set_page_config(
@@ -19,6 +30,44 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Aplicar tema de colores Anclora RAG
+apply_anclora_theme()
+
+# CSS adicional para elementos específicos del Dashboard
+st.markdown(f"""
+<style>
+/* 🏷️ Arreglar los tipos de archivos rojos en multiselect */
+.stMultiSelect > div > div > div > div {{
+    background-color: {ANCLORA_RAG_COLORS['success_light']} !important;
+    color: {ANCLORA_RAG_COLORS['text_primary']} !important;
+    border: 1px solid {ANCLORA_RAG_COLORS['success_medium']} !important;
+}}
+
+/* Tags seleccionados en multiselect */
+.stMultiSelect span[data-baseweb="tag"] {{
+    background-color: {ANCLORA_RAG_COLORS['primary_medium']} !important;
+    color: {ANCLORA_RAG_COLORS['text_inverse']} !important;
+}}
+
+/* Botón X de los tags */
+.stMultiSelect span[data-baseweb="tag"] button {{
+    color: {ANCLORA_RAG_COLORS['text_inverse']} !important;
+}}
+
+/* 📊 Mejorar labels del sidebar */
+.sidebar label, .sidebar .stMarkdown p {{
+    color: {ANCLORA_RAG_COLORS['primary_light']} !important;
+}}
+
+/* Selectbox del sidebar */
+.sidebar .stSelectbox > div > div {{
+    background-color: {ANCLORA_RAG_COLORS['neutral_medium']} !important;
+    border: 2px solid {ANCLORA_RAG_COLORS['primary_medium']} !important;
+    color: {ANCLORA_RAG_COLORS['text_primary']} !important;
+}}
+</style>
+""", unsafe_allow_html=True)
 
 # Título principal
 st.title("📊 Dashboard de Transparencia")
@@ -30,53 +79,216 @@ st.info("""
 Actualizamos esta información cada 5 minutos para mantener la máxima transparencia con nuestros usuarios.
 """)
 
-# Sidebar con filtros
-st.sidebar.header("🔍 Filtros")
+# Sidebar con filtros avanzados
+st.sidebar.header("🔍 Filtros y Configuración")
+
+# Selector de período
 time_range = st.sidebar.selectbox(
     "Período de análisis",
     ["Últimas 24 horas", "Últimos 7 días", "Últimos 30 días"]
 )
 
-document_type_filter = st.sidebar.multiselect(
-    "Tipos de documento",
-    ["PDF", "DOCX", "TXT", "PPTX", "XLSX"],
-    default=["PDF", "DOCX", "TXT"]
+# Agrupación inteligente de tipos de archivo (máximo 10 por grupo)
+@st.cache_data
+def get_file_type_groups():
+    """Agrupa tipos de archivo en categorías lógicas, máximo 10 por grupo"""
+    return {
+        "📄 Documentos de Texto": ["PDF", "DOCX", "DOC", "TXT", "RTF", "ODT", "PAGES", "TEX", "MD", "HTML"],
+        "📊 Hojas de Cálculo": ["XLSX", "XLS", "CSV", "ODS", "NUMBERS", "TSV", "XLSM", "XLSB", "XML", "JSON"],
+        "📈 Presentaciones": ["PPTX", "PPT", "ODP", "KEY", "PPS", "PPSX", "POTX", "PPTM", "PPSM", "POTM"],
+        "🖼️ Imágenes y Gráficos": ["PNG", "JPG", "JPEG", "GIF", "BMP", "TIFF", "SVG", "WEBP", "ICO", "PSD"],
+        "🎵 Audio y Video": ["MP3", "MP4", "WAV", "AVI", "MOV", "WMV", "FLV", "MKV", "OGG", "M4A"],
+        "💻 Código y Desarrollo": ["PY", "JS", "HTML", "CSS", "SQL", "JSON", "XML", "YAML", "PHP", "JAVA"],
+        "📦 Archivos Comprimidos": ["ZIP", "RAR", "7Z", "TAR", "GZ", "BZ2", "XZ", "CAB", "ISO", "DMG"],
+        "📧 Comunicaciones": ["EML", "MSG", "PST", "MBOX", "VCF", "ICS", "EMLX", "OFT", "OST", "NSF"]
+    }
+
+file_groups = get_file_type_groups()
+
+# Selector de grupo de documentos
+selected_group = st.sidebar.selectbox(
+    "🗂️ Grupo de documentos",
+    list(file_groups.keys()),
+    help="Cada grupo contiene máximo 10 tipos de archivo relacionados"
 )
 
-# Generar datos realistas (en producción vendrían de la base de datos)
+# Selector específico de tipos dentro del grupo
+available_types = file_groups[selected_group]
+document_type_filter = st.sidebar.multiselect(
+    f"Tipos específicos en {selected_group}",
+    available_types,
+    default=available_types[:3],  # Seleccionar los primeros 3 por defecto
+    help=f"Selecciona hasta 10 tipos de archivo de este grupo"
+)
+
+# Mostrar información del grupo seleccionado
+with st.sidebar.expander(f"ℹ️ Información de {selected_group}"):
+    st.write(f"**Tipos disponibles:** {len(available_types)}")
+    st.write(f"**Seleccionados:** {len(document_type_filter)}")
+    if document_type_filter:
+        st.write("**Tipos activos:**")
+        for doc_type in document_type_filter:
+            st.write(f"• {doc_type}")
+
+# Configuración avanzada
+st.sidebar.subheader("⚙️ Configuración Avanzada")
+
+show_detailed_metrics = st.sidebar.checkbox(
+    "📊 Métricas detalladas",
+    value=True,
+    help="Mostrar métricas adicionales por tipo de archivo"
+)
+
+show_chunking_info = st.sidebar.checkbox(
+    "🧩 Información de chunking",
+    value=False,
+    help="Mostrar métricas del nuevo sistema de chunking por dominio"
+)
+
+auto_refresh = st.sidebar.checkbox(
+    "🔄 Auto-actualización",
+    value=True,
+    help="Actualizar datos automáticamente cada 30 segundos"
+)
+
+# Generar datos realistas basados en tipos seleccionados
 @st.cache_data(ttl=300)  # Cache por 5 minutos
-def generate_realistic_data():
-    """Genera datos realistas basados en benchmarks reales"""
-    
+def generate_realistic_data(selected_types, selected_group):
+    """Genera datos realistas basados en benchmarks reales para tipos específicos"""
+
     # Simular datos de las últimas 24 horas
     hours = list(range(24))
-    
-    # Tiempos de procesamiento realistas por tipo
-    processing_times = {
-        'simple_docs': np.random.normal(8, 3, 24),  # 8±3 segundos
-        'medium_docs': np.random.normal(20, 8, 24), # 20±8 segundos  
-        'complex_docs': np.random.normal(45, 15, 24) # 45±15 segundos
+
+    # Configuración de tiempos por grupo de documentos
+    group_configs = {
+        "📄 Documentos de Texto": {
+            'base_time': 12, 'variance': 5, 'complexity_factor': 1.2
+        },
+        "📊 Hojas de Cálculo": {
+            'base_time': 18, 'variance': 8, 'complexity_factor': 1.5
+        },
+        "📈 Presentaciones": {
+            'base_time': 25, 'variance': 12, 'complexity_factor': 1.8
+        },
+        "🖼️ Imágenes y Gráficos": {
+            'base_time': 8, 'variance': 4, 'complexity_factor': 1.1
+        },
+        "🎵 Audio y Video": {
+            'base_time': 45, 'variance': 20, 'complexity_factor': 2.5
+        },
+        "💻 Código y Desarrollo": {
+            'base_time': 6, 'variance': 3, 'complexity_factor': 1.0
+        },
+        "📦 Archivos Comprimidos": {
+            'base_time': 35, 'variance': 15, 'complexity_factor': 2.0
+        },
+        "📧 Comunicaciones": {
+            'base_time': 10, 'variance': 4, 'complexity_factor': 1.3
+        }
     }
-    
+
+    config = group_configs.get(selected_group, group_configs["📄 Documentos de Texto"])
+
+    # Tiempos de procesamiento realistas por complejidad
+    processing_times = {
+        'simple_docs': np.random.normal(config['base_time'], config['variance'], 24),
+        'medium_docs': np.random.normal(config['base_time'] * config['complexity_factor'],
+                                       config['variance'] * 1.5, 24),
+        'complex_docs': np.random.normal(config['base_time'] * config['complexity_factor'] * 2,
+                                        config['variance'] * 2, 24)
+    }
+
     # Asegurar que no hay tiempos negativos
     for key in processing_times:
         processing_times[key] = np.maximum(processing_times[key], 1)
-    
-    # Tasas de éxito realistas
-    success_rates = np.random.normal(92, 3, 24)  # 92±3%
-    success_rates = np.clip(success_rates, 85, 98)
-    
-    # Volumen de documentos procesados
-    doc_volumes = np.random.poisson(15, 24)  # Promedio 15 docs/hora
-    
+
+    # Tasas de éxito por tipo de grupo
+    base_success_rate = {
+        "📄 Documentos de Texto": 94,
+        "📊 Hojas de Cálculo": 91,
+        "📈 Presentaciones": 89,
+        "🖼️ Imágenes y Gráficos": 96,
+        "🎵 Audio y Video": 87,
+        "💻 Código y Desarrollo": 98,
+        "📦 Archivos Comprimidos": 85,
+        "📧 Comunicaciones": 92
+    }.get(selected_group, 92)
+
+    success_rates = np.random.normal(base_success_rate, 3, 24)
+    success_rates = np.clip(success_rates, 80, 99)
+
+    # Volumen de documentos procesados (varía por popularidad del tipo)
+    volume_multiplier = {
+        "📄 Documentos de Texto": 1.5,
+        "📊 Hojas de Cálculo": 1.2,
+        "📈 Presentaciones": 0.8,
+        "🖼️ Imágenes y Gráficos": 1.0,
+        "🎵 Audio y Video": 0.6,
+        "💻 Código y Desarrollo": 0.9,
+        "📦 Archivos Comprimidos": 0.7,
+        "📧 Comunicaciones": 0.5
+    }.get(selected_group, 1.0)
+
+    doc_volumes = np.random.poisson(15 * volume_multiplier, 24)
+
+    # Datos específicos por tipo de archivo seleccionado
+    type_specific_data = {}
+    for doc_type in selected_types:
+        type_specific_data[doc_type] = {
+            'processing_time': np.random.normal(config['base_time'], config['variance'], 24),
+            'success_rate': np.random.normal(base_success_rate, 2, 24),
+            'volume': np.random.poisson(max(1, int(15 * volume_multiplier / len(selected_types))), 24)
+        }
+        # Asegurar valores válidos
+        type_specific_data[doc_type]['processing_time'] = np.maximum(
+            type_specific_data[doc_type]['processing_time'], 1
+        )
+        type_specific_data[doc_type]['success_rate'] = np.clip(
+            type_specific_data[doc_type]['success_rate'], 80, 99
+        )
+
     return {
         'hours': hours,
         'processing_times': processing_times,
         'success_rates': success_rates,
-        'doc_volumes': doc_volumes
+        'doc_volumes': doc_volumes,
+        'type_specific_data': type_specific_data,
+        'group_config': config
     }
 
-data = generate_realistic_data()
+data = generate_realistic_data(document_type_filter, selected_group)
+
+# Mostrar información del chunking si está habilitado
+if show_chunking_info:
+    st.subheader("🧩 Información del Sistema de Chunking por Dominio")
+
+    chunking_col1, chunking_col2, chunking_col3 = st.columns(3)
+
+    with chunking_col1:
+        st.info("""
+        **📄 Documentos de Texto**
+        - Tamaño: 800 caracteres
+        - Overlap: 80 caracteres
+        - Separadores: Headers, listas, párrafos
+        """)
+
+    with chunking_col2:
+        st.info("""
+        **💻 Código y Desarrollo**
+        - Tamaño: 1200 caracteres
+        - Overlap: 100 caracteres
+        - Separadores: Funciones, clases, comentarios
+        """)
+
+    with chunking_col3:
+        st.info("""
+        **🎵 Multimedia**
+        - Tamaño: 600 caracteres
+        - Overlap: 60 caracteres
+        - Separadores: Párrafos, líneas
+        """)
+
+    st.divider()
 
 # Métricas principales en tiempo real
 col1, col2, col3, col4 = st.columns(4)
@@ -132,7 +344,7 @@ with col1:
         y=data['processing_times']['simple_docs'],
         mode='lines+markers',
         name='Documentos Simples',
-        line=dict(color='#10b981', width=3),
+        line=dict(color=ANCLORA_RAG_COLORS['success_deep'], width=3),
         marker=dict(size=6)
     ))
     
@@ -141,7 +353,7 @@ with col1:
         y=data['processing_times']['medium_docs'],
         mode='lines+markers',
         name='Documentos Medianos',
-        line=dict(color='#f59e0b', width=3),
+        line=dict(color=ANCLORA_RAG_COLORS['warning_deep'], width=3),
         marker=dict(size=6)
     ))
     
@@ -150,7 +362,7 @@ with col1:
         y=data['processing_times']['complex_docs'],
         mode='lines+markers',
         name='Documentos Complejos',
-        line=dict(color='#ef4444', width=3),
+        line=dict(color=ANCLORA_RAG_COLORS['error_deep'], width=3),  # Rosa coral suave
         marker=dict(size=6)
     ))
     
@@ -179,7 +391,7 @@ with col2:
             y=data['success_rates'],
             mode='lines+markers',
             name='Tasa de Éxito',
-            line=dict(color='#10b981', width=3),
+            line=dict(color=ANCLORA_RAG_COLORS['success_deep'], width=3),
             marker=dict(size=6)
         ),
         row=1, col=1
@@ -191,7 +403,7 @@ with col2:
             x=data['hours'],
             y=data['doc_volumes'],
             name='Docs Procesados',
-            marker_color='#3b82f6'
+            marker_color=ANCLORA_RAG_COLORS['primary_medium']
         ),
         row=2, col=1
     )
@@ -220,7 +432,7 @@ benchmark_df = pd.DataFrame(benchmark_data)
 # Aplicar estilos
 def highlight_anclora(row):
     if row['Servicio'] == 'Anclora RAG':
-        return ['background-color: #dcfce7; font-weight: bold'] * len(row)
+        return [f'background-color: {ANCLORA_RAG_COLORS["success_light"]}; font-weight: bold'] * len(row)
     return [''] * len(row)
 
 styled_benchmark = benchmark_df.style.apply(highlight_anclora, axis=1)
@@ -314,7 +526,7 @@ por favor contáctanos inmediatamente. Nuestro objetivo es la máxima transparen
 
 st.markdown(
     """
-    <div style='text-align: center; color: #6b7280; font-size: 0.9em; margin-top: 2rem;'>
+    <div style='text-align: center; color: {ANCLORA_RAG_COLORS["text_secondary"]}; font-size: 0.9em; margin-top: 2rem;'>
         📊 Dashboard de Transparencia Anclora RAG v1.0<br>
         Datos verificables • Actualizaciones en tiempo real • Compromiso con la honestidad<br>
         Última verificación: {}<br>
