@@ -23,7 +23,16 @@ except Exception:  # pragma: no cover - fallback path used in constrained enviro
 
         def split_documents(self, documents):
             return list(documents)
-from ..agents import (
+import sys
+import os
+
+# Add the app directory to the path if not already there
+current_dir = os.path.dirname(os.path.abspath(__file__))
+app_dir = os.path.dirname(current_dir)
+if app_dir not in sys.path:
+    sys.path.insert(0, app_dir)
+
+from agents import (
     BaseFileIngestor,
     CodeIngestor,
     DocumentIngestor,

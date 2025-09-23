@@ -14,7 +14,7 @@ python-docx
 langchain==0.1.16
 langchain-community==0.0.34
 gpt4all==1.0.8
-chromadb==1.1.0
+chromadb==0.5.15
 llama-cpp-python==0.1.81
 urllib3==2.0.4
 PyMuPDF==1.23.5

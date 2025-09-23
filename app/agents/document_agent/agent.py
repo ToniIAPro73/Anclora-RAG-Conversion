@@ -5,9 +5,18 @@ from __future__ import annotations
 import time
 from typing import Any, Callable, Mapping, Optional
 
-from app.agents.base import AgentResponse, AgentTask, BaseAgent
-from app.common import langchain_module
-from app.common.langchain_module import LegalComplianceGuardError
+import sys
+import os
+
+# Add the app directory to the path if not already there
+current_dir = os.path.dirname(os.path.abspath(__file__))
+app_dir = os.path.dirname(os.path.dirname(current_dir))
+if app_dir not in sys.path:
+    sys.path.insert(0, app_dir)
+
+from agents.base import AgentResponse, AgentTask, BaseAgent
+from common import langchain_module
+from common.langchain_module import LegalComplianceGuardError
 from common.observability import record_agent_invocation
 
 QueryFunction = Callable[[str, Optional[str], Optional[str], Optional[Mapping[str, Any]]], str]

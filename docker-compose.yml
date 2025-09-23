@@ -89,7 +89,7 @@ services:
   # =============================================================================
   chroma:
     <<: *restart-policy
-    image: chromadb/chroma:0.5.1.dev111
+    image: chromadb/chroma:0.5.15
     volumes:
       - chroma_data:/chroma/.chroma/index
     ports:

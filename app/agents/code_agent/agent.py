@@ -6,9 +6,18 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, List, Mapping, MutableMapping, Sequence
 
-from app.agents.base import AgentResponse, AgentTask, BaseAgent
-from app.agents.code import CODE_COLLECTION
-from app.common.observability import record_agent_invocation
+import sys
+import os
+
+# Add the app directory to the path if not already there
+current_dir = os.path.dirname(os.path.abspath(__file__))
+app_dir = os.path.dirname(os.path.dirname(current_dir))
+if app_dir not in sys.path:
+    sys.path.insert(0, app_dir)
+
+from agents.base import AgentResponse, AgentTask, BaseAgent
+from agents.code_agent.ingestor import CODE_COLLECTION
+from common.observability import record_agent_invocation
 
 
 _ContextItem = Mapping[str, Any]
@@ -165,7 +174,7 @@ class CodeAgent(BaseAgent):
 
     @staticmethod
     def _default_collection_resolver(collection_name: str) -> Any:
-        from app.common.constants import CHROMA_SETTINGS
+        from common.constants import CHROMA_SETTINGS
 
         return CHROMA_SETTINGS.get_or_create_collection(collection_name)
 

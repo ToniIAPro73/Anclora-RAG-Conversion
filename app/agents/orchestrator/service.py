@@ -7,12 +7,21 @@ from importlib import import_module
 import inspect
 from typing import Callable, Iterable, List, Sequence, Type, Union
 
-from app.agents.base import AgentResponse, AgentTask, BaseAgent
-from app.agents.code_agent import CodeAgent
-from app.agents.document_agent import DocumentAgent
-from app.agents.media_agent import MediaAgent
-from app.agents.content_analyzer_agent import ContentAnalyzerAgent
-from app.agents.smart_converter_agent import SmartConverterAgent
+import sys
+import os
+
+# Add the app directory to the path if not already there
+current_dir = os.path.dirname(os.path.abspath(__file__))
+app_dir = os.path.dirname(os.path.dirname(current_dir))
+if app_dir not in sys.path:
+    sys.path.insert(0, app_dir)
+
+from agents.base import AgentResponse, AgentTask, BaseAgent
+from agents.code_agent import CodeAgent
+from agents.document_agent import DocumentAgent
+from agents.media_agent import MediaAgent
+from agents.content_analyzer_agent import ContentAnalyzerAgent
+from agents.smart_converter_agent import SmartConverterAgent
 from common.observability import record_orchestrator_decision
 
 
