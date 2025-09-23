@@ -1,10 +1,11 @@
-"""Dashboard de Inteligencia Empresarial para Anclora RAG."""
+"""Dashboard de Inteligencia Empresarial para Conversión Documental - Anclora RAG."""
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import json
+import time
 
 # Try to import plotly, fallback to basic charts if not available
 try:
@@ -18,13 +19,22 @@ except ImportError:
 
 # Try to import dashboard service, fallback to mock data if not available
 try:
-    from app.analytics.dashboard_data_service import DashboardDataService
-    dashboard_service = DashboardDataService()
+    import sys
+    import os
+
+    # Add the app directory to the path if not already there
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    app_dir = os.path.dirname(current_dir)
+    if app_dir not in sys.path:
+        sys.path.insert(0, app_dir)
+
+    from analytics.conversion_dashboard_service import ConversionDashboardService
+    dashboard_service = ConversionDashboardService()
     DASHBOARD_SERVICE_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     DASHBOARD_SERVICE_AVAILABLE = False
     dashboard_service = None
-    st.info("ℹ️ Servicio de dashboard no disponible. Usando datos simulados.")
+    st.info(f"ℹ️ Servicio de dashboard no disponible: {e}. Usando datos simulados de conversión.")
 
 # Set page config
 st.set_page_config(layout='wide', page_title='Intelligence Dashboard', page_icon='📈')
@@ -68,63 +78,85 @@ with st.sidebar:
 # Translations
 translations = {
     'es': {
-        'title': '📈 Dashboard de Inteligencia Empresarial',
-        'subtitle': 'Análisis avanzado del sistema RAG Anclora',
-        'performance_metrics': 'Métricas de Rendimiento',
-        'usage_analytics': 'Análisis de Uso',
-        'content_insights': 'Insights de Contenido',
-        'security_overview': 'Resumen de Seguridad',
+        'title': '📊 Dashboard de Conversión Documental',
+        'subtitle': 'Análisis avanzado del sistema de conversión orquestada por agentes',
+        'conversion_metrics': 'Métricas de Conversión',
+        'agent_performance': 'Rendimiento de Agentes',
+        'security_analysis': 'Análisis de Seguridad',
+        'quality_insights': 'Insights de Calidad',
         'predictive_analytics': 'Análisis Predictivo',
         'optimization_recommendations': 'Recomendaciones de Optimización',
-        'response_time': 'Tiempo de Respuesta',
-        'query_volume': 'Volumen de Consultas',
+        'conversion_volume': 'Volumen de Conversiones',
+        'conversion_time': 'Tiempo de Conversión',
         'success_rate': 'Tasa de Éxito',
         'user_satisfaction': 'Satisfacción del Usuario',
-        'peak_hours': 'Horas Pico',
-        'content_categories': 'Categorías de Contenido',
-        'language_distribution': 'Distribución por Idioma',
+        'complex_conversions': 'Conversiones Complejas',
+        'batch_conversions': 'Conversiones por Lotes',
+        'format_distribution': 'Distribución por Formato',
+        'agent_utilization': 'Utilización de Agentes',
         'security_events': 'Eventos de Seguridad',
+        'malware_detected': 'Malware Detectado',
+        'files_quarantined': 'Archivos en Cuarentena',
         'threat_level': 'Nivel de Amenaza',
-        'performance_trend': 'Tendencia de Rendimiento',
+        'conversion_trend': 'Tendencia de Conversiones',
+        'quality_score': 'Puntuación de Calidad',
+        'error_analysis': 'Análisis de Errores',
         'usage_forecast': 'Pronóstico de Uso',
         'optimization_impact': 'Impacto de Optimizaciones',
         'recommendations': 'Recomendaciones',
         'last_24h': 'Últimas 24 horas',
         'last_7d': 'Últimos 7 días',
         'last_30d': 'Últimos 30 días',
-        'real_time': 'Tiempo Real'
+        'real_time': 'Tiempo Real',
+        'peak_hours': 'Horas Pico',
+        'performance_trend': 'Tendencia de Rendimiento'
     },
     'en': {
-        'title': '📈 Business Intelligence Dashboard',
-        'subtitle': 'Advanced analysis of Anclora RAG system',
-        'performance_metrics': 'Performance Metrics',
-        'usage_analytics': 'Usage Analytics',
-        'content_insights': 'Content Insights',
-        'security_overview': 'Security Overview',
+        'title': '📊 Document Conversion Dashboard',
+        'subtitle': 'Advanced analysis of agent-orchestrated conversion system',
+        'conversion_metrics': 'Conversion Metrics',
+        'agent_performance': 'Agent Performance',
+        'security_analysis': 'Security Analysis',
+        'quality_insights': 'Quality Insights',
         'predictive_analytics': 'Predictive Analytics',
         'optimization_recommendations': 'Optimization Recommendations',
-        'response_time': 'Response Time',
-        'query_volume': 'Query Volume',
+        'conversion_volume': 'Conversion Volume',
+        'conversion_time': 'Conversion Time',
         'success_rate': 'Success Rate',
         'user_satisfaction': 'User Satisfaction',
-        'peak_hours': 'Peak Hours',
-        'content_categories': 'Content Categories',
-        'language_distribution': 'Language Distribution',
+        'complex_conversions': 'Complex Conversions',
+        'batch_conversions': 'Batch Conversions',
+        'format_distribution': 'Format Distribution',
+        'agent_utilization': 'Agent Utilization',
         'security_events': 'Security Events',
+        'malware_detected': 'Malware Detected',
+        'files_quarantined': 'Files Quarantined',
         'threat_level': 'Threat Level',
-        'performance_trend': 'Performance Trend',
+        'conversion_trend': 'Conversion Trend',
+        'quality_score': 'Quality Score',
+        'error_analysis': 'Error Analysis',
         'usage_forecast': 'Usage Forecast',
         'optimization_impact': 'Optimization Impact',
         'recommendations': 'Recommendations',
         'last_24h': 'Last 24 hours',
         'last_7d': 'Last 7 days',
         'last_30d': 'Last 30 days',
-        'real_time': 'Real Time'
+        'real_time': 'Real Time',
+        'peak_hours': 'Peak Hours',
+        'performance_trend': 'Performance Trend'
     }
 }
 
 def get_text(key):
-    return translations[st.session_state.language].get(key, key)
+    # Ensure language is set in session state
+    if 'language' not in st.session_state:
+        st.session_state.language = 'es'
+
+    # Get the language, fallback to 'es' if not found
+    language = st.session_state.get('language', 'es')
+
+    # Return translation or key if not found
+    return translations.get(language, translations['es']).get(key, key)
 
 # Get real data from dashboard service
 @st.cache_data(ttl=300)  # Cache for 5 minutes
@@ -136,21 +168,21 @@ def get_dashboard_data(time_range: str):
         return get_fallback_data()
 
     try:
-        # Get real metrics
-        performance_metrics = dashboard_service.get_performance_metrics(time_range)
-        usage_analytics = dashboard_service.get_usage_analytics()
-        security_overview = dashboard_service.get_security_overview()
+        # Get real metrics from conversion dashboard service
+        conversion_metrics = dashboard_service.get_conversion_metrics(time_range)
+        agent_performance = dashboard_service.get_agent_performance()
+        security_analysis = dashboard_service.get_security_analysis()
         predictive_insights = dashboard_service.get_predictive_insights()
 
-        # Get time series data
+        # Get time series data for conversion metrics
         time_series_data = {}
-        for metric in ['response_time', 'query_volume', 'success_rate', 'user_satisfaction']:
+        for metric in ['conversion_time', 'conversion_volume', 'success_rate', 'user_satisfaction', 'quality_score']:
             time_series_data[metric] = dashboard_service.get_time_series_data(metric, time_range)
 
         return {
-            'performance_metrics': performance_metrics,
-            'usage_analytics': usage_analytics,
-            'security_overview': security_overview,
+            'conversion_metrics': conversion_metrics,
+            'agent_performance': agent_performance,
+            'security_analysis': security_analysis,
             'predictive_insights': predictive_insights,
             'time_series_data': time_series_data
         }
@@ -162,64 +194,96 @@ def get_dashboard_data(time_range: str):
 
 
 def get_fallback_data():
-    """Fallback data when real data is not available."""
+    """Fallback data when real data is not available - specialized for document conversion."""
 
-    # Generate fallback time series
+    # Generate fallback time series for conversion metrics
     dates = pd.date_range(start=datetime.now() - timedelta(days=1), end=datetime.now(), freq='h')
 
     time_series_data = {
-        'response_time': [{'timestamp': d, 'value': 2.5 + np.random.normal(0, 0.3)} for d in dates],
-        'query_volume': [{'timestamp': d, 'value': 15 + np.random.poisson(5)} for d in dates],
-        'success_rate': [{'timestamp': d, 'value': 0.95 + np.random.normal(0, 0.02)} for d in dates],
-        'user_satisfaction': [{'timestamp': d, 'value': 0.85 + np.random.normal(0, 0.05)} for d in dates]
+        'conversion_time': [{'timestamp': d, 'value': 45 + np.random.normal(0, 8)} for d in dates],
+        'conversion_volume': [{'timestamp': d, 'value': 8 + np.random.poisson(3)} for d in dates],
+        'success_rate': [{'timestamp': d, 'value': 0.92 + np.random.normal(0, 0.03)} for d in dates],
+        'user_satisfaction': [{'timestamp': d, 'value': 0.88 + np.random.normal(0, 0.04)} for d in dates],
+        'quality_score': [{'timestamp': d, 'value': 0.85 + np.random.normal(0, 0.05)} for d in dates]
     }
 
     return {
-        'performance_metrics': {
-            'avg_response_time': 2.5,
-            'total_queries': 1200,
-            'success_rate': 0.95,
-            'user_satisfaction': 0.85
+        'conversion_metrics': {
+            'avg_conversion_time': 45.2,
+            'total_conversions': 847,
+            'success_rate': 0.92,
+            'user_satisfaction': 0.88,
+            'complex_conversions': 156,
+            'batch_conversions': 89,
+            'avg_quality_score': 0.85
         },
-        'usage_analytics': {
+        'agent_performance': {
             'peak_hours': [9, 10, 11, 14, 15, 16],
-            'content_categories': {
-                'Documentos Técnicos': 35,
-                'Documentos Legales': 25,
-                'Documentos Comerciales': 20,
-                'Documentos Académicos': 15,
-                'Otros': 5
+            'format_distribution': {
+                'PDF → DOCX': 28,
+                'DOCX → PDF': 22,
+                'PDF → EPUB': 18,
+                'HTML → PDF': 12,
+                'TXT → DOCX': 8,
+                'Otros': 12
             },
-            'language_distribution': {
-                'Español': 70,
-                'Inglés': 25,
-                'Otros': 5
+            'agent_utilization': {
+                'DocumentAgent': 85,
+                'CodeAgent': 67,
+                'MediaAgent': 43,
+                'ArchiveAgent': 29,
+                'OrchestratorAgent': 92
+            },
+            'complex_conversion_types': {
+                'Documentos Técnicos con Diagramas': 45,
+                'Documentos Legales Estructurados': 38,
+                'Presentaciones Multimedia': 28,
+                'Documentos Científicos': 25,
+                'Archivos Comprimidos': 20
             }
         },
-        'security_overview': {
-            'total_events': 127,
-            'quarantined_ips': 3,
+        'security_analysis': {
+            'total_events': 89,
+            'files_quarantined': 12,
+            'malware_detected': 5,
+            'suspicious_files': 18,
             'threat_levels': {
-                'Bajo': 85,
-                'Medio': 32,
-                'Alto': 8,
+                'Bajo': 62,
+                'Medio': 19,
+                'Alto': 6,
                 'Crítico': 2
             },
-            'event_types': {
-                'Rate Limit': 45,
-                'Consulta Sospechosa': 38,
-                'Intento de Inyección': 12,
-                'Comportamiento Anómalo': 32
+            'security_events': {
+                'Malware Detectado': 5,
+                'Archivo Corrupto': 23,
+                'Formato Sospechoso': 18,
+                'Tamaño Excesivo': 15,
+                'Extensión Prohibida': 12,
+                'Contenido Encriptado': 8,
+                'Otros': 8
+            },
+            'scan_results': {
+                'Archivos Escaneados': 2847,
+                'Archivos Limpios': 2758,
+                'Archivos Sospechosos': 77,
+                'Archivos Bloqueados': 12
             }
         },
         'predictive_insights': {
-            'usage_forecast': [15, 18, 22, 19, 16, 14, 17],
+            'conversion_forecast': [8, 12, 15, 13, 10, 9, 11],
+            'quality_trend': [0.85, 0.87, 0.86, 0.88, 0.89, 0.87, 0.90],
             'optimization_recommendations': [
                 {
-                    'type': 'performance',
-                    'description': 'Optimizar tamaño de chunks',
-                    'impact': '25% mejora en tiempo de respuesta',
+                    'type': 'conversion_performance',
+                    'description': 'Optimizar pipeline de conversión PDF→DOCX',
+                    'impact': '30% reducción en tiempo de conversión',
                     'priority': 'Alta'
+                },
+                {
+                    'type': 'security',
+                    'description': 'Implementar escaneo antimalware avanzado',
+                    'impact': '95% reducción en archivos maliciosos',
+                    'priority': 'Crítica'
                 }
             ]
         },
@@ -246,89 +310,116 @@ with col2:
 # Get real data
 dashboard_data = get_dashboard_data(time_range)
 
-performance_metrics = dashboard_data['performance_metrics']
-usage_analytics = dashboard_data['usage_analytics']
-security_overview = dashboard_data['security_overview']
+conversion_metrics = dashboard_data['conversion_metrics']
+agent_performance = dashboard_data['agent_performance']
+security_analysis = dashboard_data['security_analysis']
 predictive_insights = dashboard_data['predictive_insights']
 time_series_data = dashboard_data['time_series_data']
 
-# Performance Metrics Section
-st.header(get_text('performance_metrics'))
+# Conversion Metrics Section
+st.header(get_text('conversion_metrics'))
 
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    avg_response_time = performance_metrics['avg_response_time']
+    total_conversions = int(conversion_metrics['total_conversions'])
     st.metric(
-        label=get_text('response_time'),
-        value=f"{avg_response_time:.2f}s",
-        delta=f"{(avg_response_time - 2.5):.2f}s"
+        label=get_text('conversion_volume'),
+        value=f"{total_conversions:,}",
+        delta=f"+{int(total_conversions * 0.08)}"
     )
 
 with col2:
-    total_queries = int(performance_metrics['total_queries'])
+    avg_conversion_time = conversion_metrics['avg_conversion_time']
     st.metric(
-        label=get_text('query_volume'),
-        value=f"{total_queries:,}",
-        delta=f"+{int(total_queries * 0.1)}"
+        label=get_text('conversion_time'),
+        value=f"{avg_conversion_time:.1f}s",
+        delta=f"{(avg_conversion_time - 50):.1f}s"
     )
 
 with col3:
-    success_rate = performance_metrics['success_rate']
+    success_rate = conversion_metrics['success_rate']
     st.metric(
         label=get_text('success_rate'),
         value=f"{success_rate:.1%}",
-        delta=f"{(success_rate - 0.95):.1%}"
+        delta=f"{(success_rate - 0.90):.1%}"
     )
 
 with col4:
-    user_satisfaction = performance_metrics['user_satisfaction']
+    user_satisfaction = conversion_metrics['user_satisfaction']
     st.metric(
         label=get_text('user_satisfaction'),
         value=f"{user_satisfaction:.1%}",
         delta=f"{(user_satisfaction - 0.85):.1%}"
     )
 
-# Performance Trends
-st.subheader(get_text('performance_trend'))
+# Additional conversion-specific metrics
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    complex_conversions = int(conversion_metrics['complex_conversions'])
+    st.metric(
+        label=get_text('complex_conversions'),
+        value=f"{complex_conversions:,}",
+        delta=f"+{int(complex_conversions * 0.12)}"
+    )
+
+with col2:
+    batch_conversions = int(conversion_metrics['batch_conversions'])
+    st.metric(
+        label=get_text('batch_conversions'),
+        value=f"{batch_conversions:,}",
+        delta=f"+{int(batch_conversions * 0.15)}"
+    )
+
+with col3:
+    avg_quality_score = conversion_metrics['avg_quality_score']
+    st.metric(
+        label=get_text('quality_score'),
+        value=f"{avg_quality_score:.1%}",
+        delta=f"{(avg_quality_score - 0.80):.1%}"
+    )
+
+# Conversion Trends
+st.subheader(get_text('conversion_trend'))
 
 fig_performance = make_subplots(
     rows=2, cols=2,
     subplot_titles=[
-        get_text('response_time'),
-        get_text('query_volume'),
+        get_text('conversion_time'),
+        get_text('conversion_volume'),
         get_text('success_rate'),
-        get_text('user_satisfaction')
+        get_text('quality_score')
     ]
 )
 
-# Response time trend
-response_time_data = time_series_data.get('response_time', [])
-if response_time_data:
-    timestamps = [d['timestamp'] for d in response_time_data]
-    values = [d['value'] for d in response_time_data]
+# Conversion time trend
+conversion_time_data = time_series_data.get('conversion_time', [])
+if conversion_time_data:
+    timestamps = [d['timestamp'] for d in conversion_time_data]
+    values = [d['value'] for d in conversion_time_data]
     fig_performance.add_trace(
         go.Scatter(
             x=timestamps,
             y=values,
             mode='lines',
-            name=get_text('response_time'),
+            name=get_text('conversion_time'),
             line=dict(color='#FF6B6B')
         ),
         row=1, col=1
     )
 
-# Query volume trend
-query_volume_data = time_series_data.get('query_volume', [])
-if query_volume_data:
-    timestamps = [d['timestamp'] for d in query_volume_data]
-    values = [d['value'] for d in query_volume_data]
+# Conversion volume trend
+conversion_volume_data = time_series_data.get('conversion_volume', [])
+if conversion_volume_data:
+    timestamps = [d['timestamp'] for d in conversion_volume_data]
+    values = [d['value'] for d in conversion_volume_data]
     fig_performance.add_trace(
         go.Scatter(
             x=timestamps,
             y=values,
             mode='lines',
-            name=get_text('query_volume'),
+            name=get_text('conversion_volume'),
             line=dict(color='#4ECDC4')
         ),
         row=1, col=2
@@ -350,17 +441,17 @@ if success_rate_data:
         row=2, col=1
     )
 
-# User satisfaction trend
-satisfaction_data = time_series_data.get('user_satisfaction', [])
-if satisfaction_data:
-    timestamps = [d['timestamp'] for d in satisfaction_data]
-    values = [d['value'] for d in satisfaction_data]
+# Quality score trend
+quality_score_data = time_series_data.get('quality_score', [])
+if quality_score_data:
+    timestamps = [d['timestamp'] for d in quality_score_data]
+    values = [d['value'] for d in quality_score_data]
     fig_performance.add_trace(
         go.Scatter(
             x=timestamps,
             y=values,
             mode='lines',
-            name=get_text('user_satisfaction'),
+            name=get_text('quality_score'),
             line=dict(color='#96CEB4')
         ),
         row=2, col=2
@@ -369,51 +460,51 @@ if satisfaction_data:
 fig_performance.update_layout(height=600, showlegend=False)
 st.plotly_chart(fig_performance, use_container_width=True)
 
-# Usage Analytics Section
-st.header(get_text('usage_analytics'))
+# Agent Performance Section
+st.header(get_text('agent_performance'))
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader(get_text('content_categories'))
+    st.subheader(get_text('agent_utilization'))
 
-    categories_df = pd.DataFrame(
-        list(usage_analytics['content_categories'].items()),
-        columns=['Category', 'Count']
+    agent_util_df = pd.DataFrame(
+        list(agent_performance['agent_utilization'].items()),
+        columns=['Agent', 'Utilization']
     )
 
-    fig_categories = px.pie(
-        categories_df,
-        values='Count',
-        names='Category',
+    fig_agents = px.pie(
+        agent_util_df,
+        values='Utilization',
+        names='Agent',
         color_discrete_sequence=px.colors.qualitative.Set3
     )
-    fig_categories.update_layout(height=400)
-    st.plotly_chart(fig_categories, use_container_width=True)
+    fig_agents.update_layout(height=400)
+    st.plotly_chart(fig_agents, use_container_width=True)
 
 with col2:
-    st.subheader(get_text('language_distribution'))
+    st.subheader(get_text('format_distribution'))
 
-    lang_df = pd.DataFrame(
-        list(usage_analytics['language_distribution'].items()),
-        columns=['Language', 'Percentage']
+    format_df = pd.DataFrame(
+        list(agent_performance['format_distribution'].items()),
+        columns=['Conversion Type', 'Count']
     )
 
-    fig_languages = px.bar(
-        lang_df,
-        x='Language',
-        y='Percentage',
-        color='Language',
+    fig_formats = px.bar(
+        format_df,
+        x='Conversion Type',
+        y='Count',
+        color='Count',
         color_discrete_sequence=px.colors.qualitative.Pastel
     )
-    fig_languages.update_layout(height=400)
-    st.plotly_chart(fig_languages, use_container_width=True)
+    fig_formats.update_layout(height=400, xaxis_tickangle=-45)
+    st.plotly_chart(fig_formats, use_container_width=True)
 
 # Peak Hours Analysis
 st.subheader(get_text('peak_hours'))
 
 hours = list(range(24))
-hourly_activity = [50 if h in usage_analytics['peak_hours'] else np.random.randint(10, 30) for h in hours]
+hourly_activity = [50 if h in agent_performance['peak_hours'] else np.random.randint(10, 30) for h in hours]
 
 fig_peak = px.bar(
     x=hours,
@@ -433,23 +524,23 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.metric(
         label=get_text('security_events'),
-        value=security_overview['total_events'],
+        value=security_analysis['total_events'],
         delta="-15"
     )
 
 with col2:
-    high_threats = security_overview['threat_levels']['Alto'] + security_overview['threat_levels']['Crítico']
+    malware_detected = security_analysis['malware_detected']
     st.metric(
-        label="Amenazas Altas/Críticas",
-        value=high_threats,
+        label="Malware Detectado",
+        value=malware_detected,
         delta="-3"
     )
 
 with col3:
-    blocked_attempts = security_overview['event_types']['Intento de Inyección']
+    files_quarantined = security_analysis['files_quarantined']
     st.metric(
-        label="Intentos Bloqueados",
-        value=blocked_attempts,
+        label="Archivos en Cuarentena",
+        value=files_quarantined,
         delta="+2"
     )
 
@@ -457,32 +548,31 @@ with col3:
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("Eventos por Nivel de Amenaza")
+    st.subheader("Resultados de Escaneo")
 
-    threat_df = pd.DataFrame(
-        list(security_overview['threat_levels'].items()),
-        columns=['Nivel', 'Cantidad']
+    scan_df = pd.DataFrame(
+        list(security_analysis['scan_results'].items()),
+        columns=['Resultado', 'Cantidad']
     )
 
-    fig_threats = px.bar(
-        threat_df,
-        x='Nivel',
+    fig_scan = px.bar(
+        scan_df,
+        x='Resultado',
         y='Cantidad',
-        color='Nivel',
+        color='Resultado',
         color_discrete_map={
-            'Bajo': '#96CEB4',
-            'Medio': '#FFEAA7',
-            'Alto': '#FDCB6E',
-            'Crítico': '#E17055'
+            'Archivos Limpios': '#96CEB4',
+            'Archivos Sospechosos': '#FFEAA7',
+            'Archivos Bloqueados': '#E17055'
         }
     )
-    st.plotly_chart(fig_threats, use_container_width=True)
+    st.plotly_chart(fig_scan, use_container_width=True)
 
 with col2:
     st.subheader("Tipos de Eventos de Seguridad")
 
     events_df = pd.DataFrame(
-        list(security_overview['event_types'].items()),
+        list(security_analysis['security_events'].items()),
         columns=['Tipo', 'Cantidad']
     )
 

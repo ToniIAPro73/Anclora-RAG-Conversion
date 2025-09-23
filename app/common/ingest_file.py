@@ -40,11 +40,25 @@ from agents import (
     ArchiveIngestor,
     refresh_document_loaders,
 )
+
+# Import security scanner and analytics
+try:
+    from security import scan_file_for_conversion, is_file_safe_for_conversion, ScanResult
+    from analytics import record_security_event
+    SECURITY_AVAILABLE = True
+except ImportError:
+    SECURITY_AVAILABLE = False
+    st.warning("⚠️ Módulo de seguridad no disponible. Los archivos no serán escaneados por malware.")
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
 from common.chroma_db_settings import Chroma
 from common.embeddings_manager import get_embeddings_manager
+
+# Custom security exception
+class SecurityError(Exception):
+    """Excepción lanzada cuando se detecta una amenaza de seguridad."""
+    pass
 
 try:
     from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -212,6 +226,55 @@ def load_single_document(uploaded_file, file_name: str) -> Tuple[List[Document],
 
 
 def process_file(uploaded_file, file_name: str) -> ProcessResult:
+    """Process a file with security scanning before ingestion."""
+
+    # 🔒 SECURITY SCAN: Escanear archivo por malware antes de procesarlo
+    if SECURITY_AVAILABLE:
+        # Guardar archivo temporalmente para escaneo
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as temp_file:
+            temp_file.write(uploaded_file.read())
+            temp_file_path = temp_file.name
+
+        try:
+            # Escanear archivo por amenazas
+            scan_result = scan_file_for_conversion(temp_file_path)
+
+            if not scan_result.is_safe:
+                # Archivo peligroso detectado
+                threat_msg = f"🚨 ARCHIVO BLOQUEADO: {file_name}"
+                security_msg = f"Nivel de amenaza: {scan_result.threat_level.upper()}"
+                threats_msg = "Amenazas detectadas: " + ", ".join(scan_result.threats_detected)
+
+                st.error(threat_msg)
+                st.error(security_msg)
+                st.error(threats_msg)
+
+                if scan_result.quarantine_path:
+                    st.warning(f"Archivo puesto en cuarentena: {scan_result.quarantine_path}")
+
+                logger.error(f"Archivo bloqueado por seguridad: {file_name} - {scan_result.threat_level}")
+                logger.error(f"Amenazas: {scan_result.threats_detected}")
+
+                # Retornar resultado vacío para bloquear procesamiento
+                raise SecurityError(f"Archivo bloqueado por seguridad: {scan_result.threat_level}")
+
+            else:
+                # Archivo seguro
+                st.success(f"✅ Archivo seguro: {file_name}")
+                logger.info(f"Archivo aprobado por seguridad: {file_name}")
+
+                # Resetear el puntero del archivo para procesamiento normal
+                uploaded_file.seek(0)
+
+        finally:
+            # Limpiar archivo temporal
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+
+    else:
+        st.warning("⚠️ Escaneo de seguridad deshabilitado - Procesando sin verificación antimalware")
+
+    # Continuar con procesamiento normal si el archivo es seguro
     documents, ingestor = load_single_document(uploaded_file, file_name)
     collection = CHROMA_SETTINGS.get_or_create_collection(ingestor.collection_name)
     if _collection_contains_file(collection, file_name):
@@ -275,6 +338,16 @@ def ingest_file(uploaded_file, file_name):
 
         st.success(f"Se agregó el archivo '{file_name}' con éxito.")
         logger.info("Archivo procesado exitosamente: %s", file_name)
+
+    except SecurityError as sec_exc:
+        # Manejo específico de errores de seguridad
+        security_msg = f"🚨 ARCHIVO BLOQUEADO POR SEGURIDAD: '{file_name}'"
+        st.error(security_msg)
+        st.error(f"Motivo: {sec_exc}")
+        st.warning("El archivo no fue procesado por razones de seguridad.")
+        logger.error("Archivo bloqueado por seguridad: %s - %s", file_name, sec_exc)
+        return  # No continuar procesamiento
+
     except Exception as exc:
         error_msg = f"Error al procesar el archivo '{file_name}': {exc}"
         st.error(error_msg)
