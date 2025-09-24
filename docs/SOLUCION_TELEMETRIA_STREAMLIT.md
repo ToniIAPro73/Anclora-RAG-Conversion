@@ -25,7 +25,7 @@ gatherUsageStats = false
 
 [server]
 headless = true
-port = 8080
+port = 8501
 address = "0.0.0.0"
 
 [theme]
@@ -61,7 +61,7 @@ environment:
 Se actualizó el comando de inicio en el `Dockerfile`:
 
 ```dockerfile
-CMD ["streamlit", "run", "Inicio.py", "--server.port", "8080", "--server.address", "0.0.0.0", "--browser.gatherUsageStats", "false"]
+CMD ["streamlit", "run", "Inicio.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--browser.gatherUsageStats", "false"]
 ```
 
 ### 5. Actualización de Versión de Streamlit

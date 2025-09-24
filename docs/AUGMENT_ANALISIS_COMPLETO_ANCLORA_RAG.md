@@ -160,7 +160,7 @@ docker exec [CONTAINER_ID] ollama pull llama3
 ```
 
 #### Paso 4: Acceso
-- **URL**: http://localhost:8080
+- **URL**: http://localhost:8501
 - **Chat**: Página principal
 - **Gestión de archivos**: Pestaña "Archivos"
 

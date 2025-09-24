@@ -99,11 +99,11 @@ def validate_uploaded_file(uploaded_file) -> tuple[bool, str]:
 ui:
   build: ./app
   ports:
-    - 8080:8080
+    - 8501:8501
   networks:
     - net  # ✅ Agregado
   healthcheck:  # ✅ Nuevo
-    test: ["CMD", "curl", "-f", "http://localhost:8080/_stcore/health"]
+    test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
     interval: 30s
     timeout: 10s
     retries: 3

@@ -19,7 +19,7 @@ services:
     ui:
       build: ./app
       ports:
-        - 8080:8080
+        - 8501:8501
         - 9000:9000
       volumes:
         - ./app:/app
@@ -38,7 +38,7 @@ services:
         - PROMETHEUS_METRICS_PORT=9000
         - PROMETHEUS_METRICS_HOST=0.0.0.0
       healthcheck:
-        test: ["CMD", "curl", "-f", "http://localhost:8080/_stcore/health"]
+        test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
         interval: 30s
         timeout: 10s
         retries: 3

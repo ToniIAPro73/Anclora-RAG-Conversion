@@ -44,7 +44,7 @@ Puedes obtener la ruta correcta ejecutando `pwd` (Linux/macOS) o `cd` (Windows) 
 
 ## Resultados esperados y comprobaciones
 
-Tras ejecutar cualquiera de los scripts deberías poder acceder a la interfaz en <http://localhost:8080>. Para confirmar que los servicios están activos utiliza `docker ps` y verifica que los contenedores `ui`, `ollama` y `chroma` se encuentren "Up".
+Tras ejecutar cualquiera de los scripts deberías poder acceder a la interfaz en <http://localhost:8501>. Para confirmar que los servicios están activos utiliza `docker ps` y verifica que los contenedores `ui`, `ollama` y `chroma` se encuentren "Up".
 
 ## Limitaciones conocidas
 

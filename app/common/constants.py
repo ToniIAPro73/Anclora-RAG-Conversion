@@ -156,9 +156,9 @@ def _create_chroma_client() -> chromadb.api.ClientAPI:
         local_settings = Settings(
             allow_reset=True,
             anonymized_telemetry=False,
-            is_persistent=True,
+            is_persistent=False,
         )
-        return chromadb.PersistentClient(path=":memory:", settings=local_settings)
+        return chromadb.EphemeralClient(settings=local_settings)
 
 
 CHROMA_SETTINGS = _create_chroma_client()

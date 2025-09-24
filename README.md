@@ -388,6 +388,6 @@ Si necesitas habilitar GPU desde estos scripts, agrega los archivos adicionales 
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 ```
 
-Ahora mientras que tengamos el Docker/Docker Desktop prendido y mientras que ejecutemos este archivo vamos a poder acceder al RAG en este link: <http://localhost:8080>
+Ahora mientras que tengamos el Docker/Docker Desktop prendido y mientras que ejecutemos este archivo vamos a poder acceder al RAG en este link: <http://localhost:8501>
 
 Próximo paso: disfrutar

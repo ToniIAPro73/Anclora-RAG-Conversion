@@ -25,7 +25,7 @@ python diagnostico_rag.py
 
 Este script verificará automáticamente:
 - ✅ Servicios Docker
-- ✅ Interfaz Streamlit (puerto 8080)
+- ✅ Interfaz Streamlit (puerto 8501)
 - ✅ ChromaDB (puerto 8000)
 - ✅ Ollama y modelos LLM
 - ✅ Documentos en la base de conocimiento
@@ -160,7 +160,7 @@ netstat -an | grep 8000
 
 #### **Verificar**:
 ```bash
-curl http://localhost:8080
+curl http://localhost:8501
 ```
 
 #### **Si falla**:
@@ -172,7 +172,7 @@ docker-compose logs ui
 docker-compose restart ui
 
 # Verificar puerto
-netstat -an | grep 8080
+netstat -an | grep 8501
 ```
 
 ---
@@ -261,7 +261,7 @@ docker-compose up -d
 python diagnostico_rag.py
 
 # O verificar manualmente:
-# 1. Ir a http://localhost:8080
+# 1. Ir a http://localhost:8501
 # 2. Escribir "Hola"
 # 3. Debe responder: "¡Hola! Soy Bastet..."
 ```
