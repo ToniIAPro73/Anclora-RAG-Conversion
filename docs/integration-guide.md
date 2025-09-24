@@ -27,11 +27,13 @@
 
 | Método / Method | Ruta / Path          | Descripción ES / Description EN |
 |-----------------|----------------------|---------------------------------|
-| GET             | `/health`            | **ES:** Estado general del sistema.<br>**EN:** Overall health status. |
-| POST            | `/chat`              | **ES:** Consulta al motor RAG (`message`, `max_length`, `language`).<br>**EN:** Ask the RAG engine (`message`, `max_length`, `language`). |
-| POST            | `/upload`            | **ES:** Ingresa documentos (multipart, campo `file`).<br>**EN:** Ingest documents (multipart `file`). |
-| GET             | `/documents`         | **ES:** Lista archivos disponibles.<br>**EN:** List available documents. |
-| DELETE          | `/documents/{name}`  | **ES:** Elimina un archivo de la base.<br>**EN:** Remove a document from the knowledge base. |
+| GET             | `/health`            | **ES:** Estado general del sistema.  |
+| POST            | `/chat`              | **ES:** Consulta al motor RAG (`message`, `max_length`, `language`).  **EN:** Ask the RAG engine (`message`, `max_length`, `language`). |
+| GET             | `/documents`         | **ES:** Lista archivos disponibles.  |
+| DELETE          | `/documents/{name}`  | **ES:** Elimina un archivo de la base.  **EN:** Remove a document from the knowledge base. |
+| POST            | `/upload`            | **ES:** Ingresa documentos (multipart, campo `file`).  **EN:** Ingest documents (multipart `file`). |
+| GET             | `/documents`         | **ES:** Lista archivos disponibles. / **EN:** List available documents. |
+| DELETE          | `/documents/{name}`  | **ES:** Elimina un archivo de la base. / **EN:** Remove a document from the knowledge base. |
 
 ### Ejemplo de consulta / Query Example
 
@@ -64,7 +66,7 @@ curl -X POST "http://localhost:8081/upload" \
 
 ### Manejo de Unicode y respuestas / Unicode Handling and Responses
 
-- **ES:** El servidor serializa JSON usando UTF-8. Asegúrate de que tu cliente defina `Content-Type: application/json; charset=utf-8` cuando envíe payloads. 
+- **ES:** El servidor serializa JSON usando UTF-8. Asegúrate de que tu cliente defina `Content-Type: application/json; charset=utf-8` cuando envíe payloads.
 - **EN:** The server serializes JSON in UTF-8. Make sure your client sets `Content-Type: application/json; charset=utf-8` when sending payloads.
 - **ES:** Si tu aplicación consume texto en otros alfabetos (p. ej., árabe, japonés), mantén la cadena en Unicode nativa de tu lenguaje de programación; evita convertirla a ASCII.
 - **EN:** If your app consumes non-Latin text (e.g., Arabic, Japanese), keep strings in your language's native Unicode representation; avoid ASCII coercion.

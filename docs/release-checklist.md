@@ -52,7 +52,7 @@
 
 ---
 
-**Notas adicionales**
+### Notas adicionales
 
 - Mantener evidencia de aprobaciones en Notion o GDrive.
 - Documentar cualquier excepción o riesgo identificado durante el proceso.

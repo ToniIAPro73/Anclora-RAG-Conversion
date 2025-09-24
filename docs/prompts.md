@@ -1,6 +1,7 @@
 # Registro de pruebas de prompts
 
 ## 2025-09-21
+
 - **Idioma:** Español
 - **Prompt:** "Resume la reunión de análisis de métricas."
 - **Contexto:** "La reunión resaltó la importancia de mantener actualizadas las métricas de calidad."

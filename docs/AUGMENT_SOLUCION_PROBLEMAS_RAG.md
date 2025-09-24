@@ -2,7 +2,7 @@
 
 > **Nota de idioma:** Las interfaces y respuestas están certificadas en español e inglés. Si utilizas otro idioma podrías recibir mensajes mixtos mientras se completa la localización.
 
-### Roadmap de soporte lingüístico
+## Roadmap de soporte lingüístico
 
 1. **Portugués**: validación en curso para interfaz y respuestas automáticas.
 2. **Francés y Alemán**: se incorporarán tras cerrar la fase de pruebas de portugués.
@@ -19,11 +19,13 @@ He identificado y corregido el problema principal. El sistema ahora debería res
 ## 🔍 Diagnóstico Rápido
 
 ### **Ejecutar Script de Diagnóstico**
+
 ```bash
 python diagnostico_rag.py
 ```
 
 Este script verificará automáticamente:
+
 - ✅ Servicios Docker
 - ✅ Interfaz Streamlit (puerto 8501)
 - ✅ ChromaDB (puerto 8000)
@@ -42,11 +44,12 @@ curl http://localhost:8081/health
 
 ### **1. El chat no responde a "Hola"**
 
-#### ✅ **YA CORREGIDO** - Cambios implementados:
+#### ✅ **YA CORREGIDO** - Cambios implementados
 
 **Problema**: El sistema solo funcionaba con contexto específico de documentos.
 
 **Solución aplicada**:
+
 - Mejorado el prompt para manejar saludos básicos
 - Agregada detección de saludos simples
 - Implementada respuesta automática para casos sin contexto
@@ -56,11 +59,13 @@ curl http://localhost:8081/health
 
 ### **2. No hay documentos en la base de conocimiento**
 
-#### **Síntomas**:
+#### **Síntomas de documentos vacíos**
+
 - El RAG responde: "No tengo documentos en mi base de conocimiento"
 - Las consultas específicas no obtienen respuestas relevantes
 
-#### **Solución**:
+#### **Solución para documentos vacíos**
+
 ```bash
 # 1. Verificar estado
 python diagnostico_rag.py
@@ -75,8 +80,10 @@ python diagnostico_rag.py
 # - Tamaño máximo: 10MB
 ```
 
-#### **Documentos de prueba recomendados**:
+#### **Documentos de prueba recomendados**
+
 Crea un archivo `info_pbc.txt` con contenido básico:
+
 ```text
 PBC es una consultora de Ingeniería de Software e Inteligencia Artificial.
 
@@ -94,12 +101,14 @@ Servicios:
 
 ### **3. Servicios Docker no están corriendo**
 
-#### **Verificar estado**:
+#### **Verificar estado**
+
 ```bash
 docker-compose ps
 ```
 
-#### **Si no están corriendo**:
+#### **Si no están corriendo**
+
 ```bash
 # Detener todo
 docker-compose down
@@ -116,11 +125,13 @@ docker-compose logs -f ui
 
 ### **4. Modelo LLM no está descargado**
 
-#### **Síntomas**:
+#### **Síntomas**
+
 - Error: "model not found"
 - Ollama no responde
 
-#### **Solución**:
+#### **Solución**
+
 ```bash
 # 1. Ver contenedores corriendo
 docker ps
@@ -139,12 +150,14 @@ docker exec [CONTAINER_ID] ollama list
 
 ### **5. ChromaDB no accesible**
 
-#### **Verificar**:
+#### **Verificar ChromaDB**
+
 ```bash
 curl http://localhost:8000/api/v1/heartbeat
 ```
 
-#### **Si falla**:
+#### **Solución si ChromaDB falla**
+
 ```bash
 # Ver logs de ChromaDB
 docker-compose logs chroma
@@ -158,12 +171,14 @@ netstat -an | grep 8000
 
 ### **6. Streamlit no carga**
 
-#### **Verificar**:
+#### **Verificar**
+
 ```bash
 curl http://localhost:8501
 ```
 
-#### **Si falla**:
+#### **Si falla**
+
 ```bash
 # Ver logs detallados
 docker-compose logs ui
@@ -180,6 +195,7 @@ netstat -an | grep 8501
 ## 🔧 Comandos de Mantenimiento
 
 ### **Reinicio Completo**
+
 ```bash
 # Parar todo
 docker-compose down
@@ -195,6 +211,7 @@ docker-compose up -d
 ```
 
 ### **Ver Logs en Tiempo Real**
+
 ```bash
 # Todos los servicios
 docker-compose logs -f
@@ -210,6 +227,7 @@ docker-compose logs -f ollama
 ```
 
 ### **Verificar Recursos**
+
 ```bash
 # Uso de recursos
 docker stats
@@ -225,16 +243,16 @@ docker system prune
 
 ## 📋 Checklist de Verificación
 
-### **Antes de reportar un problema**:
+### **Antes de reportar un problema**
 
 - [ ] ✅ Servicios Docker corriendo (`docker-compose ps`)
-- [ ] ✅ Streamlit accesible (http://localhost:8080)
-- [ ] ✅ ChromaDB accesible (http://localhost:8000/api/v1/heartbeat)
+- [ ] ✅ Streamlit accesible (<http://localhost:8080>)
+- [ ] ✅ ChromaDB accesible (<http://localhost:8000/api/v1/heartbeat>)
 - [ ] ✅ Modelo LLM descargado (`docker exec [ID] ollama list`)
 - [ ] ✅ Al menos un documento subido
 - [ ] ✅ Logs sin errores críticos (`docker-compose logs`)
 
-### **Pruebas básicas**:
+### **Pruebas básicas**
 
 1. **Saludo simple**: Escribir "Hola" → Debe responder Bastet
 2. **Consulta general**: "¿Qué es PBC?" → Debe usar contexto o info básica
@@ -246,6 +264,7 @@ docker system prune
 ## 🚀 Pasos para Resolver "Hola" No Responde
 
 ### **Paso 1: Aplicar correcciones**
+
 ```bash
 # Las correcciones ya están implementadas en el código
 # Solo necesitas reconstruir:
@@ -256,6 +275,7 @@ docker-compose up -d
 ```
 
 ### **Paso 2: Verificar funcionamiento**
+
 ```bash
 # Ejecutar diagnóstico
 python diagnostico_rag.py
@@ -267,6 +287,7 @@ python diagnostico_rag.py
 ```
 
 ### **Paso 3: Si aún no funciona**
+
 ```bash
 # Ver logs específicos
 docker-compose logs ui | grep -i error
@@ -283,9 +304,10 @@ curl http://localhost:11434/api/tags
 
 ## 📞 Escalación de Problemas
 
-### **Si el problema persiste**:
+### **Si el problema persiste**
 
 1. **Recopilar información**:
+
    ```bash
    # Ejecutar diagnóstico completo
    python diagnostico_rag.py > diagnostico_resultado.txt
@@ -313,6 +335,7 @@ curl http://localhost:11434/api/tags
 ## ✅ Estado Actual
 
 **Correcciones implementadas**:
+
 - ✅ Manejo de saludos básicos
 - ✅ Detección de base de conocimiento vacía
 - ✅ Mensajes informativos mejorados
@@ -320,6 +343,7 @@ curl http://localhost:11434/api/tags
 - ✅ Script de diagnóstico automático
 
 **El sistema ahora debería**:
+
 - ✅ Responder a "Hola" correctamente
 - ✅ Informar cuando no hay documentos
 - ✅ Proporcionar ayuda contextual

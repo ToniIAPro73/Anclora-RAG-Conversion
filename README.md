@@ -128,6 +128,7 @@ También puedes ajustar `CHROMA_HOST` y `CHROMA_PORT` a los valores de cualquier
 ## 🚀 Instalación y Configuración
 
 ### Prerrequisitos
+
 - Python 3.11.8 (recomendado)
 - Docker y Docker Compose
 - Git
@@ -135,18 +136,21 @@ También puedes ajustar `CHROMA_HOST` y `CHROMA_PORT` a los valores de cualquier
 ### Configuración del Entorno
 
 1. **Clonar el repositorio:**
+
    ```bash
    git clone https://github.com/ToniIAPro73/basdonax-ai-rag.git
    cd basdonax-ai-rag
    ```
 
 2. **Configurar variables de entorno:**
+
    ```bash
    cp .env.example .env
    # Editar .env con tus claves API
    ```
 
 3. **Opción A: Usar entorno virtual (Recomendado para desarrollo):**
+
    ```bash
    # Crear entorno virtual con Python 3.11
    python -m venv venv_rag --python=python3.11
@@ -165,6 +169,7 @@ También puedes ajustar `CHROMA_HOST` y `CHROMA_PORT` a los valores de cualquier
    ```
 
 4. **Opción B: Ejecutar con Docker:**
+
    ```bash
    docker-compose up -d
    ```

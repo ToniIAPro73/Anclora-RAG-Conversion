@@ -1,5 +1,5 @@
 # Dependencias completas para Anclora RAG
-# Incluye todas las librer�as necesarias para procesar todos los formatos
+# Incluye todas las librerías necesarias para procesar todos los formatos
 
 # === DEPENDENCIAS CORE ===
 chromadb==0.5.15
@@ -32,7 +32,7 @@ openai-whisper>=20231117
 opencv-python
 pydub
 
-# === C�DIGO Y DESARROLLO ===
+# === CÓDIGO Y DESARROLLO ===
 pygments
 tree-sitter
 tree-sitter-languages

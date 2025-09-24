@@ -290,4 +290,3 @@ Esta sección final reúne fuentes sobre la implementación práctica y la efici
   * **Aportación Clave:** Ofrece un ejemplo de uso de la herramienta de línea de comandos pdftk para la manipulación programática de archivos PDF, como dividir un documento en páginas individuales.
 
 En conjunto, este compendio de fuentes proporciona una base de conocimiento integral y multifacética, fundamentando el proyecto desde sus principios teóricos hasta su ejecución técnica, regulatoria y operativa.
-

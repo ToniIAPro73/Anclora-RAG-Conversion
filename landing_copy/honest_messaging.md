@@ -4,7 +4,7 @@
 
 ### ✅ HEADLINES HONESTOS Y VERIFICABLES
 
-```
+```text
 🚀 "Convierte documentos complejos en minutos, no horas"
 📈 "IA que aprende de tus documentos para mayor velocidad cada vez"
 🧠 "Sistema inteligente que mejora automáticamente con cada uso"
@@ -14,7 +14,7 @@
 
 ### ❌ HEADLINES A EVITAR (Poco realistas)
 
-```
+```text
 ❌ "Conversión instantánea en segundos"
 ❌ "El convertidor más rápido del mundo"
 ❌ "100% de precisión garantizada"

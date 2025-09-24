@@ -36,15 +36,19 @@ Las métricas se activan cuando se define el puerto de publicación mediante la 
 ## Uso local sin contenedores
 
 1. Instalar la dependencia opcional:
+
    ```bash
    pip install prometheus-client
    ```
+
 2. Definir el puerto antes de ejecutar el módulo objetivo:
+
    ```bash
    export PROMETHEUS_METRICS_PORT=9000
    export PROMETHEUS_METRICS_HOST=0.0.0.0  # Opcional (por defecto 0.0.0.0)
    python app/api_endpoints.py  # Ejemplo
    ```
+
 3. Visitar `http://localhost:9000/` para comprobar el _endpoint_ de métricas o apuntar una instancia de Prometheus externa.
 
 ## Stack de observabilidad con Docker Compose

@@ -19,6 +19,7 @@ Esta guía explica las diferentes formas en que un agente de inteligencia artifi
 ### 1. **API REST (Recomendado)**
 
 #### Configuración Inicial
+
 ```bash
 # Iniciar el sistema con API
 docker-compose up -d
@@ -38,6 +39,7 @@ curl http://localhost:8081/health
 | DELETE | `/documents/{filename}` | Eliminar documento |
 
 #### Autenticación
+
 ```bash
 # Todas las requests requieren header de autorización
 Authorization: Bearer your-api-key-here
@@ -46,6 +48,7 @@ Authorization: Bearer your-api-key-here
 #### Ejemplos de Uso
 
 **Consulta al RAG:**
+
 ```bash
 curl -X POST "http://localhost:8081/chat" \
   -H "Authorization: Bearer your-api-key-here" \
@@ -57,6 +60,7 @@ curl -X POST "http://localhost:8081/chat" \
 ```
 
 **Subir documento:**
+
 ```bash
 curl -X POST "http://localhost:8081/upload" \
   -H "Authorization: Bearer your-api-key-here" \
@@ -64,6 +68,7 @@ curl -X POST "http://localhost:8081/upload" \
 ```
 
 **Listar documentos:**
+
 ```bash
 curl -X GET "http://localhost:8081/documents" \
   -H "Authorization: Bearer your-api-key-here"
@@ -72,11 +77,13 @@ curl -X GET "http://localhost:8081/documents" \
 ### 2. **Cliente Python**
 
 #### Instalación
+
 ```bash
 pip install requests
 ```
 
 #### Uso Básico
+
 ```python
 from anclora_rag_client import AIAgentRAGInterface
 
@@ -99,6 +106,7 @@ if ai_rag.is_healthy():
 ```
 
 #### Uso Avanzado
+
 ```python
 from anclora_rag_client import AncloraRAGClient
 
