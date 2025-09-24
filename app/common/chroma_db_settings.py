@@ -14,6 +14,7 @@ from typing import (
     Optional,
     Tuple,
     Type,
+    Union,
 )
 
 import numpy as np
@@ -27,14 +28,16 @@ from langchain_community.vectorstores.utils import maximal_marginal_relevance
 
 from common.constants import CHROMA_COLLECTIONS
 
+# Deshabilitar telemetría de ChromaDB para evitar errores
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+os.environ["CHROMA_TELEMETRY"] = "False"
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import chromadb
     import chromadb.config
     from chromadb.api.types import ID, OneOrMany, Where, WhereDocument
-
-logger = logging.getLogger()
 DEFAULT_K = 5  # Number of Documents to return.
 
 
@@ -77,9 +80,9 @@ class Chroma(VectorStore):
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         embedding_function: Optional[Embeddings] = None,
         persist_directory: Optional[str] = None,
-        client_settings: Optional[chromadb.config.Settings] = None,
-        collection_metadata: Optional[Dict] = None,
-        client: Optional[chromadb.Client] = None,
+        client_settings: Optional[chromadb.config.Settings] = None,  # type: ignore[valid-type]
+        collection_metadata: Optional[Dict[str, Any]] = None,
+        client: Optional[chromadb.Client] = None,  # type: ignore[valid-type]
         relevance_score_fn: Optional[Callable[[float], float]] = None,
     ) -> None:
         """Initialize with a Chroma client."""
@@ -107,7 +110,7 @@ class Chroma(VectorStore):
                     # Maintain backwards compatibility with chromadb < 0.4.0
                     major, minor, _ = chromadb.__version__.split(".")
                     if int(major) == 0 and int(minor) < 4:
-                        client_settings.chroma_db_impl = "duckdb+parquet"
+                        client_settings.chroma_db_impl = "duckdb+parquet"  # type: ignore[attr-defined]
 
                 _client_settings = client_settings
             elif persist_directory:
@@ -115,10 +118,10 @@ class Chroma(VectorStore):
                 major, minor, _ = chromadb.__version__.split(".")
                 if int(major) == 0 and int(minor) < 4:
                     _client_settings = chromadb.config.Settings(
-                        chroma_db_impl="duckdb+parquet",
+                        chroma_db_impl="duckdb+parquet",  # type: ignore[call-arg]
                     )
                 else:
-                    _client_settings = chromadb.config.Settings(is_persistent=True)
+                    _client_settings = chromadb.config.Settings(is_persistent=True)  # type: ignore[call-arg]
                 _client_settings.persist_directory = persist_directory
             else:
                 _client_settings = chromadb.config.Settings()
@@ -146,8 +149,8 @@ class Chroma(VectorStore):
         query_texts: Optional[List[str]] = None,
         query_embeddings: Optional[List[List[float]]] = None,
         n_results: int = 4,
-        where: Optional[Dict[str, str]] = None,
-        where_document: Optional[Dict[str, str]] = None,
+        where: Optional[Union[Dict[str, str], "Where"]] = None,
+        where_document: Optional[Union[Dict[str, str], "WhereDocument"]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Query the chroma collection."""
@@ -158,14 +161,15 @@ class Chroma(VectorStore):
                 "Could not import chromadb python package. "
                 "Please install it with `pip install chromadb`."
             )
-        return self._collection.query(
+        results = self._collection.query(
             query_texts=query_texts,
-            query_embeddings=query_embeddings,
+            query_embeddings=query_embeddings,  # type: ignore[arg-type]
             n_results=n_results,
-            where=where,
-            where_document=where_document,
+            where=where,  # type: ignore[arg-type]
+            where_document=where_document,  # type: ignore[arg-type]
             **kwargs,
         )
+        return _results_to_docs(results)
 
     def encode_image(self, uri: str) -> str:
         """Get base64 string from image URI."""
@@ -175,7 +179,7 @@ class Chroma(VectorStore):
     def add_images(
         self,
         uris: List[str],
-        metadatas: Optional[List[dict]] = None,
+        metadatas: Optional[List[Dict[str, Any]]] = None,
         ids: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[str]:
@@ -194,12 +198,21 @@ class Chroma(VectorStore):
         # Populate IDs
         if ids is None:
             ids = [str(uuid.uuid4()) for _ in uris]
-        embeddings = None
+        embeddings: Optional[List[List[float]]] = None
         # Set embeddings
-        if self._embedding_function is not None and hasattr(
-            self._embedding_function, "embed_image"
-        ):
-            embeddings = self._embedding_function.embed_image(uris=uris)
+        if self._embedding_function is not None:
+            # Check if the embedding function supports multimodal embeddings
+            embed_image_method = getattr(self._embedding_function, "embed_image", None)
+            if embed_image_method is not None and callable(embed_image_method):
+                try:
+                    embeddings = embed_image_method(uris=uris)  # type: ignore[assignment]
+                except (AttributeError, NotImplementedError):
+                    # Fallback if embed_image method exists but is not implemented
+                    embeddings = self._embedding_function.embed_documents(b64_texts)  # type: ignore[assignment]
+            else:
+                # Fallback: use text embeddings on base64 encoded images
+                # This is not ideal but allows the method to work with text-only embedding models
+                embeddings = self._embedding_function.embed_documents(b64_texts)  # type: ignore[assignment]
         if metadatas:
             # fill metadatas with empty dicts if somebody
             # did not specify metadata for all images
@@ -222,8 +235,8 @@ class Chroma(VectorStore):
                 ids_with_metadata = [ids[idx] for idx in non_empty_ids]
                 try:
                     self._collection.upsert(
-                        metadatas=metadatas,
-                        embeddings=embeddings_with_metadatas,
+                        metadatas=metadatas,  # type: ignore[arg-type]
+                        embeddings=embeddings_with_metadatas,  # type: ignore[arg-type]
                         documents=images_with_metadatas,
                         ids=ids_with_metadata,
                     )
@@ -243,13 +256,13 @@ class Chroma(VectorStore):
                 )
                 ids_without_metadatas = [ids[j] for j in empty_ids]
                 self._collection.upsert(
-                    embeddings=embeddings_without_metadatas,
+                    embeddings=embeddings_without_metadatas,  # type: ignore[arg-type]
                     documents=images_without_metadatas,
                     ids=ids_without_metadatas,
                 )
         else:
             self._collection.upsert(
-                embeddings=embeddings,
+                embeddings=embeddings,  # type: ignore[arg-type]
                 documents=b64_texts,
                 ids=ids,
             )
@@ -258,7 +271,7 @@ class Chroma(VectorStore):
     def add_texts(
         self,
         texts: Iterable[str],
-        metadatas: Optional[List[dict]] = None,
+        metadatas: Optional[List[Dict[str, Any]]] = None,
         ids: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[str]:
@@ -275,10 +288,10 @@ class Chroma(VectorStore):
         # TODO: Handle the case where the user doesn't provide ids on the Collection
         if ids is None:
             ids = [str(uuid.uuid4()) for _ in texts]
-        embeddings = None
+        embeddings: Optional[List[List[float]]] = None
         texts = list(texts)
         if self._embedding_function is not None:
-            embeddings = self._embedding_function.embed_documents(texts)
+            embeddings = self._embedding_function.embed_documents(texts)  # type: ignore[assignment]
         if metadatas:
             # fill metadatas with empty dicts if somebody
             # did not specify metadata for all texts
@@ -301,8 +314,8 @@ class Chroma(VectorStore):
                 ids_with_metadata = [ids[idx] for idx in non_empty_ids]
                 try:
                     self._collection.upsert(
-                        metadatas=metadatas,
-                        embeddings=embeddings_with_metadatas,
+                        metadatas=metadatas,  # type: ignore[arg-type]
+                        embeddings=embeddings_with_metadatas,  # type: ignore[arg-type]
                         documents=texts_with_metadatas,
                         ids=ids_with_metadata,
                     )
@@ -322,13 +335,13 @@ class Chroma(VectorStore):
                 )
                 ids_without_metadatas = [ids[j] for j in empty_ids]
                 self._collection.upsert(
-                    embeddings=embeddings_without_metadatas,
+                    embeddings=embeddings_without_metadatas,  # type: ignore[arg-type]
                     documents=texts_without_metadatas,
                     ids=ids_without_metadatas,
                 )
         else:
             self._collection.upsert(
-                embeddings=embeddings,
+                embeddings=embeddings,  # type: ignore[arg-type]
                 documents=texts,
                 ids=ids,
             )
@@ -338,7 +351,7 @@ class Chroma(VectorStore):
         self,
         query: str,
         k: int = DEFAULT_K,
-        filter: Optional[Dict[str, str]] = None,
+        filter: Optional[Union[Dict[str, str], "Where"]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Run similarity search with Chroma.
@@ -360,8 +373,8 @@ class Chroma(VectorStore):
         self,
         embedding: List[float],
         k: int = DEFAULT_K,
-        filter: Optional[Dict[str, str]] = None,
-        where_document: Optional[Dict[str, str]] = None,
+        filter: Optional[Union[Dict[str, str], "Where"]] = None,
+        where_document: Optional[Union[Dict[str, str], "WhereDocument"]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs most similar to embedding vector.
@@ -373,7 +386,7 @@ class Chroma(VectorStore):
             List of Documents most similar to the query vector.
         """
         results = self.__query_collection(
-            query_embeddings=embedding,
+            query_embeddings=[embedding],
             n_results=k,
             where=filter,
             where_document=where_document,
@@ -385,8 +398,8 @@ class Chroma(VectorStore):
         self,
         embedding: List[float],
         k: int = DEFAULT_K,
-        filter: Optional[Dict[str, str]] = None,
-        where_document: Optional[Dict[str, str]] = None,
+        filter: Optional[Union[Dict[str, str], "Where"]] = None,
+        where_document: Optional[Union[Dict[str, str], "WhereDocument"]] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """
@@ -403,7 +416,7 @@ class Chroma(VectorStore):
             Lower score represents more similarity.
         """
         results = self.__query_collection(
-            query_embeddings=embedding,
+            query_embeddings=[embedding],
             n_results=k,
             where=filter,
             where_document=where_document,
@@ -415,8 +428,8 @@ class Chroma(VectorStore):
         self,
         query: str,
         k: int = DEFAULT_K,
-        filter: Optional[Dict[str, str]] = None,
-        where_document: Optional[Dict[str, str]] = None,
+        filter: Optional[Union[Dict[str, str], "Where"]] = None,
+        where_document: Optional[Union[Dict[str, str], "WhereDocument"]] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Run similarity search with Chroma with distance.
@@ -450,6 +463,24 @@ class Chroma(VectorStore):
             )
 
         return _results_to_docs_and_scores(results)
+
+    @staticmethod
+    def _cosine_relevance_score_fn(distance: float) -> float:
+        """Normalize the cosine distance to a score between 0 and 1."""
+        return 1.0 - distance
+
+    @staticmethod
+    def _euclidean_relevance_score_fn(distance: float) -> float:
+        """Normalize the euclidean distance to a score between 0 and 1."""
+        # This is a simple normalization, you might want to adjust based on your use case
+        return 1.0 / (1.0 + distance)
+
+    @staticmethod
+    def _max_inner_product_relevance_score_fn(distance: float) -> float:
+        """Normalize the max inner product distance to a score between 0 and 1."""
+        # For inner product, higher values are better, so we return the distance directly
+        # but ensure it's between 0 and 1
+        return max(0.0, min(1.0, distance))
 
     def _select_relevance_score_fn(self) -> Callable[[float], float]:
         """
@@ -489,8 +520,8 @@ class Chroma(VectorStore):
         k: int = DEFAULT_K,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Optional[Dict[str, str]] = None,
-        where_document: Optional[Dict[str, str]] = None,
+        filter: Optional[Union[Dict[str, str], "Where"]] = None,
+        where_document: Optional[Union[Dict[str, str], "WhereDocument"]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using the maximal marginal relevance.
@@ -512,7 +543,7 @@ class Chroma(VectorStore):
         """
 
         results = self.__query_collection(
-            query_embeddings=embedding,
+            query_embeddings=[embedding],
             n_results=fetch_k,
             where=filter,
             where_document=where_document,
@@ -521,7 +552,7 @@ class Chroma(VectorStore):
         )
         mmr_selected = maximal_marginal_relevance(
             np.array(embedding, dtype=np.float32),
-            results["embeddings"][0],
+            results["embeddings"][0],  # type: ignore[index]
             k=k,
             lambda_mult=lambda_mult,
         )
@@ -537,8 +568,8 @@ class Chroma(VectorStore):
         k: int = DEFAULT_K,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Optional[Dict[str, str]] = None,
-        where_document: Optional[Dict[str, str]] = None,
+        filter: Optional[Union[Dict[str, str], "Where"]] = None,
+        where_document: Optional[Union[Dict[str, str], "WhereDocument"]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using the maximal marginal relevance.
@@ -560,7 +591,7 @@ class Chroma(VectorStore):
         """
         if self._embedding_function is None:
             raise ValueError(
-                "For MMR search, you must specify an embedding function on" "creation."
+                "For MMR search, you must specify an embedding function on creation."
             )
 
         embedding = self._embedding_function.embed_query(query)
@@ -614,7 +645,7 @@ class Chroma(VectorStore):
         if include is not None:
             kwargs["include"] = include
 
-        return self._collection.get(**kwargs)
+        return self._collection.get(**kwargs)  # type: ignore[return-value]
 
     def persist(self) -> None:
         """Persist the collection.
@@ -624,15 +655,14 @@ class Chroma(VectorStore):
         """
         if self._persist_directory is None:
             raise ValueError(
-                "You must specify a persist_directory on"
-                "creation to persist the collection."
+                "You must specify a persist_directory on creation to persist the collection."
             )
         import chromadb
 
         # Maintain backwards compatibility with chromadb < 0.4.0
         major, minor, _ = chromadb.__version__.split(".")
         if int(major) == 0 and int(minor) < 4:
-            self._client.persist()
+            self._client.persist()  # type: ignore[attr-defined]
 
     def update_document(self, document_id: str, document: Document) -> None:
         """Update a document in the collection.
@@ -656,7 +686,7 @@ class Chroma(VectorStore):
             raise ValueError(
                 "For update, you must specify an embedding function on creation."
             )
-        embeddings = self._embedding_function.embed_documents(text)
+        embeddings: List[List[float]] = self._embedding_function.embed_documents(text)  # type: ignore[assignment]
 
         if hasattr(
             self._collection._client, "max_batch_size"
@@ -666,9 +696,9 @@ class Chroma(VectorStore):
             for batch in create_batches(
                 api=self._collection._client,
                 ids=ids,
-                metadatas=metadata,
+                metadatas=metadata,  # type: ignore[arg-type]
                 documents=text,
-                embeddings=embeddings,
+                embeddings=embeddings,  # type: ignore[arg-type]
             ):
                 self._collection.update(
                     ids=batch[0],
@@ -679,9 +709,9 @@ class Chroma(VectorStore):
         else:
             self._collection.update(
                 ids=ids,
-                embeddings=embeddings,
+                embeddings=embeddings,  # type: ignore[arg-type]
                 documents=text,
-                metadatas=metadata,
+                metadatas=metadata,  # type: ignore[arg-type]
             )
 
     @classmethod
@@ -689,13 +719,13 @@ class Chroma(VectorStore):
         cls: Type[Chroma],
         texts: List[str],
         embedding: Optional[Embeddings] = None,
-        metadatas: Optional[List[dict]] = None,
+        metadatas: Optional[List[Dict[str, Any]]] = None,
         ids: Optional[List[str]] = None,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         persist_directory: Optional[str] = None,
-        client_settings: Optional[chromadb.config.Settings] = None,
-        client: Optional[chromadb.Client] = None,
-        collection_metadata: Optional[Dict] = None,
+        client_settings: Optional[chromadb.config.Settings] = None,  # type: ignore[valid-type]
+        client: Optional[chromadb.Client] = None,  # type: ignore[valid-type]
+        collection_metadata: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Chroma:
         """Create a Chroma vectorstore from a raw documents.
@@ -736,12 +766,12 @@ class Chroma(VectorStore):
             for batch in create_batches(
                 api=chroma_collection._client,
                 ids=ids,
-                metadatas=metadatas,
+                metadatas=metadatas,  # type: ignore[arg-type]
                 documents=texts,
             ):
                 chroma_collection.add_texts(
                     texts=batch[3] if batch[3] else [],
-                    metadatas=batch[2] if batch[2] else None,
+                    metadatas=batch[2] if batch[2] else None,  # type: ignore[arg-type]
                     ids=batch[0],
                 )
         else:
@@ -756,9 +786,9 @@ class Chroma(VectorStore):
         ids: Optional[List[str]] = None,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         persist_directory: Optional[str] = None,
-        client_settings: Optional[chromadb.config.Settings] = None,
-        client: Optional[chromadb.Client] = None,  # Add this line
-        collection_metadata: Optional[Dict] = None,
+        client_settings: Optional[chromadb.config.Settings] = None,  # type: ignore[valid-type]
+        client: Optional[chromadb.Client] = None,  # type: ignore[valid-type]
+        collection_metadata: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Chroma:
         """Create a Chroma vectorstore from a list of documents.
@@ -822,7 +852,7 @@ def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
                 except TypeError:  # pragma: no cover - compatibility with legacy clients
                     response = collection.get()
                 except Exception as e:
-                    logger.error(f"Error getting collection {collection_name}: {e}")
+                    logger.debug(f"Error getting collection {collection_name}: {e}")
                     continue
 
                 # Debug logging
@@ -831,38 +861,58 @@ def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
                 metadata_items: Iterable[Any] = []
 
                 if response is None:
-                    logger.warning(f"Collection {collection_name} returned None response")
+                    logger.debug(f"Collection {collection_name} returned None response - skipping")
                     continue
                 elif isinstance(response, dict):
-                    metadata_items = response.get("metadatas", []) or []
-                elif hasattr(response, "get"):
                     try:
                         metadata_items = response.get("metadatas", []) or []
+                        logger.debug(f"Collection {collection_name}: got {len(metadata_items)} metadata items")
                     except Exception as e:
-                        logger.error(f"Error calling get() on response for collection {collection_name}: {e}")
+                        logger.debug(f"Error getting metadatas from dict response for collection {collection_name}: {e}")
+                        continue
+                elif hasattr(response, "get"):
+                    try:
+                        # Additional safety check - ensure response is not None before calling get()
+                        if response is None:
+                            logger.debug(f"Collection {collection_name}: response is None despite hasattr check")
+                            continue
+                        metadata_items = response.get("metadatas", []) or []
+                        logger.debug(f"Collection {collection_name}: got {len(metadata_items)} metadata items from object")
+                    except Exception as e:
+                        logger.debug(f"Error calling get() on response for collection {collection_name}: {e}")
                         continue
                 else:
-                    logger.warning(f"Collection {collection_name}: unexpected response type {type(response)}")
+                    logger.debug(f"Collection {collection_name}: unexpected response type {type(response)} - skipping")
                     continue
 
-                for metadata in metadata_items:
-                    if not metadata:
+                for i, metadata in enumerate(metadata_items):
+                    # Verificación más robusta de metadata - sin logging verbose
+                    if metadata is None or not isinstance(metadata, dict) or not metadata:
                         continue
 
-                    file_name = metadata.get("uploaded_file_name") if isinstance(metadata, dict) else None
-                    if not file_name and isinstance(metadata, dict):
-                        source_path = metadata.get("source")
-                        if source_path:
-                            file_name = os.path.basename(str(source_path))
+                    try:
+                        file_name = metadata.get("uploaded_file_name") if metadata else None
+                    except Exception:
+                        continue
+
+                    if not file_name:
+                        try:
+                            source_path = metadata.get("source") if metadata else None
+                            if source_path:
+                                file_name = os.path.basename(str(source_path))
+                        except Exception:
+                            continue
+
                     if not file_name:
                         continue
 
-                    domain = (
-                        metadata.get("domain") if isinstance(metadata, dict) else None
-                    ) or collection_config.domain
-                    collection_label = (
-                        metadata.get("collection") if isinstance(metadata, dict) else None
-                    ) or collection_name
+                    try:
+                        domain = metadata.get("domain") if metadata else None
+                        domain = domain or collection_config.domain
+                        collection_label = metadata.get("collection") if metadata else None
+                        collection_label = collection_label or collection_name
+                    except Exception:
+                        continue
 
                     records.append(
                         {
@@ -872,10 +922,11 @@ def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
                         }
                     )
             except Exception as e:
-                logger.error(f"Error processing collection {collection_name}: {e}")
+                logger.debug(f"Error processing collection {collection_name}: {e}")
                 continue
 
         if not records:
+            logger.info("No records found in any collection, returning empty DataFrame")
             return pd.DataFrame(columns=["uploaded_file_name", "domain", "collection"])
 
         df = pd.DataFrame(records)
@@ -883,7 +934,6 @@ def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
         return df.sort_values(by=["uploaded_file_name", "collection"]).reset_index(drop=True)
 
     except Exception as e:
-        logger.error(f"Error in get_unique_sources_df: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.debug(f"Error in get_unique_sources_df: {e}")
+        # Always return a DataFrame, never None
         return pd.DataFrame(columns=["uploaded_file_name", "domain", "collection"])

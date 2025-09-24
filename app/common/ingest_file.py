@@ -21,9 +21,10 @@ except Exception:  # pragma: no cover - fallback path used in constrained enviro
     class RecursiveCharacterTextSplitter:  # type: ignore[override]
         """Minimal splitter that returns documents unchanged."""
 
-        def __init__(self, chunk_size: int = 500, chunk_overlap: int = 0) -> None:  # noqa: D401
+        def __init__(self, chunk_size: int = 500, chunk_overlap: int = 0, separators: Optional[List[str]] = None) -> None:  # noqa: D401
             self.chunk_size = chunk_size
             self.chunk_overlap = chunk_overlap
+            self.separators = separators or ["\n\n", "\n", " "]
 
         def split_documents(self, documents):
             return list(documents)
@@ -64,15 +65,12 @@ class SecurityError(Exception):
     """Excepción lanzada cuando se detecta una amenaza de seguridad."""
     pass
 
-try:
-    from langchain_community.embeddings import HuggingFaceEmbeddings
-except ImportError:  # pragma: no cover - used in lightweight stubs
-    HuggingFaceEmbeddings = Any  # type: ignore[assignment]
 
 try:
     from common.chroma_db_settings import get_unique_sources_df as _get_unique_sources_df
 except (ImportError, AttributeError):  # pragma: no cover - fallback for lightweight stubs
-    def _get_unique_sources_df(_chroma_settings) -> pd.DataFrame:
+    def _get_unique_sources_df(chroma_settings) -> pd.DataFrame:  # type: ignore
+        logger.warning("Using fallback get_unique_sources_df function - ChromaDB settings not available")
         return pd.DataFrame(columns=["uploaded_file_name", "domain", "collection"])
 from common.constants import CHROMA_SETTINGS
 from common.text_normalization import Document, normalize_documents_nfc
@@ -164,7 +162,7 @@ class ProcessedFile:
     def __getitem__(self, item):  # type: ignore[override]
         return self.documents[item]
 
-def get_embeddings(domain: Optional[str] = None) -> HuggingFaceEmbeddings:
+def get_embeddings(domain: Optional[str] = None) -> Any:
     """Obtain embeddings for the requested domain using the shared manager."""
 
     return get_embeddings_manager().get_embeddings(domain)
@@ -197,7 +195,7 @@ def _get_text_splitter_for_domain(domain: str) -> RecursiveCharacterTextSplitter
     return RecursiveCharacterTextSplitter(
         chunk_size=config["chunk_size"],
         chunk_overlap=config["chunk_overlap"],
-        separators=config["separators"]
+        separators=config.get("separators", ["\n\n", "\n", " "])
     )
 
 
@@ -218,21 +216,36 @@ def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Document], Base
     ext = os.path.splitext(uploaded_file.name)[1].lower()
     ingestor = _get_ingestor_for_extension(ext)
 
-    with _temp_file(uploaded_file) as tmp_path:
-        documents = ingestor.load(tmp_path, ext)
+    if ingestor is None:
+        raise ValueError(f"No ingestor found for extension: {ext}")
 
-    for document in documents:
-        metadata = dict(document.metadata or {})
-        metadata.update(
-            {
-                "domain": ingestor.domain,
-                "collection": ingestor.collection_name,
-                "uploaded_file_name": file_name,
-            }
-        )
-        document.metadata = metadata
+    try:
+        with _temp_file(uploaded_file) as tmp_path:
+            documents = ingestor.load(tmp_path, ext)
 
-    return documents, ingestor
+        if documents is None:
+            raise ValueError(f"Document loader returned None for file: {file_name}")
+
+        if not isinstance(documents, list):
+            raise ValueError(f"Document loader returned invalid type {type(documents)} for file: {file_name}")
+
+        for document in documents:
+            if document is None:
+                continue
+            metadata = dict(document.metadata or {})
+            metadata.update(
+                {
+                    "domain": ingestor.domain,
+                    "collection": ingestor.collection_name,
+                    "uploaded_file_name": file_name,
+                }
+            )
+            document.metadata = metadata
+
+        return documents, ingestor
+    except Exception as e:
+        logger.error(f"Error loading documents for file {file_name}: {e}")
+        raise
 
 
 class ProcessResult(Sequence[Document]):
@@ -262,15 +275,40 @@ class ProcessResult(Sequence[Document]):
 def _collection_contains_file(collection, file_name: str) -> bool:
     try:
         results = collection.get(where={"uploaded_file_name": file_name})
-    except Exception:  # pragma: no cover - chroma specific failure fallback
-        results = collection.get()
-    ids = results.get("ids", []) if isinstance(results, dict) else []
-    metadatas = results.get("metadatas", []) if isinstance(results, dict) else []
-    if ids:
+    except Exception as e:  # pragma: no cover - chroma specific failure fallback
+        logger.warning(f"Error querying collection for file {file_name}: {e}")
+        try:
+            results = collection.get()
+        except Exception as e2:
+            logger.error(f"Failed to get collection data for file {file_name}: {e2}")
+            return False
+
+    # Handle case where collection.get() returns None
+    if results is None:
+        logger.warning(f"Collection.get() returned None for file: {file_name}")
+        return False
+
+    # Ensure results is a dictionary before accessing keys
+    if not isinstance(results, dict):
+        logger.warning(f"Collection.get() returned non-dict type {type(results)} for file: {file_name}")
+        return False
+
+    ids = results.get("ids", [])
+    metadatas = results.get("metadatas", [])
+
+    # Check if file exists by ID
+    if ids and file_name in ids:
         return True
-    return any(
-        metadata and metadata.get("uploaded_file_name") == file_name for metadata in metadatas
-    )
+
+    # Check if file exists by metadata
+    if metadatas:
+        return any(
+            isinstance(metadata, dict) and metadata.get("uploaded_file_name") == file_name
+            for metadata in metadatas
+            if metadata is not None
+        )
+
+    return False
 
 
 def validate_uploaded_file(uploaded_file) -> tuple[bool, str]:
@@ -295,7 +333,17 @@ def load_single_document(uploaded_file, file_name: str) -> Tuple[List[Document],
 
     try:
         logger.info("Cargando documento: %s", uploaded_file.name)
-        return _load_documents(uploaded_file, file_name)
+        documents, ingestor = _load_documents(uploaded_file, file_name)
+
+        # Validate that we got valid results
+        if documents is None:
+            raise ValueError(f"Document loader returned None for file: {file_name}")
+        if ingestor is None:
+            raise ValueError(f"No ingestor found for file: {file_name}")
+        if not isinstance(documents, list):
+            raise ValueError(f"Document loader returned invalid type {type(documents)} for file: {file_name}")
+
+        return documents, ingestor
     except Exception as exc:
         logger.error("Error al cargar documento %s: %s", uploaded_file.name, exc)
         raise
@@ -353,28 +401,41 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
         logger.warning(f"Procesando archivo sin escaneo de seguridad: {file_name}")
 
     # Continuar con procesamiento normal si el archivo es seguro
-    documents, ingestor = load_single_document(uploaded_file, file_name)
-    collection = CHROMA_SETTINGS.get_or_create_collection(ingestor.collection_name)
-    if _collection_contains_file(collection, file_name):
-        return ProcessResult([], ingestor, duplicate=True)
+    try:
+        documents, ingestor = load_single_document(uploaded_file, file_name)
+    except Exception as e:
+        logger.error(f"Error loading document {file_name}: {e}")
+        raise
+
+    try:
+        collection = CHROMA_SETTINGS.get_or_create_collection(ingestor.collection_name)
+        if _collection_contains_file(collection, file_name):
+            return ProcessResult([], ingestor, duplicate=True)
+    except Exception as e:
+        logger.error(f"Error checking collection for file {file_name}: {e}")
+        raise
 
     # Usar chunking específico por dominio
-    text_splitter = _get_text_splitter_for_domain(ingestor.domain)
-    texts = text_splitter.split_documents(documents)
+    try:
+        text_splitter = _get_text_splitter_for_domain(ingestor.domain)
+        texts = text_splitter.split_documents(documents)
 
-    # Agregar metadatos de chunking para análisis
-    for i, text in enumerate(texts):
-        if hasattr(text, 'metadata') and text.metadata:
-            text.metadata.update({
-                "chunk_index": i,
-                "total_chunks": len(texts),
-                "chunking_domain": ingestor.domain,
-                "chunk_size_config": CHUNKING_CONFIG.get(ingestor.domain, CHUNKING_CONFIG["default"])["chunk_size"],
-                "chunk_overlap_config": CHUNKING_CONFIG.get(ingestor.domain, CHUNKING_CONFIG["default"])["chunk_overlap"]
-            })
+        # Agregar metadatos de chunking para análisis
+        for i, text in enumerate(texts):
+            if hasattr(text, 'metadata') and text.metadata:
+                text.metadata.update({
+                    "chunk_index": i,
+                    "total_chunks": len(texts),
+                    "chunking_domain": ingestor.domain,
+                    "chunk_size_config": CHUNKING_CONFIG.get(ingestor.domain, CHUNKING_CONFIG["default"])["chunk_size"],
+                    "chunk_overlap_config": CHUNKING_CONFIG.get(ingestor.domain, CHUNKING_CONFIG["default"])["chunk_overlap"]
+                })
 
-    normalized = normalize_documents_nfc(texts)
-    return ProcessResult(normalized, ingestor)
+        normalized = normalize_documents_nfc(texts)
+        return ProcessResult(normalized, ingestor)
+    except Exception as e:
+        logger.error(f"Error processing documents for file {file_name}: {e}")
+        raise
 
 def does_vectorstore_exist(settings, collection_name: str) -> bool:
     """Check if a vectorstore already contains data for *collection_name*."""
@@ -438,17 +499,40 @@ def ingest_file(uploaded_file, file_name):
 
     try:
         logger.info("Iniciando ingesta del archivo: %s", file_name)
+
+        if uploaded_file is None:
+            return {"success": False, "error": "Archivo no proporcionado"}
+
+        if not hasattr(uploaded_file, 'name'):
+            return {"success": False, "error": "Objeto de archivo inválido"}
+
         result = process_file(uploaded_file, file_name)
 
-        if result.get("success"):
-            logger.info("Archivo ingerido exitosamente: %s", file_name)
-        else:
-            logger.error("Error al ingerir archivo: %s", file_name)
+        # Validate result
+        if result is None:
+            logger.error("process_file returned None for file: %s", file_name)
+            return {"success": False, "error": "Error interno: process_file devolvió None"}
 
-        return result
+        # Convert ProcessResult to dictionary format expected by callers
+        if isinstance(result, ProcessResult):
+            if result.duplicate:
+                logger.warning("Archivo duplicado: %s", file_name)
+                return {"success": False, "error": "Archivo ya existe en la base de datos"}
+            elif hasattr(result, 'documents') and len(result.documents) > 0:
+                logger.info("Archivo ingerido exitosamente: %s", file_name)
+                return {"success": True, "message": f"Archivo procesado con {len(result.documents)} documentos"}
+            else:
+                logger.error("No se generaron documentos para el archivo: %s", file_name)
+                return {"success": False, "error": "No se generaron documentos válidos"}
+        else:
+            # If it's already a dict, return as is
+            return result
     except Exception as e:
         logger.error("Error durante la ingesta del archivo %s: %s", file_name, str(e))
-        return {"success": False, "error": str(e)}
+        error_msg = str(e)
+        if "'NoneType' object has no attribute 'get'" in error_msg:
+            error_msg = "Error interno: problema con la conexión a la base de datos vectorial"
+        return {"success": False, "error": error_msg}
 
 def _start_processing_worker():
     """Inicia el worker de procesamiento si no está corriendo."""
@@ -544,6 +628,13 @@ def _original_ingest_file(uploaded_file, file_name):
         ingestor = result.ingestor
         embeddings = get_embeddings(ingestor.domain)
 
+        # Convert local Document objects to LangChain Document objects
+        from langchain_core.documents import Document as LangChainDocument
+        langchain_docs = [
+            LangChainDocument(page_content=doc.page_content, metadata=doc.metadata)
+            for doc in texts
+        ]
+
         spinner_message = f"Creando embeddings para {file_name}..."
         if does_vectorstore_exist(CHROMA_SETTINGS, ingestor.collection_name):
             db = Chroma(
@@ -552,20 +643,20 @@ def _original_ingest_file(uploaded_file, file_name):
                 client=CHROMA_SETTINGS,
             )
             with st.spinner(spinner_message):
-                db.add_documents(texts)
+                db.add_documents(langchain_docs)
         else:
             st.info("Creando nueva base de datos vectorial...")
             with st.spinner("Creando embeddings. Esto puede tomar algunos minutos..."):
                 try:
                     Chroma.from_documents(
-                        texts,
+                        langchain_docs,
                         embeddings,
                         client=CHROMA_SETTINGS,
                         collection_name=ingestor.collection_name,
                     )
                 except TypeError:
                     # Compatibilidad con dobles de prueba minimalistas.
-                    Chroma.from_documents(texts, embeddings, CHROMA_SETTINGS)
+                    Chroma.from_documents(langchain_docs, embeddings, CHROMA_SETTINGS)
 
         st.success(f"Se agregó el archivo '{file_name}' con éxito.")
         logger.info("Archivo procesado exitosamente: %s", file_name)

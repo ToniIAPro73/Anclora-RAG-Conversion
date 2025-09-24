@@ -13,7 +13,7 @@ import sys
 import yaml
 
 if TYPE_CHECKING:  # pragma: no cover - used for type checkers only
-    from langchain_community.embeddings import HuggingFaceEmbeddings
+    from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
 
 HuggingFaceEmbeddings = None  # type: ignore[assignment]
 
@@ -148,7 +148,7 @@ class EmbeddingsManager:
                     langchain_module, "HuggingFaceEmbeddings", embedding_cls
                 )
             if embedding_cls is None or not callable(embedding_cls):
-                from langchain_community.embeddings import HuggingFaceEmbeddings as _HF
+                from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings as _HF
 
                 embedding_cls = _HF
                 globals()["HuggingFaceEmbeddings"] = _HF

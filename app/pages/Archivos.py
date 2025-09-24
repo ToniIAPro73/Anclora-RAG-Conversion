@@ -332,5 +332,6 @@ if INGEST_AVAILABLE:
 
     except Exception as e:
         st.error(f"❌ Error al obtener archivos: {str(e)}")
+        st.info(f"📂 {no_files_message}")
 else:
     st.info(f"📂 {no_files_message}")

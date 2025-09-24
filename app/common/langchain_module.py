@@ -7,57 +7,109 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from langchain_community.embeddings import HuggingFaceEmbeddings
+    from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
     from langchain_community.llms import Ollama
 except ImportError:
     print("Error: langchain_community module not found. Please install it with 'pip install langchain-community==0.0.34'")
     import sys
     sys.exit(1)
 
-RunnableLambda = None  # type: ignore[assignment]
+
 
 try:
+
     from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+
     from langchain_core.output_parsers import StrOutputParser
+
     from langchain_core.runnables import RunnablePassthrough
-    try:
-        from langchain_core.runnables import RunnableLambda as _RunnableLambda
-    except ImportError:
-        _RunnableLambda = None
-    else:
-        RunnableLambda = _RunnableLambda
+
 except ImportError:
+
     print("Error: langchain_core module not found. Please install it with 'pip install langchain-core'")
+
     import sys
+
     sys.exit(1)
 
-if RunnableLambda is None:  # pragma: no cover - fallback for older langchain versions
+
+
+try:
+
+    from langchain_core.runnables import RunnableLambda as _ImportedRunnableLambda
+
+except ImportError:
+
+    _ImportedRunnableLambda = None
+
+
+
+if _ImportedRunnableLambda is None:  # pragma: no cover - fallback for older langchain versions
+
     class _CallableRunnable:
+
         def __init__(self, func):
+
             self._func = func
 
+
+
         def invoke(self, value):
+
             return self._func(value)
+
+
 
         def __call__(self, value):
+
             return self._func(value)
 
+
+
         def __or__(self, other):
+
             if hasattr(other, "invoke"):
+
                 return _CallableRunnable(lambda value: other.invoke(self.invoke(value)))
+
             if callable(other):
+
                 return _CallableRunnable(lambda value: other(self.invoke(value)))
+
             return NotImplemented
+
+
 
         def __ror__(self, other):
+
             if hasattr(other, "invoke"):
+
                 return _CallableRunnable(lambda value: self.invoke(other.invoke(value)))
+
             if callable(other):
+
                 return _CallableRunnable(lambda value: self.invoke(other(value)))
+
             return NotImplemented
 
-    class RunnableLambda(_CallableRunnable):
+
+
+    class _FallbackRunnableLambda(_CallableRunnable):
+
         """Ligero reemplazo de ``RunnableLambda`` cuando la dependencia no lo expone."""
+
+
+
+    RunnableLambda = _FallbackRunnableLambda
+
+else:
+
+    RunnableLambda = _ImportedRunnableLambda
+
+
+
+RUNNABLE_LAMBDA_AVAILABLE = RunnableLambda is not None
+
 
 
 try:
@@ -175,6 +227,41 @@ LEGAL_COMPLIANCE_ALLOWED_METADATA_KEYS = frozenset(
     }
 )
 LEGAL_COMPLIANCE_REQUIRED_METADATA_KEYS = frozenset({"policy_id", "policy_version"})
+
+# Constants for prompt variants and domain aliases
+DEFAULT_PROMPT_VARIANT = "documental"
+_DOMAIN_ALIASES = {
+    "docs": "documents",
+    "doc": "documents",
+    "documentation": "documents",
+    "multimedia": "multimedia",
+    "media": "multimedia",
+    "legal": "legal",
+    "compliance": "compliance",
+    "code": "code",
+    "troubleshooting": "code",
+    "guides": "guides",
+    "formats": "formats"
+}
+
+_PROMPT_VARIANT_ALIASES = {
+    "document": "documental",
+    "documents": "documental",
+    "doc": "documental",
+    "docs": "documental",
+    "legal": "legal",
+    "multimedia": "multimedia",
+    "media": "multimedia",
+    "code": "documental",
+    "troubleshooting": "documental"
+}
+
+# Prompt builders mapping
+PROMPT_BUILDERS = {
+    "documental": assistant_prompt,
+    "legal": assistant_prompt,
+    "multimedia": assistant_prompt
+}
 
 def detect_language(text: str) -> str:
     """Detect the language of *text* returning ``es`` or ``en``."""
@@ -838,60 +925,25 @@ def response(
             return greeting_text
 
         # Parse the command line arguments
-        args = parse_args()
+        args = parse_arguments()
         rag_started = True
 
-        embeddings = get_embeddings()
+        # Analyze task context to determine collections and prompt variant
+        directives = _analyse_task_context(task_type, metadata)
+
+        # Prepare collection states
+        collection_states = _prepare_collection_states()
+        selected_states = _select_collection_states(collection_states, directives)
+        prompt_variant = directives.prompt_variant
 
         per_collection_counts: Dict[str, int] = {name: 0 for name in CHROMA_COLLECTIONS}
         collection_domains: Dict[str, str] = {
             name: config.domain for name, config in CHROMA_COLLECTIONS.items()
         }
-        retrievers_by_collection: List[Tuple[str, Any]] = []
-        total_documents = 0
 
-        for collection_name, collection_config in CHROMA_COLLECTIONS.items():
-            doc_count: Optional[int] = None
-
-            skip_remote_collection = False
-            if testing_mode:
-                client_module = getattr(type(chroma_client), "__module__", "")
-                skip_remote_collection = client_module.startswith("chromadb")
-
-            if not skip_remote_collection:
-                try:
-                    collection = chroma_client.get_collection(collection_name)
-                except Exception as exc:
-                    logger.warning(
-                        "No se pudo obtener la colección '%s': %s",
-                        collection_name,
-                        exc,
-                    )
-                    collection = None
-                else:
-                    try:
-                        doc_count = collection.count()
-                    except Exception as exc:
-                        logger.warning(
-                            "No se pudo verificar la cantidad de documentos en '%s': %s",
-                            collection_name,
-                            exc,
-                        )
-                        collection = None
-
-            if doc_count is None:
-                if testing_mode and collection_count_fn is _get_collection_document_count:
-                    doc_count = 1
-                else:
-                    doc_count = collection_count_fn(collection_name)
-
-            if doc_count < 0:  # pragma: no cover - defensive guard
-                logger.warning(
-                    "Se obtuvo un conteo negativo para la colección '%s': %s",
-                    collection_name,
-                    doc_count,
-                )
-                continue
+        # Update per_collection_counts with actual document counts
+        for state in collection_states:
+            per_collection_counts[state.name] = state.document_count
 
         logger.info(
             "Colecciones seleccionadas (%s): %s",
@@ -907,9 +959,10 @@ def response(
             if state.document_count == 0:
                 continue
 
-            embeddings = embeddings_getter(collection_config.domain)
             try:
-                vector_store = collection_store_fn(collection_name, embeddings)
+                # Create retriever from the vector store
+                retriever = state.store.as_retriever(search_kwargs={"k": target_source_chunks})
+                retrievers_by_collection.append((state.name, retriever))
             except Exception as exc:
                 logger.warning(
                     "No se pudo crear el retriever de la colección '%s': %s",
@@ -917,11 +970,6 @@ def response(
                     exc,
                 )
                 continue
-
-            if retriever is None:
-                continue
-
-            retrievers_by_collection.append((state.name, retriever))
 
         if not retrievers_by_collection:
             status = "empty"
@@ -1006,16 +1054,14 @@ def response(
             return selected_docs
 
         # activate/deactivate the streaming StdOut callback for LLMs
-        callbacks = [] if args.mute_stream else [streaming_handler_cls()]
+        callbacks = [] if args.mute_stream else [StreamingStdOutCallbackHandler()]
 
-        llm = ollama_cls(
+        llm = Ollama(
             model=model,
             callbacks=callbacks,
             temperature=0,
             base_url='http://ollama:11434',
         )
-
-        prompt = prompt_factory(language_code)
 
         def format_docs(docs):
             nonlocal context_document_count
@@ -1025,6 +1071,9 @@ def response(
 
             context_document_count = len(docs)
             return "\n\n".join(doc.page_content for doc in docs)
+
+        if not RUNNABLE_LAMBDA_AVAILABLE:
+            raise RuntimeError("RunnableLambda is not available. Please ensure langchain_core is properly installed.")
 
         multi_retriever = RunnableLambda(collect_documents)
 
@@ -1055,22 +1104,15 @@ def response(
 
             multi_retriever = _LambdaWrapper(multi_retriever)
 
-        rag_chain = (
-            {"context": multi_retriever | format_docs, "question": RunnablePassthrough()}
-            | prompt
-            | llm
-            | StrOutputParser()
-        )
-
         try:
             rag_chain = (
                 {
                     "context": multi_retriever | format_docs,
-                    "question": runnable_passthrough_factory(),
+                    "question": RunnablePassthrough(),
                 }
                 | prompt
                 | llm
-                | str_parser_factory()
+                | StrOutputParser()
             )
 
             logger.info(f"Procesando consulta: {stripped_query[:50]}...")
@@ -1081,6 +1123,8 @@ def response(
 
             return result
         except Exception as pipeline_error:
+            # For testing mode, we would need to check if we're in testing
+            testing_mode = os.getenv("PYTEST_CURRENT_TEST") is not None
             if testing_mode:
                 logger.error(
                     "Error en la canalización de pruebas: %s",
@@ -1106,7 +1150,7 @@ def response(
     finally:
         if rag_started:
             duration = time.perf_counter() - start_time
-            record_response(
+            record_rag_response(
                 language_code,
                 status,
                 duration_seconds=duration,

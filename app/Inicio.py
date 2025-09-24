@@ -1,5 +1,8 @@
-import streamlit as st
 import os
+# Deshabilitar telemetría de ChromaDB antes de cualquier importación
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
+import streamlit as st
 from pathlib import Path
 
 # Importar colores de Anclora RAG

@@ -6,6 +6,9 @@ import os
 from dataclasses import dataclass
 from typing import Mapping
 
+# Deshabilitar telemetría de ChromaDB antes de importarlo
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
 import chromadb
 from chromadb.config import Settings
 
