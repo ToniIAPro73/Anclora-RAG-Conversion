@@ -273,6 +273,11 @@ class ProcessResult(Sequence[Document]):
 
 
 def _collection_contains_file(collection, file_name: str) -> bool:
+    # Check if collection is None
+    if collection is None:
+        logger.error(f"Collection is None for file {file_name}")
+        return False
+
     try:
         results = collection.get(where={"uploaded_file_name": file_name})
     except Exception as e:  # pragma: no cover - chroma specific failure fallback
@@ -409,11 +414,15 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
 
     try:
         collection = CHROMA_SETTINGS.get_or_create_collection(ingestor.collection_name)
+        if collection is None:
+            logger.error(f"Failed to create or get collection '{ingestor.collection_name}' for file {file_name}")
+            raise ValueError(f"No se pudo crear la colección '{ingestor.collection_name}' para el archivo {file_name}")
+
         if _collection_contains_file(collection, file_name):
             return ProcessResult([], ingestor, duplicate=True)
     except Exception as e:
         logger.error(f"Error checking collection for file {file_name}: {e}")
-        raise
+        raise ValueError(f"Error de conexión con la base de datos vectorial: {str(e)}")
 
     # Usar chunking específico por dominio
     try:
@@ -530,8 +539,17 @@ def ingest_file(uploaded_file, file_name):
     except Exception as e:
         logger.error("Error durante la ingesta del archivo %s: %s", file_name, str(e))
         error_msg = str(e)
-        if "'NoneType' object has no attribute 'get'" in error_msg:
-            error_msg = "Error interno: problema con la conexión a la base de datos vectorial"
+
+        # Provide more specific error messages based on the error type
+        if "conexión" in error_msg.lower() or "connection" in error_msg.lower():
+            error_msg = "Error de conexión con la base de datos vectorial. Verifique que ChromaDB esté ejecutándose."
+        elif "colección" in error_msg.lower() or "collection" in error_msg.lower():
+            error_msg = "Error al acceder a la colección de la base de datos vectorial."
+        elif "NoneType" in error_msg and "get" in error_msg:
+            error_msg = "Error interno: problema con la configuración de la base de datos vectorial."
+        elif "security" in error_msg.lower():
+            error_msg = f"Archivo bloqueado por seguridad: {error_msg}"
+
         return {"success": False, "error": error_msg}
 
 def _start_processing_worker():

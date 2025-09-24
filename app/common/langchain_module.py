@@ -47,49 +47,33 @@ except ImportError:
 if _ImportedRunnableLambda is None:  # pragma: no cover - fallback for older langchain versions
 
     class _CallableRunnable:
+        """Base class for callable runnables with proper type annotations."""
 
-        def __init__(self, func):
-
+        def __init__(self, func: Callable[[Any], Any]) -> None:
             self._func = func
 
 
 
-        def invoke(self, value):
+        def invoke(self, value: Any) -> Any:
+            return self._func(value)
 
+        def __call__(self, value: Any) -> Any:
             return self._func(value)
 
 
 
-        def __call__(self, value):
-
-            return self._func(value)
-
-
-
-        def __or__(self, other):
-
+        def __or__(self, other: Any) -> "_CallableRunnable":
             if hasattr(other, "invoke"):
-
                 return _CallableRunnable(lambda value: other.invoke(self.invoke(value)))
-
             if callable(other):
-
                 return _CallableRunnable(lambda value: other(self.invoke(value)))
-
             return NotImplemented
 
-
-
-        def __ror__(self, other):
-
+        def __ror__(self, other: Any) -> "_CallableRunnable":
             if hasattr(other, "invoke"):
-
                 return _CallableRunnable(lambda value: self.invoke(other.invoke(value)))
-
             if callable(other):
-
                 return _CallableRunnable(lambda value: self.invoke(other(value)))
-
             return NotImplemented
 
 
@@ -97,6 +81,9 @@ if _ImportedRunnableLambda is None:  # pragma: no cover - fallback for older lan
     class _FallbackRunnableLambda(_CallableRunnable):
 
         """Ligero reemplazo de ``RunnableLambda`` cuando la dependencia no lo expone."""
+
+        def __init__(self, func):
+            super().__init__(func)
 
 
 
@@ -1075,7 +1062,7 @@ def response(
         if not RUNNABLE_LAMBDA_AVAILABLE:
             raise RuntimeError("RunnableLambda is not available. Please ensure langchain_core is properly installed.")
 
-        multi_retriever = RunnableLambda(collect_documents)
+        multi_retriever = RunnableLambda(collect_documents)  # type: ignore[assignment]
 
         if not hasattr(multi_retriever, "__or__"):
             class _LambdaWrapper:
