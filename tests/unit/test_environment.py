@@ -73,7 +73,7 @@ def test_system_dependencies():
 
     if success_count < total_count:
         print("💡 Para instalar herramientas faltantes, ejecuta:")
-        print("   python install_system_dependencies.py")
+        print("   python scripts/setup/install_system_dependencies.py")
 
     return success_count, total_count
 

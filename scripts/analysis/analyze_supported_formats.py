@@ -247,7 +247,7 @@ def main():
     generate_requirements_file(dependencies)
     
     print("\n💡 PRÓXIMOS PASOS:")
-    print("1. Ejecuta: python install_system_dependencies.py")
+    print("1. Ejecuta: python scripts/setup/install_system_dependencies.py")
     print("2. Instala dependencias Python: pip install -r requirements_complete.txt")
     print("3. Verifica todo: python test_environment.py")
     

@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from anclora_rag_client import AncloraRAGClient
+from tools.client.anclora_rag_client import AncloraRAGClient
 
 
 class DummyResponse:

@@ -6,7 +6,7 @@ from typing import List
 
 import pytest
 
-from anclora_rag_client import AIAgentRAGInterface
+from tools.client.anclora_rag_client import AIAgentRAGInterface
 from rag_core.conversion_advisor import ConversionAdvisor
 
 
