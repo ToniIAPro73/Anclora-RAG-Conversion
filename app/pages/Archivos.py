@@ -265,7 +265,18 @@ if st.button(add_button_text):
                         st.info(f"📊 Resultado: {result}")
 
                         if result and result.get("success"):
-                            st.success(f"✅ {success_message}: {uploaded_file.name}")
+                            # Get domain information from the result if available
+                            domain_info = ""
+                            if result.get("domain"):
+                                domain_info = f" (Dominio: {result.get('domain')})"
+                            elif result.get("collection"):
+                                # Try to get domain from collection name
+                                from common.constants import CHROMA_COLLECTIONS
+                                collection_config = CHROMA_COLLECTIONS.get(result.get("collection"))
+                                if collection_config:
+                                    domain_info = f" (Dominio: {collection_config.domain})"
+
+                            st.success(f"✅ {success_message}: {uploaded_file.name}{domain_info}")
                             st.rerun()  # Refresh to show updated file list
                         else:
                             error_msg = result.get("error", "Error desconocido") if result else "Sin resultado"
@@ -300,8 +311,119 @@ if INGEST_AVAILABLE:
         files_df = get_unique_sources_df(CHROMA_SETTINGS)
 
         if not files_df.empty:
+            # Filters section
+            st.subheader("🔍 Filtros de búsqueda" if st.session_state.language == 'es' else "🔍 Search filters")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                # Domain filter
+                available_domains = sorted(files_df['domain'].unique().tolist())
+                domain_options = ['Todos los dominios'] + available_domains if st.session_state.language == 'es' else ['All domains'] + available_domains
+
+                selected_domain = st.selectbox(
+                    "Dominio:" if st.session_state.language == 'es' else "Domain:",
+                    options=domain_options,
+                    index=0,
+                    key="domain_filter"
+                )
+
+            with col2:
+                # Collection filter
+                available_collections = sorted(files_df['collection'].unique().tolist())
+                collection_options = ['Todas las colecciones'] + available_collections if st.session_state.language == 'es' else ['All collections'] + available_collections
+
+                selected_collection = st.selectbox(
+                    "Colección:" if st.session_state.language == 'es' else "Collection:",
+                    options=collection_options,
+                    index=0,
+                    key="collection_filter"
+                )
+
+            # Apply filters
+            filtered_df = files_df.copy()
+
+            # Domain filter
+            domain_filter = selected_domain if st.session_state.language == 'es' else 'All domains'
+            if selected_domain != ('Todos los dominios' if st.session_state.language == 'es' else 'All domains'):
+                filtered_df = filtered_df[filtered_df['domain'] == selected_domain]
+                domain_filter = selected_domain
+
+            # Collection filter
+            collection_filter = selected_collection if st.session_state.language == 'es' else 'All collections'
+            if selected_collection != ('Todas las colecciones' if st.session_state.language == 'es' else 'All collections'):
+                filtered_df = filtered_df[filtered_df['collection'] == selected_collection]
+                collection_filter = selected_collection
+
+            # Show filter status
+            if domain_filter != ('Todos los dominios' if st.session_state.language == 'es' else 'All domains') or collection_filter != ('Todas las colecciones' if st.session_state.language == 'es' else 'All collections'):
+                filter_desc = []
+                if domain_filter != ('Todos los dominios' if st.session_state.language == 'es' else 'All domains'):
+                    filter_desc.append(f"dominio '{domain_filter}'")
+                if collection_filter != ('Todas las colecciones' if st.session_state.language == 'es' else 'All collections'):
+                    filter_desc.append(f"colección '{collection_filter}'")
+
+                filter_text = " y ".join(filter_desc) if st.session_state.language == 'es' else " and ".join(filter_desc)
+                st.info(f"📊 Mostrando {len(filtered_df)} archivos de {filter_text}" if st.session_state.language == 'es' else f"📊 Showing {len(filtered_df)} files from {filter_text}")
+            else:
+                st.info(f"📊 Mostrando todos los {len(filtered_df)} archivos" if st.session_state.language == 'es' else f"📊 Showing all {len(filtered_df)} files")
+
+            # Display statistics
+            if (selected_domain == ('Todos los dominios' if st.session_state.language == 'es' else 'All domains') and
+                selected_collection == ('Todas las colecciones' if st.session_state.language == 'es' else 'All collections')):
+
+                st.subheader("📈 Estadísticas por dominio y colección" if st.session_state.language == 'es' else "📈 Domain and collection statistics")
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown("**Por Dominio:**" if st.session_state.language == 'es' else "**By Domain:**")
+                    # Create domain statistics dataframe
+                    domain_stats = files_df.groupby('domain').size().reset_index(name='count')
+                    domain_stats.columns = ['Dominio', 'Archivos'] if st.session_state.language == 'es' else ['Domain', 'Files']
+                    domain_stats = domain_stats.sort_values('Archivos', ascending=False)
+
+                    # Display domain statistics
+                    for _, row in domain_stats.iterrows():
+                        st.metric(
+                            label=row['Dominio'] if st.session_state.language == 'es' else row['Domain'],
+                            value=row['Archivos'] if st.session_state.language == 'es' else row['Files']
+                        )
+
+                with col2:
+                    st.markdown("**Por Colección:**" if st.session_state.language == 'es' else "**By Collection:**")
+                    # Create collection statistics dataframe
+                    collection_stats = files_df.groupby('collection').size().reset_index(name='count')
+                    collection_stats.columns = ['Colección', 'Archivos'] if st.session_state.language == 'es' else ['Collection', 'Files']
+                    collection_stats = collection_stats.sort_values('Archivos', ascending=False)
+
+                    # Display collection statistics
+                    for _, row in collection_stats.iterrows():
+                        st.metric(
+                            label=row['Colección'] if st.session_state.language == 'es' else row['Collection'],
+                            value=row['Archivos'] if st.session_state.language == 'es' else row['Files']
+                        )
+
+            # Search within filtered results
+            search_query = st.text_input(
+                "🔍 Buscar archivos:" if st.session_state.language == 'es' else "🔍 Search files:",
+                placeholder="Escribe para buscar..." if st.session_state.language == 'es' else "Type to search...",
+                key="file_search"
+            )
+
+            # Apply search filter
+            if search_query:
+                search_df = filtered_df[
+                    filtered_df['uploaded_file_name'].str.contains(search_query, case=False, na=False) |
+                    filtered_df['domain'].str.contains(search_query, case=False, na=False) |
+                    filtered_df['collection'].str.contains(search_query, case=False, na=False)
+                ].copy()
+                st.info(f"🔍 Encontrados {len(search_df)} archivos que coinciden con '{search_query}'" if st.session_state.language == 'es' else f"🔍 Found {len(search_df)} files matching '{search_query}'")
+            else:
+                search_df = filtered_df.copy()
+
             # Display files table
-            display_df = files_df[['uploaded_file_name', 'domain', 'collection']].copy()
+            display_df = search_df[['uploaded_file_name', 'domain', 'collection']].copy()
             display_df.columns = ['Archivo', 'Dominio', 'Colección'] if st.session_state.language == 'es' else ['File', 'Domain', 'Collection']
 
             st.dataframe(display_df, use_container_width=True)
@@ -311,7 +433,7 @@ if INGEST_AVAILABLE:
 
             file_to_delete = st.selectbox(
                 "Seleccionar archivo para eliminar:" if st.session_state.language == 'es' else "Select file to delete:",
-                options=files_df['uploaded_file_name'].tolist(),
+                options=filtered_df['uploaded_file_name'].tolist(),
                 key="file_to_delete"
             )
 

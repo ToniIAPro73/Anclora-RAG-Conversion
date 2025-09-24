@@ -528,8 +528,47 @@ def ingest_file(uploaded_file, file_name):
                 logger.warning("Archivo duplicado: %s", file_name)
                 return {"success": False, "error": "Archivo ya existe en la base de datos"}
             elif hasattr(result, 'documents') and len(result.documents) > 0:
-                logger.info("Archivo ingerido exitosamente: %s", file_name)
-                return {"success": True, "message": f"Archivo procesado con {len(result.documents)} documentos"}
+                # Store documents in ChromaDB
+                try:
+                    texts = result.documents
+                    ingestor = result.ingestor
+                    embeddings = get_embeddings(ingestor.domain)
+
+                    # Convert local Document objects to LangChain Document objects
+                    from langchain_core.documents import Document as LangChainDocument
+                    langchain_docs = [
+                        LangChainDocument(page_content=doc.page_content, metadata=doc.metadata)
+                        for doc in texts
+                    ]
+
+                    # Check if collection already exists
+                    if does_vectorstore_exist(CHROMA_SETTINGS, ingestor.collection_name):
+                        db = Chroma(
+                            collection_name=ingestor.collection_name,
+                            embedding_function=embeddings,
+                            client=CHROMA_SETTINGS,
+                        )
+                        logger.info(f"Agregando {len(langchain_docs)} documentos a colección existente '{ingestor.collection_name}'")
+                        db.add_documents(langchain_docs)
+                    else:
+                        logger.info(f"Creando nueva colección '{ingestor.collection_name}' con {len(langchain_docs)} documentos")
+                        Chroma.from_documents(
+                            langchain_docs,
+                            embeddings,
+                            client=CHROMA_SETTINGS,
+                            collection_name=ingestor.collection_name,
+                        )
+
+                    logger.info("Archivo ingerido exitosamente: %s", file_name)
+                    return {
+                        "success": True,
+                        "message": f"Archivo procesado y almacenado con {len(result.documents)} documentos",
+                        "domain": ingestor.domain,
+                        "collection": ingestor.collection_name
+                    }
+                except Exception as storage_error:
+                    logger.error(f"Error al almacenar documentos en ChromaDB para {file_name}: {storage_error}")
+                    return {"success": False, "error": f"Error al almacenar en base de datos: {str(storage_error)}"}
             else:
                 logger.error("No se generaron documentos para el archivo: %s", file_name)
                 return {"success": False, "error": "No se generaron documentos válidos"}
