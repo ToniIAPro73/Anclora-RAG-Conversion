@@ -1,23 +1,27 @@
 # Anclora RAG - Comprehensive Architecture Documentation
 
+<a id="table-of-contents"></a>
+
 ## 📋 Table of Contents
 
-1. [System Overview](#-system-overview)
-2. [Architecture Overview](#-architecture-overview)
-3. [Technology Stack](#-technology-stack)
-4. [Multi-Agent System Architecture](#-multi-agent-system-architecture)
-5. [Data Flow and Processing Pipeline](#-data-flow-and-processing-pipeline)
-6. [Deployment and Infrastructure](#-deployment-and-infrastructure)
-7. [Configuration and Setup](#-configuration-and-setup)
-8. [Usage Guide](#-usage-guide)
-9. [Benefits and Competitive Advantages](#-benefits-and-competitive-advantages)
-10. [Monitoring and Observability](#-monitoring-and-observability)
-11. [Security Considerations](#-security-considerations)
-12. [Performance Optimizations](#-performance-optimizations)
-13. [Areas for Improvement](#-areas-for-improvement)
-14. [Future Roadmap](#-future-roadmap)
+1. [System Overview](#system-overview)
+2. [Architecture Overview](#architecture-overview)
+3. [Technology Stack](#technology-stack)
+4. [Multi-Agent System Architecture](#multi-agent-system-architecture)
+5. [Data Flow and Processing Pipeline](#data-flow-and-processing-pipeline)
+6. [Deployment and Infrastructure](#deployment-and-infrastructure)
+7. [Configuration and Setup](#configuration-and-setup)
+8. [Usage Guide](#usage-guide)
+9. [Benefits and Competitive Advantages](#benefits-and-competitive-advantages)
+10. [Monitoring and Observability](#monitoring-and-observability)
+11. [Security Considerations](#security-considerations)
+12. [Performance Optimizations](#performance-optimizations)
+13. [Areas for Improvement](#areas-for-improvement)
+14. [Future Roadmap](#future-roadmap)
 
 ---
+
+<a id="system-overview"></a>
 
 ## 🎯 System Overview
 
@@ -47,13 +51,55 @@ Anclora RAG is an advanced **Retrieval-Augmented Generation (RAG)** system desig
 
 ---
 
+<a id="architecture-overview"></a>
+
 ## 🏗️ Architecture Overview
 
-### High-Level Architecture
+ │ Prometheus  │  │   Grafana   │  │   Docker    │              │
+│  │   (9090)    │  │   (3000)    │  │ Containers  │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    Anclora RAG System                           │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │   Streamlit │  │   FastAPI   │  │   N8N       │              │
+│  │     UI      │  │    API      │  │ Workflows   │              │
+│  │   (8080)    │  │   (8081)    │  │             │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │   Hybrid    │  │   Multi-    │  │  Learning   │              │
+│  │ Orchestrator│  │    Agent    │  │   System    │              │
+│  │             │  │   System    │  │             │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │ Document    │  │   Media     │  │    Code     │              │
+│  │   Agent     │  │   Agent     │  │   Agent     │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │ Content     │  │ Smart       │  │ Archive     │              │
+│  │ Analyzer    │  │ Converter   │  │   Agent     │              │
+│  │   Agent     │  │   Agent     │  │             │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │ Embeddings  │  │   ChromaDB  │  │   Ollama    │              │
+│  │  Manager    │  │   (8000)    │  │   (11434)   │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │ Prometheus  │  │   Grafana   │  │   Docker    │              │
+│  │   (9090)    │  │   (3000)    │  │ Containers  │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+└─────────────────────────────────────────────────────────────────┘
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Anclora RAG System                          │
+│                    Anclora RAG System                           │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
 │  │   Streamlit │  │   FastAPI   │  │   N8N       │              │
@@ -126,6 +172,8 @@ Anclora RAG is an advanced **Retrieval-Augmented Generation (RAG)** system desig
 
 ---
 
+<a id="technology-stack"></a>
+
 ## 🛠️ Technology Stack
 
 ### Core Technologies
@@ -183,11 +231,13 @@ Anclora RAG is an advanced **Retrieval-Augmented Generation (RAG)** system desig
 
 ---
 
+<a id="multi-agent-system-architecture"></a>
+
 ## 🤖 Multi-Agent System Architecture
 
 ### Agent Architecture Pattern
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    BaseAgent (Abstract)                     │
 ├─────────────────────────────────────────────────────────────┤
@@ -297,11 +347,13 @@ Anclora RAG is an advanced **Retrieval-Augmented Generation (RAG)** system desig
 
 ---
 
+<a id="data-flow-and-processing-pipeline"></a>
+
 ## 🔄 Data Flow and Processing Pipeline
 
 ### Document Ingestion Pipeline
 
-```
+```text
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   Upload    │───▶│   Format    │───▶│   Agent     │
 │   File      │    │ Detection   │    │ Selection   │
@@ -387,6 +439,8 @@ Anclora RAG is an advanced **Retrieval-Augmented Generation (RAG)** system desig
 - Caching and optimization
 
 ---
+
+<a id="deployment-and-infrastructure"></a>
 
 ## 🚀 Deployment and Infrastructure
 
@@ -505,6 +559,8 @@ services:
 
 ---
 
+<a id="configuration-and-setup"></a>
+
 ## ⚙️ Configuration and Setup
 
 ### Environment Configuration
@@ -612,6 +668,8 @@ open http://localhost:8080
 
 ---
 
+## Usage Guide
+
 ## 📖 Usage Guide
 
 ### User Interface Usage
@@ -699,6 +757,8 @@ export BATCH_SIZE=10
 
 ---
 
+<a id="benefits-and-competitive-advantages"></a>
+
 ## 🏆 Benefits and Competitive Advantages
 
 ### Core Benefits
@@ -771,6 +831,8 @@ export BATCH_SIZE=10
 
 ---
 
+<a id="monitoring-and-observability"></a>
+
 ## 📊 Monitoring and Observability
 
 ### Metrics Collection
@@ -842,6 +904,8 @@ embedding_generation_time = Histogram('embedding_generation_time', 'Time to gene
 - **Custom Log Parsers**: Domain-specific log analysis
 
 ---
+
+## 🔒 Security Considerations
 
 ## 🔒 Security Considerations
 
@@ -979,6 +1043,8 @@ embedding_generation_time = Histogram('embedding_generation_time', 'Time to gene
 
 ---
 
+## Areas for Improvement
+
 ## 🔧 Areas for Improvement
 
 ### Current Limitations
@@ -1058,6 +1124,8 @@ embedding_generation_time = Histogram('embedding_generation_time', 'Time to gene
 - **Environment Management**: Limited environment configurations
 
 ---
+
+## Future Roadmap
 
 ## 🗺️ Future Roadmap
 
