@@ -199,8 +199,21 @@ class AdvancedIngestionSystem:
         
         finally:
             job.end_time = datetime.now()
-            
+
         return job
+
+### Formato de `job.files`
+
+Cada elemento agregado a `job.files` incluye un resumen serializable en la clave `summary` para evitar exponer objetos complejos como `ProcessResult`. Este resumen contiene:
+
+- `collection`: nombre de la colección en Chroma asociada al archivo ingerido.
+- `domain`: dominio que determinó el esquema de chunking aplicado.
+- `chunk_count`: cantidad total de chunks generados durante la normalización.
+- `total_characters`: suma de caracteres en todos los chunks procesados.
+- `duplicate`: indicador booleano que permite detectar rápidamente si el archivo fue descartado por estar repetido.
+- `warnings`: lista opcional de advertencias recogidas durante la conversión (p. ej., problemas puntuales de formato).
+
+Los integradores que necesiten detalles adicionales pueden consultar el mensaje principal (`message`) y la metadata complementaria disponible en el payload del archivo. Si se requiere reconstruir el resultado completo, es posible reingestar el archivo utilizando los helpers tradicionales del módulo `ingest_file`, que continúan devolviendo `ProcessResult` en memoria antes de su serialización.
     
     async def ingest_folder(
         self,

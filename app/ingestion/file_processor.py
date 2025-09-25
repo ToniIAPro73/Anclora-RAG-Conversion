@@ -63,10 +63,34 @@ class FileProcessor:
 
         success = bool(result.get("success")) if isinstance(result, dict) else False
         error = result.get("error") if isinstance(result, dict) else None
+        summary = result.get("summary") if isinstance(result, dict) else None
+        message = result.get("message") if isinstance(result, dict) else None
+        domain = result.get("domain") if isinstance(result, dict) else None
+        collection = result.get("collection") if isinstance(result, dict) else None
+        duplicate = result.get("duplicate") if isinstance(result, dict) else None
+
+        sanitized_result = None
+        if isinstance(result, dict):
+            sanitized_result = {
+                key: value
+                for key, value in (
+                    ("message", message),
+                    ("domain", domain),
+                    ("collection", collection),
+                    ("summary", summary),
+                    ("duplicate", duplicate),
+                )
+                if value is not None
+            }
+            if not sanitized_result:
+                sanitized_result = None
+
         payload = {
             "file_name": file_name,
             "success": success,
-            "result": result,
+            "summary": summary,
+            "message": message,
+            "result": sanitized_result,
             "error": error,
             "metadata": metadata,
         }
