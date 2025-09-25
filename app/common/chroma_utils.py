@@ -1,8 +1,12 @@
 """Utility helpers to interact with Chroma collections."""
 from __future__ import annotations
 
+import dataclasses
+import datetime as _dt
+import enum
 import logging
-from typing import Sequence, Tuple
+from pathlib import Path, PurePath
+from typing import Any, Mapping, Sequence, Tuple
 from uuid import uuid4
 
 from langchain_core.documents import Document as LangChainDocument
