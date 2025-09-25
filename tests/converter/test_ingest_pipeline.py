@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+import unicodedata
 from pathlib import Path
 from types import SimpleNamespace
 import types
@@ -24,6 +25,48 @@ class _UploadedFile:
 
     def getvalue(self) -> bytes:
         return self._data
+
+
+@pytest.fixture
+def docx_project_overview(tmp_path: Path) -> Path:
+    """Build an in-memory DOCX equivalent to the original fixture."""
+
+    from docx import Document as DocxDocument
+
+    document = DocxDocument()
+
+    document.add_paragraph("Project Overview")
+    document.add_paragraph(
+        "Proyecto: Plataforma Anclora RAG para gestión de conocimiento corporativo."
+    )
+    document.add_paragraph(
+        "Objetivo: Entregar respuestas generativas auditables y con controles de"
+        " cumplimiento en menos de 2 segundos."
+    )
+    document.add_paragraph(
+        "Resumen de estado: El piloto con el área de operaciones está en marcha y"
+        " las métricas de adopción se mantienen en niveles verdes."
+    )
+
+    table = document.add_table(rows=1, cols=3)
+    header_cells = table.rows[0].cells
+    header_cells[0].text = "Fase"
+    header_cells[1].text = "Responsable"
+    header_cells[2].text = "Estado"
+
+    for fase, responsable, estado in [
+        ("Descubrimiento", "Ana Torres", "Completado"),
+        ("Implementación", "Luis Gómez", "En progreso"),
+        ("Validación", "Marta Ruiz", "Pendiente"),
+    ]:
+        row_cells = table.add_row().cells
+        row_cells[0].text = fase
+        row_cells[1].text = responsable
+        row_cells[2].text = estado
+
+    output_path = tmp_path / "project_overview.docx"
+    document.save(output_path)
+    return output_path
 
 
 @pytest.fixture
@@ -61,6 +104,34 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     streamlit_module.error = lambda message: events.append(("error", str(message)))
     monkeypatch.setitem(sys.modules, "streamlit", streamlit_module)
 
+    huggingface_module = types.ModuleType("langchain_huggingface")
+
+    class _StubHFEmbeddings:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: D401 - parity
+            self.args = args
+            self.kwargs = kwargs
+
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            return [[0.0] for _ in texts]
+
+    huggingface_module.HuggingFaceEmbeddings = _StubHFEmbeddings
+    monkeypatch.setitem(sys.modules, "langchain_huggingface", huggingface_module)
+
+    langchain_core_module = types.ModuleType("langchain_core")
+    langchain_documents_module = types.ModuleType("langchain_core.documents")
+
+    class _StubLCDocument:
+        def __init__(self, page_content: str, metadata: dict | None = None) -> None:
+            self.page_content = page_content
+            self.metadata = metadata or {}
+
+    langchain_documents_module.Document = _StubLCDocument
+    langchain_core_module.documents = langchain_documents_module
+    monkeypatch.setitem(sys.modules, "langchain_core", langchain_core_module)
+    monkeypatch.setitem(
+        sys.modules, "langchain_core.documents", langchain_documents_module
+    )
+
     common_pkg = sys.modules.get("common")
     if common_pkg is None:
         common_pkg = types.ModuleType("common")
@@ -73,7 +144,11 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         def __init__(self) -> None:
             self.existing_sources: list[str] = []
 
-        def get(self, include: list[str] | None = None) -> dict:
+        def get(
+            self,
+            include: list[str] | None = None,
+            where: dict | None = None,
+        ) -> dict:
             return {
                 "embeddings": [],
                 "documents": [],
@@ -91,6 +166,9 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
                 self.existing_sources = [
                     item for item in self.existing_sources if item != source
                 ]
+
+        def add(self, **kwargs) -> None:
+            self.last_add = kwargs
 
     class _StubChromaClient:
         def __init__(self) -> None:
@@ -157,6 +235,24 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     docloaders_module = types.ModuleType("langchain_community.document_loaders")
     loader_calls: list[tuple[str, str, dict]] = []
 
+    def _extract_text(file_path: Path) -> str:
+        suffix = file_path.suffix.lower()
+        if suffix in {".doc", ".docx"}:
+            from docx import Document as DocxDocument  # lazy import for tests
+
+            doc = DocxDocument(file_path)
+            parts: list[str] = [
+                paragraph.text.strip()
+                for paragraph in doc.paragraphs
+                if paragraph.text.strip()
+            ]
+            for table in doc.tables:
+                for row in table.rows:
+                    cell_text = [cell.text.strip() for cell in row.cells]
+                    parts.append("\t".join(cell_text).strip())
+            return "\n".join(part for part in parts if part)
+        return file_path.read_text(encoding="utf-8")
+
     def _make_loader(name: str):
         class _Loader:
             def __init__(self, file_path: str, **kwargs) -> None:
@@ -165,7 +261,8 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
                 loader_calls.append((name, str(self.file_path), kwargs))
 
             def load(self) -> list[Document]:
-                raw_text = self.file_path.read_text(encoding="utf-8")
+                raw_text = _extract_text(self.file_path)
+                raw_text = unicodedata.normalize("NFD", raw_text)
                 original_name = self.file_path.name
                 if "_" in original_name:
                     original_name = original_name.split("_", 1)[1]
@@ -217,20 +314,49 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
             self.model_name = model_name
             self.kwargs = kwargs
 
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            return [[0.0] for _ in texts]
+
     embeddings_module.HuggingFaceEmbeddings = _StubEmbeddings
     monkeypatch.setitem(sys.modules, "langchain_community.embeddings", embeddings_module)
 
     text_splitter_module = types.ModuleType("langchain.text_splitter")
 
     class _StubSplitter:
-        def __init__(self, chunk_size: int, chunk_overlap: int) -> None:
+        def __init__(
+            self,
+            chunk_size: int,
+            chunk_overlap: int,
+            separators: list[str] | None = None,
+        ) -> None:
             self.chunk_size = chunk_size
             self.chunk_overlap = chunk_overlap
+            self.separators = separators or ["\n\n"]
 
         def split_documents(self, documents):  # noqa: D401 - parity
             chunks: list[Document] = []
             for doc in documents:
-                parts = [part for part in doc.page_content.split("\n\n") if part.strip()]
+                separators = [sep for sep in self.separators if sep]
+                if "\n\n" in doc.page_content:
+                    parts = [
+                        part
+                        for part in doc.page_content.split("\n\n")
+                        if part.strip()
+                    ]
+                else:
+                    separator = None
+                    for candidate in separators:
+                        if candidate in doc.page_content:
+                            separator = candidate
+                            break
+                    if separator is None:
+                        parts = [doc.page_content]
+                    else:
+                        parts = [
+                            part
+                            for part in doc.page_content.split(separator)
+                            if part.strip()
+                        ]
                 if not parts:
                     chunks.append(doc)
                     continue
@@ -244,6 +370,14 @@ def ingest_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setitem(sys.modules, "langchain.text_splitter", text_splitter_module)
 
     module = importlib.import_module("app.common.ingest_file")
+    module.SECURITY_AVAILABLE = False
+
+    def _fake_add_langchain_documents(client, collection_name, embeddings, documents):
+        chroma = _StubChroma(client=client, embedding_function=embeddings)
+        chroma.add_documents(documents)
+        return False, len(documents)
+
+    module.add_langchain_documents = _fake_add_langchain_documents  # type: ignore[attr-defined]
 
     doc_module = importlib.import_module("app.agents.document_agent.ingestor")
     for ext, (loader_cls, loader_kwargs) in list(doc_module.DOCUMENT_LOADERS.items()):
@@ -313,6 +447,30 @@ def test_process_file_pipeline_preserves_metadata(
         assert "original_page_content" in doc.metadata
         assert doc.metadata["normalization"] == NORMALIZATION_FORM
         assert doc.metadata["source"].endswith(uploaded.name)
+
+
+@pytest.mark.slow
+def test_process_file_pipeline_handles_docx(
+    ingest_env: SimpleNamespace, docx_project_overview: Path
+) -> None:
+    module = ingest_env.module
+
+    uploaded = _UploadedFile(docx_project_overview)
+
+    documents = module.process_file(uploaded, uploaded.name)
+
+    assert len(documents) >= 1
+    assert ingest_env.loader_calls, "Se esperaba que el loader fuera invocado"
+    assert ingest_env.loader_calls[-1][0] == "UnstructuredWordDocumentLoader"
+
+    joined = "\n".join(doc.page_content for doc in documents)
+    assert "Project Overview" in joined
+    assert "Descubrimiento" in joined
+    assert any("Responsable" in doc.page_content for doc in documents)
+
+    for doc in documents:
+        assert doc.metadata["source"].endswith(uploaded.name)
+        assert doc.metadata["normalization"] == NORMALIZATION_FORM
 
 
 @pytest.mark.slow
