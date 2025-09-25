@@ -143,7 +143,7 @@ CHUNKING_CONFIG = {
 # Configuración legacy para compatibilidad
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
 
 
 @dataclass(slots=True)
@@ -320,7 +320,7 @@ def validate_uploaded_file(uploaded_file) -> tuple[bool, str]:
     """Validate the uploaded file size and extension."""
 
     if uploaded_file.size > MAX_FILE_SIZE:
-        return False, "Archivo demasiado grande (máximo 10MB)"
+        return False, "Archivo demasiado grande (máximo 200MB)"
 
     file_ext = os.path.splitext(uploaded_file.name)[1].lower()
     if file_ext not in SUPPORTED_EXTENSIONS:

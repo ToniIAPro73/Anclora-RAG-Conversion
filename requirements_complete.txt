@@ -1,14 +1,12 @@
 # Dependencias completas para Anclora RAG
 # Incluye todas las librerías necesarias para procesar todos los formatos
-
 # === DEPENDENCIAS CORE ===
 chromadb==0.5.15
 fastapi>=0.111.0
-langchain-community>=0.2.0
-langchain>=0.2.0
+langchain-community==0.2.5
+langchain==0.2.17
 pydantic>=2.8.0
 streamlit>=1.28.0
-
 # === PROCESAMIENTO DE DOCUMENTOS ===
 PyMuPDF==1.23.5
 beautifulsoup4
@@ -21,7 +19,6 @@ python-magic>=0.4.27
 python-pptx
 unstructured[all-docs]
 xlrd
-
 # === MULTIMEDIA ===
 Pillow
 SpeechRecognition
@@ -31,17 +28,14 @@ moviepy>=1.0.3
 openai-whisper>=20231117
 opencv-python
 pydub
-
 # === CÓDIGO Y DESARROLLO ===
 pygments
 tree-sitter
 tree-sitter-languages
-
 # === ARCHIVOS COMPRIMIDOS ===
 llama-parse>=0.4.0
 py7zr
 rarfile
-
 # === UTILIDADES ADICIONALES ===
 camelot-py[cv]
 ebooklib
@@ -49,7 +43,11 @@ pdfplumber
 pytesseract
 docx2txt
 tabula-py
-
 # === PROCESAMIENTO AVANZADO ===
 unstructured
 # Nota: epub-meta removido por usar setup.py legacy (será obsoleto en pip 25.3)
+GitPython>=3.1.40
+aiohttp>=3.9.0
+fnmatch2>=0.0.8
+langchain-core==0.2.43
+langchain-text-splitters==0.2.4

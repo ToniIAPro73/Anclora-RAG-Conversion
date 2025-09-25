@@ -129,6 +129,13 @@ CHROMA_COLLECTIONS: Mapping[str, CollectionConfig] = {
             "para respaldar respuestas con enfoque legal y normativo."
         ),
     ),
+    "research_sources": CollectionConfig(
+        domain="references",
+        description=(
+            "Repositorio de fuentes bibliograficas curadas para enriquecer respuestas con contexto academico y de investigacion."
+        ),
+    ),
+
 }
 
 DOMAIN_TO_COLLECTION: Mapping[str, str] = {

@@ -1,36 +1,61 @@
+from typing import Any, Callable
+import warnings
+
 # Try to import the required modules, and if they fail, provide helpful error messages
+
+_LANGCHAIN_HINT = "pip install langchain==0.2.17"
+_LANGCHAIN_COMMUNITY_HINT = "pip install langchain-community==0.2.5"
+_LANGCHAIN_CORE_HINT = "pip install langchain-core==0.2.43"
+
+
 try:
     from langchain.chains import RetrievalQA
-except ImportError:
-    print("Error: langchain module not found. Please install it with 'pip install langchain==0.1.16'")
-    import sys
-    sys.exit(1)
+    _HAS_LANGCHAIN = True
+    _LANGCHAIN_ERROR = None
+except ImportError as exc:
+    RetrievalQA = None  # type: ignore
+    _HAS_LANGCHAIN = False
+    _LANGCHAIN_ERROR = exc
+    warnings.warn(
+        f"LangChain base package is not available ({exc}). Install it with '{_LANGCHAIN_HINT}'.",
+        RuntimeWarning,
+    )
+
 
 try:
-    from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
+    from langchain_community import embeddings as _lc_embeddings
     from langchain_community.llms import Ollama
-except ImportError:
-    print("Error: langchain_community module not found. Please install it with 'pip install langchain-community==0.0.34'")
-    import sys
-    sys.exit(1)
+    HuggingFaceEmbeddings = getattr(_lc_embeddings, "HuggingFaceEmbeddings")
+    _HAS_LANGCHAIN_COMMUNITY = True
+    _LANGCHAIN_COMMUNITY_ERROR = None
+except (ImportError, AttributeError) as exc:
+    HuggingFaceEmbeddings = Any  # type: ignore
+    Ollama = None  # type: ignore
+    _HAS_LANGCHAIN_COMMUNITY = False
+    _LANGCHAIN_COMMUNITY_ERROR = exc
+    warnings.warn(
+        f"LangChain community integrations not available ({exc}). Install them with '{_LANGCHAIN_COMMUNITY_HINT}'.",
+        RuntimeWarning,
+    )
 
 
 
 try:
-
     from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-
     from langchain_core.output_parsers import StrOutputParser
-
     from langchain_core.runnables import RunnablePassthrough
-
-except ImportError:
-
-    print("Error: langchain_core module not found. Please install it with 'pip install langchain-core'")
-
-    import sys
-
-    sys.exit(1)
+    _HAS_LANGCHAIN_CORE = True
+    _LANGCHAIN_CORE_ERROR = None
+except ImportError as exc:
+    StreamingStdOutCallbackHandler = None  # type: ignore
+    StrOutputParser = None  # type: ignore
+    RunnablePassthrough = None  # type: ignore
+    _HAS_LANGCHAIN_CORE = False
+    _LANGCHAIN_CORE_ERROR = exc
+    warnings.warn(
+        f"LangChain core components not available ({exc}). Install them with '{_LANGCHAIN_CORE_HINT}'.",
+        RuntimeWarning,
+    )
 
 
 
@@ -835,6 +860,12 @@ def _retrieve_from_collections(
 def get_embeddings(domain: Optional[str] = None) -> HuggingFaceEmbeddings:
     """Return embeddings for *domain* using the shared manager."""
 
+    if not _HAS_LANGCHAIN_COMMUNITY:
+        detail = f" ({_LANGCHAIN_COMMUNITY_ERROR})" if _LANGCHAIN_COMMUNITY_ERROR else ""
+        raise RuntimeError(
+            f"langchain-community no esta disponible{detail}. Instala la dependencia con '{_LANGCHAIN_COMMUNITY_HINT}'."
+        )
+
     module = sys.modules.get(__name__)
     manager_getter = get_embeddings_manager
     if module is not None:
@@ -913,6 +944,20 @@ def response(
 
         # Parse the command line arguments
         args = parse_arguments()
+
+        if not _HAS_LANGCHAIN_COMMUNITY:
+            raise RuntimeError(
+                f"langchain-community no esta disponible. Instala la dependencia con '{_LANGCHAIN_COMMUNITY_HINT}'."
+            )
+        if not _HAS_LANGCHAIN_CORE:
+            raise RuntimeError(
+                f"langchain-core no esta disponible. Instala la dependencia con '{_LANGCHAIN_CORE_HINT}'."
+            )
+        if not _HAS_LANGCHAIN:
+            raise RuntimeError(
+                f"langchain no esta disponible. Instala la dependencia con '{_LANGCHAIN_HINT}'."
+            )
+
         rag_started = True
 
         # Analyze task context to determine collections and prompt variant
@@ -1041,7 +1086,13 @@ def response(
             return selected_docs
 
         # activate/deactivate the streaming StdOut callback for LLMs
-        callbacks = [] if args.mute_stream else [StreamingStdOutCallbackHandler()]
+        streaming_available = StreamingStdOutCallbackHandler is not None and not args.mute_stream
+        callbacks = [StreamingStdOutCallbackHandler()] if streaming_available else []
+
+        if Ollama is None:
+            raise RuntimeError(
+                f"langchain-community no provee el cliente Ollama. Instala la dependencia con '{_LANGCHAIN_COMMUNITY_HINT}'."
+            )
 
         llm = Ollama(
             model=model,
