@@ -161,6 +161,7 @@ CHUNKING_CONFIG = {
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
+CHROMA_BATCH_SIZE = 64
 
 
 @dataclass(slots=True)
@@ -623,43 +624,24 @@ def ingest_file(uploaded_file, file_name):
                 except TypeError:
                     langchain_docs = texts  # Fallback for lightweight stubs during testing
 
-                try:
                     existed, added = add_langchain_documents(
                         CHROMA_SETTINGS,
                         ingestor.collection_name,
                         embeddings,
                         langchain_docs,
+                        batch_size=CHROMA_BATCH_SIZE,
                     )
-                except AttributeError as attr_error:
-                    if "embed_documents" not in str(attr_error):
-                        raise
-                    chroma = Chroma(
-                        collection_name=ingestor.collection_name,
-                        embedding_function=embeddings,
-                        client=CHROMA_SETTINGS,
-                    )
-                    fallback_docs = list(texts)
-                    for doc in fallback_docs:
-                        metadata = doc.metadata or {}
-                        if "original_page_content" not in metadata:
-                            metadata = dict(metadata)
-                            metadata["original_page_content"] = doc.page_content
-                        else:
-                            metadata = dict(metadata)
-                        original_text = metadata.get("original_page_content")
-                        if isinstance(original_text, str):
-                            metadata["original_page_content"] = unicodedata.normalize(
-                                "NFD", original_text
-                            )
-                        doc.metadata = metadata
-                    chroma.add_documents(fallback_docs)
-                    existed = False
-                    added = len(texts)
-                    logger.info(
-                        "Chroma fallback utilizado para almacenar %s chunks en '%s'",
-                        added,
-                        ingestor.collection_name,
-                    )
+                    if not existed:
+                        _safe_streamlit_call("info", "Creando nueva base de datos vectorial...")
+                    logger.info("Colección '%s' recibió %s documentos (existía=%s)", ingestor.collection_name, added, existed)
+
+                    _safe_streamlit_call("success", f"Se agregó el archivo '{file_name}' con éxito.")
+                    return {
+                        "success": True,
+                        "message": f"Archivo procesado y almacenado con {len(result.documents)} documentos",
+                        "domain": ingestor.domain,
+                        "collection": ingestor.collection_name
+                    }
                 except Exception as storage_error:
                     logger.error(f"Error al almacenar documentos en ChromaDB para {file_name}: {storage_error}")
                     return {"success": False, "error": f"Error al almacenar en base de datos: {str(storage_error)}"}
@@ -798,7 +780,13 @@ def _original_ingest_file(uploaded_file, file_name):
             for doc in texts
         ]
 
-        existed, added = add_langchain_documents(CHROMA_SETTINGS, ingestor.collection_name, embeddings, langchain_docs)
+        existed, added = add_langchain_documents(
+            CHROMA_SETTINGS,
+            ingestor.collection_name,
+            embeddings,
+            langchain_docs,
+            batch_size=CHROMA_BATCH_SIZE,
+        )
         if not existed:
             _safe_streamlit_call("info", "Creando nueva base de datos vectorial...")
         logger.info("Colección '%s' recibió %s documentos (existía=%s)", ingestor.collection_name, added, existed)
