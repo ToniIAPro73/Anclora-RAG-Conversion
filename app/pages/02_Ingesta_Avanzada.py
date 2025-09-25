@@ -8,6 +8,16 @@ from typing import Any, Dict, List
 import pandas as pd
 import streamlit as st
 
+import os
+import sys
+from pathlib import Path
+
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CURRENT_DIR.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+
 from app.ingestion import AdvancedIngestionSystem, IngestionJob, IngestionStatus, RepositoryOptions
 from app.components.ingestion_ui_components import (
     FileUploader,

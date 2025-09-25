@@ -80,6 +80,21 @@ get_unique_sources_df = _get_unique_sources_df
 
 logger = logging.getLogger(__name__)
 
+
+
+def _safe_streamlit_call(name: str, *args, **kwargs) -> None:
+    """Invoke a Streamlit UI helper, ignoring missing script context."""
+
+    fn = getattr(st, name, None)
+    if not callable(fn):
+        return
+    try:
+        fn(*args, **kwargs)
+    except Exception as exc:  # RuntimeError when ScriptRunContext is missing
+        logger.debug("Streamlit call %s suppressed: %s", name, exc)
+
+
+
 # Cola de procesamiento global con prioridad por tamaño
 processing_queue = queue.PriorityQueue()
 processing_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="ingest")
@@ -374,12 +389,12 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
                 security_msg = f"Nivel de amenaza: {scan_result.threat_level.upper()}"
                 threats_msg = "Amenazas detectadas: " + ", ".join(scan_result.threats_detected)
 
-                st.error(threat_msg)
-                st.error(security_msg)
-                st.error(threats_msg)
+                _safe_streamlit_call("error", threat_msg)
+                _safe_streamlit_call("error", security_msg)
+                _safe_streamlit_call("error", threats_msg)
 
                 if scan_result.quarantine_path:
-                    st.warning(f"Archivo puesto en cuarentena: {scan_result.quarantine_path}")
+                    _safe_streamlit_call("warning", f"Archivo puesto en cuarentena: {scan_result.quarantine_path}")
 
                 logger.error(f"Archivo bloqueado por seguridad: {file_name} - {scan_result.threat_level}")
                 logger.error(f"Amenazas: {scan_result.threats_detected}")
@@ -389,7 +404,7 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
 
             else:
                 # Archivo seguro
-                st.success(f"✅ Archivo seguro: {file_name}")
+                _safe_streamlit_call("success", f"✅ Archivo seguro: {file_name}")
                 logger.info(f"Archivo aprobado por seguridad: {file_name}")
 
                 # Resetear el puntero del archivo para procesamiento normal
@@ -402,7 +417,7 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
 
     else:
         # Escaneo deshabilitado - mostrar advertencia
-        st.warning("⚠️ Escaneo de seguridad deshabilitado - Procesando sin verificación antimalware")
+        _safe_streamlit_call("warning", "⚠️ Escaneo de seguridad deshabilitado - Procesando sin verificación antimalware")
         logger.warning(f"Procesando archivo sin escaneo de seguridad: {file_name}")
 
     # Continuar con procesamiento normal si el archivo es seguro
@@ -677,7 +692,7 @@ def _original_ingest_file(uploaded_file, file_name):
         result = process_file(uploaded_file, file_name)
 
         if result.duplicate:
-            st.warning("Este archivo ya fue agregado anteriormente.")
+            _safe_streamlit_call("warning", "Este archivo ya fue agregado anteriormente.")
             logger.warning("Archivo duplicado: %s", file_name)
             return
 
@@ -702,7 +717,7 @@ def _original_ingest_file(uploaded_file, file_name):
             with st.spinner(spinner_message):
                 db.add_documents(langchain_docs)
         else:
-            st.info("Creando nueva base de datos vectorial...")
+            _safe_streamlit_call("info", "Creando nueva base de datos vectorial...")
             with st.spinner("Creando embeddings. Esto puede tomar algunos minutos..."):
                 try:
                     Chroma.from_documents(
@@ -715,21 +730,21 @@ def _original_ingest_file(uploaded_file, file_name):
                     # Compatibilidad con dobles de prueba minimalistas.
                     Chroma.from_documents(langchain_docs, embeddings, CHROMA_SETTINGS)
 
-        st.success(f"Se agregó el archivo '{file_name}' con éxito.")
+        _safe_streamlit_call("success", f"Se agregó el archivo '{file_name}' con éxito.")
         logger.info("Archivo procesado exitosamente: %s", file_name)
 
     except SecurityError as sec_exc:
         # Manejo específico de errores de seguridad
         security_msg = f"🚨 ARCHIVO BLOQUEADO POR SEGURIDAD: '{file_name}'"
-        st.error(security_msg)
-        st.error(f"Motivo: {sec_exc}")
-        st.warning("El archivo no fue procesado por razones de seguridad.")
+        _safe_streamlit_call("error", security_msg)
+        _safe_streamlit_call("error", f"Motivo: {sec_exc}")
+        _safe_streamlit_call("warning", "El archivo no fue procesado por razones de seguridad.")
         logger.error("Archivo bloqueado por seguridad: %s - %s", file_name, sec_exc)
         return  # No continuar procesamiento
 
     except Exception as exc:
         error_msg = f"Error al procesar el archivo '{file_name}': {exc}"
-        st.error(error_msg)
+        _safe_streamlit_call("error", error_msg)
         logger.error(error_msg)
 
 
