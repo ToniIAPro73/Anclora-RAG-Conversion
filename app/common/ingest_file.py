@@ -160,6 +160,7 @@ CHUNKING_CONFIG = {
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
+CHROMA_BATCH_SIZE = 64
 
 
 @dataclass(slots=True)
@@ -557,7 +558,13 @@ def ingest_file(uploaded_file, file_name):
                         for doc in texts
                     ]
 
-                    existed, added = add_langchain_documents(CHROMA_SETTINGS, ingestor.collection_name, embeddings, langchain_docs)
+                    existed, added = add_langchain_documents(
+                        CHROMA_SETTINGS,
+                        ingestor.collection_name,
+                        embeddings,
+                        langchain_docs,
+                        batch_size=CHROMA_BATCH_SIZE,
+                    )
                     if not existed:
                         _safe_streamlit_call("info", "Creando nueva base de datos vectorial...")
                     logger.info("Colección '%s' recibió %s documentos (existía=%s)", ingestor.collection_name, added, existed)
@@ -694,7 +701,13 @@ def _original_ingest_file(uploaded_file, file_name):
             for doc in texts
         ]
 
-        existed, added = add_langchain_documents(CHROMA_SETTINGS, ingestor.collection_name, embeddings, langchain_docs)
+        existed, added = add_langchain_documents(
+            CHROMA_SETTINGS,
+            ingestor.collection_name,
+            embeddings,
+            langchain_docs,
+            batch_size=CHROMA_BATCH_SIZE,
+        )
         if not existed:
             _safe_streamlit_call("info", "Creando nueva base de datos vectorial...")
         logger.info("Colección '%s' recibió %s documentos (existía=%s)", ingestor.collection_name, added, existed)
