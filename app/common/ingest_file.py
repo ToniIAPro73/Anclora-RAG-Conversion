@@ -59,7 +59,7 @@ from dataclasses import dataclass
 
 from common.chroma_db_settings import Chroma
 from common.embeddings_manager import get_embeddings_manager
-from app.common.chroma_utils import add_langchain_documents
+from app.common.chroma_utils import add_langchain_documents, _make_metadata_serializable
 
 # Custom security exception
 class SecurityError(Exception):
@@ -256,7 +256,7 @@ def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Document], Base
                     "uploaded_file_name": file_name,
                 }
             )
-            document.metadata = metadata
+            document.metadata = _make_metadata_serializable(metadata)
 
         return documents, ingestor
     except Exception as e:
@@ -455,6 +455,7 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
                     "chunk_size_config": CHUNKING_CONFIG.get(ingestor.domain, CHUNKING_CONFIG["default"])["chunk_size"],
                     "chunk_overlap_config": CHUNKING_CONFIG.get(ingestor.domain, CHUNKING_CONFIG["default"])["chunk_overlap"]
                 })
+                text.metadata = _make_metadata_serializable(text.metadata)
 
         normalized = normalize_documents_nfc(texts)
         return ProcessResult(normalized, ingestor)
