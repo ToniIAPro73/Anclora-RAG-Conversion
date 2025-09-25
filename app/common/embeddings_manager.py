@@ -148,7 +148,10 @@ class EmbeddingsManager:
                     langchain_module, "HuggingFaceEmbeddings", embedding_cls
                 )
             if embedding_cls is None or not callable(embedding_cls):
-                from langchain_huggingface import HuggingFaceEmbeddings as _HF
+                try:
+                    from langchain_huggingface import HuggingFaceEmbeddings as _HF
+                except ImportError:
+                    from langchain_community.embeddings import HuggingFaceEmbeddings as _HF  # type: ignore[assignment]
 
                 embedding_cls = _HF
                 globals()["HuggingFaceEmbeddings"] = _HF

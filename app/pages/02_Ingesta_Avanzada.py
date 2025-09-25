@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import asdict
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import streamlit as st
@@ -81,6 +81,50 @@ def _show_job_feedback(job: IngestionJob) -> None:
         )
 
 
+def _render_job_results(job: IngestionJob) -> None:
+    if not job.files:
+        return
+
+    rows: List[Dict[str, Any]] = []
+    for entry in job.files:
+        if not isinstance(entry, dict):
+            continue
+        summary: Optional[Dict[str, Any]] = entry.get("summary")
+        if summary is None and isinstance(entry.get("result"), dict):
+            summary = entry["result"].get("summary")
+        if not summary:
+            continue
+
+        warnings = summary.get("warnings")
+        if isinstance(warnings, str):
+            warnings_display = warnings
+        elif isinstance(warnings, (list, tuple, set)):
+            warnings_display = ", ".join(sorted({item for item in warnings if isinstance(item, str)}))
+        else:
+            warnings_display = ""
+
+        rows.append(
+            {
+                "Elemento": entry.get("file_name")
+                or entry.get("document_id")
+                or entry.get("metadata", {}).get("source_id")
+                or "-",
+                "Coleccion": summary.get("collection", "-"),
+                "Dominio": summary.get("domain", "-"),
+                "Chunks": summary.get("chunk_count", 0),
+                "Duplicado": "Sí" if summary.get("duplicate") else "No",
+                "Avisos": warnings_display or "-",
+            }
+        )
+
+    if not rows:
+        return
+
+    st.subheader("Resumen de ingesta")
+    df = pd.DataFrame(rows)
+    st.dataframe(df, use_container_width=True)
+
+
 with tab_archivos:
     uploader = FileUploader(label="Selecciona archivos para importar")
     uploaded_files = uploader.render(ingestion_system.supported_formats)
@@ -109,6 +153,7 @@ with tab_archivos:
                 )
                 _register_job(job)
                 _show_job_feedback(job)
+                _render_job_results(job)
                 if job.errors:
                     st.json(job.errors)
 
@@ -137,6 +182,7 @@ with tab_carpetas:
             )
             _register_job(job)
             _show_job_feedback(job)
+            _render_job_results(job)
     if "folder_report" in st.session_state:
         report = st.session_state["folder_report"]
         st.subheader("Resumen de carpeta")
@@ -173,6 +219,7 @@ with tab_markdown:
             )
             _register_job(job)
             _show_job_feedback(job)
+            _render_job_results(job)
 
 
 with tab_github:
@@ -225,6 +272,7 @@ with tab_github:
                 )
             _register_job(job)
             _show_job_feedback(job)
+            _render_job_results(job)
             if job.errors:
                 st.json(job.errors)
             st.session_state.pop(analysis_key, None)
