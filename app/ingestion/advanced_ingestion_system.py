@@ -18,6 +18,7 @@ from app.ingestion.file_processor import FileProcessor
 from app.ingestion.folder_processor import FolderProcessor
 from app.ingestion.markdown_source_parser import MarkdownSourceParser
 from app.ingestion.validation_service import ValidationService
+from app.common.chroma_utils import add_langchain_documents
 from app.ingestion.github_processor import GitHubRepositoryProcessor, RepositoryOptions
 from app.common.chroma_db_settings import Chroma
 
@@ -445,11 +446,9 @@ class AdvancedIngestionSystem:
         embeddings = get_embeddings("documents")
         langchain_doc = LangChainDocument(page_content=document["content"], metadata=document["metadata"])
         collection_name = self.markdown_collection
-        if does_vectorstore_exist(CHROMA_SETTINGS, collection_name):
-            db = Chroma(collection_name=collection_name, embedding_function=embeddings, client=CHROMA_SETTINGS)
-            db.add_documents([langchain_doc])
-        else:
-            Chroma.from_documents([langchain_doc], embeddings, client=CHROMA_SETTINGS, collection_name=collection_name)
+        existed, _ = add_langchain_documents(CHROMA_SETTINGS, collection_name, embeddings, [langchain_doc])
+        if not existed:
+            logger.info("Creando nueva colección '%s' desde fuentes markdown", collection_name)
         return {
             "document_id": document["metadata"].get("source_id"),
             "status": "indexed",

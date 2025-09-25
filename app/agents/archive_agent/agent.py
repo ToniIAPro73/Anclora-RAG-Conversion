@@ -58,7 +58,7 @@ class ArchiveAgent(BaseAgent):
                 if collection is None:
                     db = Chroma(
                         collection_name=self._config.collection_name,
-                        embedding_function=embeddings,
+                        embedding_function=lambda docs, _emb=embeddings: _emb.embed_documents(docs),
                     )
                     collection = db._collection
 

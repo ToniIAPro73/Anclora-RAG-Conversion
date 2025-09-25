@@ -453,7 +453,7 @@ def _get_collection_store(
         if store is None:
             store = chroma_cls(
                 collection_name=collection_name,
-                embedding_function=embeddings,
+                embedding_function=(lambda docs, _emb=embeddings: _emb.embed_documents(docs)),
                 client=getattr(module, "CHROMA_SETTINGS", CHROMA_SETTINGS),
             )
             _collections_cache[cache_key] = store
