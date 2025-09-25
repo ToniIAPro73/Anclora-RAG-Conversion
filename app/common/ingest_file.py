@@ -624,24 +624,32 @@ def ingest_file(uploaded_file, file_name):
                 except TypeError:
                     langchain_docs = texts  # Fallback for lightweight stubs during testing
 
-                    existed, added = add_langchain_documents(
-                        CHROMA_SETTINGS,
-                        ingestor.collection_name,
-                        embeddings,
-                        langchain_docs,
-                        batch_size=CHROMA_BATCH_SIZE,
-                    )
-                    if not existed:
-                        _safe_streamlit_call("info", "Creando nueva base de datos vectorial...")
-                    logger.info("Colección '%s' recibió %s documentos (existía=%s)", ingestor.collection_name, added, existed)
+                collection_ref = locals().get('collection')
+                if collection_ref is None:
+                    collection_ref = CHROMA_SETTINGS.get_or_create_collection(ingestor.collection_name)
 
-                    _safe_streamlit_call("success", f"Se agregó el archivo '{file_name}' con éxito.")
-                    return {
-                        "success": True,
-                        "message": f"Archivo procesado y almacenado con {len(result.documents)} documentos",
-                        "domain": ingestor.domain,
-                        "collection": ingestor.collection_name
-                    }
+                try:
+                    if hasattr(collection_ref, 'add'):
+                        existed, added = add_langchain_documents(
+                            CHROMA_SETTINGS,
+                            ingestor.collection_name,
+                            embeddings,
+                            langchain_docs,
+                            batch_size=CHROMA_BATCH_SIZE,
+                        )
+                    else:
+                        try:
+                            preexisting = collection_ref.count()
+                        except Exception:
+                            preexisting = 0
+                        vector_store = Chroma(
+                            collection_name=ingestor.collection_name,
+                            embedding_function=embeddings,
+                            client=CHROMA_SETTINGS,
+                        )
+                        vector_store.add_documents(langchain_docs)
+                        existed = preexisting > 0
+                        added = len(langchain_docs)
                 except Exception as storage_error:
                     logger.error(f"Error al almacenar documentos en ChromaDB para {file_name}: {storage_error}")
                     return {"success": False, "error": f"Error al almacenar en base de datos: {str(storage_error)}"}

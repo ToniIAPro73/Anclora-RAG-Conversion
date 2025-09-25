@@ -127,12 +127,20 @@ def add_langchain_documents(
             collection_name,
             len(batch_ids),
         )
-        collection.add(
-            ids=batch_ids,
-            documents=batch_contents,
-            embeddings=batch_vectors,
-            metadatas=batch_metadatas,
-        )
+        try:
+            collection.add(
+                ids=batch_ids,
+                documents=batch_contents,
+                embeddings=batch_vectors,
+                metadatas=batch_metadatas,
+            )
+        except AttributeError:
+            if hasattr(collection, 'add_documents') and callable(getattr(collection, 'add_documents', None)):
+                collection.add_documents(documents[start:end])
+            elif hasattr(collection, 'add_records') and callable(getattr(collection, 'add_records', None)):
+                collection.add_records(documents[start:end])
+            else:
+                raise
         total_added += len(batch_ids)
 
     return existed, total_added

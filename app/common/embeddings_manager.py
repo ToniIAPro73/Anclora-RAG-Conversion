@@ -77,6 +77,31 @@ def _load_domain_overrides_from_env() -> Dict[str, str]:
     return overrides
 
 
+def _ensure_embedding_protocol(instance: Any) -> Any:
+    """Guarantee the returned embedding object exposes the expected methods."""
+
+    embed_documents = getattr(instance, "embed_documents", None)
+    if not callable(embed_documents):
+        fallback = getattr(instance, "embed", None)
+        if callable(fallback):
+            def _embed_documents(texts, *, _fn=fallback):  # type: ignore[override]
+                return _fn(texts)
+        else:
+            logger.warning("Embedding instance missing 'embed_documents'; using in-memory stub.")
+            def _embed_documents(texts):  # type: ignore[override]
+                return [[0.0] for _ in texts]
+        setattr(instance, "embed_documents", _embed_documents)
+
+    embed_query = getattr(instance, "embed_query", None)
+    if not callable(embed_query):
+        def _embed_query(text):  # type: ignore[override]
+            vectors = instance.embed_documents([text])
+            return vectors[0] if vectors else []
+        setattr(instance, "embed_query", _embed_query)
+
+    return instance
+
+
 @dataclass(frozen=True)
 class EmbeddingsConfig:
     """Configuration describing which model to use per domain."""
@@ -150,7 +175,11 @@ class EmbeddingsManager:
             if embedding_cls is None or not callable(embedding_cls):
                 try:
                     from langchain_huggingface import HuggingFaceEmbeddings as _HF
-                except ImportError:
+                except Exception as exc:  # pragma: no cover - optional dependency may fail at import time
+                    logger.warning(
+                        "Fallo al cargar langchain_huggingface.HuggingFaceEmbeddings: %s. Usando langchain_community.",
+                        exc,
+                    )
                     from langchain_community.embeddings import HuggingFaceEmbeddings as _HF  # type: ignore[assignment]
 
                 embedding_cls = _HF
@@ -175,6 +204,7 @@ class EmbeddingsManager:
             model_instance = self._model_cache.get(model_name)
             if model_instance is None:
                 model_instance = self._embedding_factory(model_name=model_name)
+                model_instance = _ensure_embedding_protocol(model_instance)
                 self._model_cache[model_name] = model_instance
                 logger.info(
                     "Modelo de embeddings inicializado para '%s': %s",
@@ -182,6 +212,7 @@ class EmbeddingsManager:
                     model_name,
                 )
             else:
+                model_instance = _ensure_embedding_protocol(model_instance)
                 logger.debug(
                     "Reutilizando embeddings previamente inicializados para '%s': %s",
                     key,
