@@ -40,6 +40,7 @@ class IngestionJob:
     total_files: int = 0
     processed_files: int = 0
     failed_files: int = 0
+    skipped_files: int = 0
     start_time: datetime = field(default_factory=datetime.now)
     end_time: Optional[datetime] = None
     files: List[Dict[str, Any]] = field(default_factory=list)
@@ -273,6 +274,8 @@ class AdvancedIngestionSystem:
                     if result.get("success"):
                         job.processed_files += 1
                     else:
+                        if result.get("error") == "Archivo ya existe en la base de datos":
+                            job.skipped_files = job.skipped_files + 1 if hasattr(job, 'skipped_files') else 1
                         job.failed_files += 1
                         job.errors.append({
                             "file": file_info["relative_path"],

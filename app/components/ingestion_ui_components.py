@@ -112,6 +112,7 @@ class JobMonitor:
                     "Estado": job.get("status").value if job.get("status") else "?",
                     "Total": job.get("total_files", 0),
                     "Procesados": job.get("processed_files", 0),
+                    "Saltados": job.get("skipped_files", 0) or job.get("metadata", {}).get("skipped_files", 0),
                     "Fallidos": job.get("failed_files", 0),
                     "Inicio": JobMonitor._format_datetime(job.get("start_time")),
                     "Fin": JobMonitor._format_datetime(job.get("end_time")),

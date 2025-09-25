@@ -541,6 +541,7 @@ def ingest_file(uploaded_file, file_name):
         if isinstance(result, ProcessResult):
             if result.duplicate:
                 logger.warning("Archivo duplicado: %s", file_name)
+                _safe_streamlit_call("warning", f"⚠️ Archivo duplicado: {file_name}")
                 return {"success": False, "error": "Archivo ya existe en la base de datos"}
             elif hasattr(result, 'documents') and len(result.documents) > 0:
                 # Store documents in ChromaDB
@@ -700,35 +701,32 @@ def _original_ingest_file(uploaded_file, file_name):
         ingestor = result.ingestor
         embeddings = get_embeddings(ingestor.domain)
 
-        # Convert local Document objects to LangChain Document objects
         from langchain_core.documents import Document as LangChainDocument
         langchain_docs = [
-            LangChainDocument(page_content=doc.page_content, metadata=doc.metadata)
+            LangChainDocument(page_content=doc.page_content, metadata=dict(doc.metadata))
             for doc in texts
         ]
 
-        spinner_message = f"Creando embeddings para {file_name}..."
+        def _embedding_call(chunks):
+            return embeddings.embed_documents([chunk.page_content for chunk in chunks])
+
         if does_vectorstore_exist(CHROMA_SETTINGS, ingestor.collection_name):
             db = Chroma(
                 collection_name=ingestor.collection_name,
-                embedding_function=embeddings,
+                embedding_function=_embedding_call,
                 client=CHROMA_SETTINGS,
             )
-            with st.spinner(spinner_message):
-                db.add_documents(langchain_docs)
+            logger.info("Agregando %s documentos a colección existente '%s'", len(langchain_docs), ingestor.collection_name)
+            db.add_documents(langchain_docs)
         else:
             _safe_streamlit_call("info", "Creando nueva base de datos vectorial...")
-            with st.spinner("Creando embeddings. Esto puede tomar algunos minutos..."):
-                try:
-                    Chroma.from_documents(
-                        langchain_docs,
-                        embeddings,
-                        client=CHROMA_SETTINGS,
-                        collection_name=ingestor.collection_name,
-                    )
-                except TypeError:
-                    # Compatibilidad con dobles de prueba minimalistas.
-                    Chroma.from_documents(langchain_docs, embeddings, CHROMA_SETTINGS)
+            logger.info("Creando nueva colección '%s' con %s documentos", ingestor.collection_name, len(langchain_docs))
+            Chroma.from_documents(
+                langchain_docs,
+                _embedding_call,
+                client=CHROMA_SETTINGS,
+                collection_name=ingestor.collection_name,
+            )
 
         _safe_streamlit_call("success", f"Se agregó el archivo '{file_name}' con éxito.")
         logger.info("Archivo procesado exitosamente: %s", file_name)

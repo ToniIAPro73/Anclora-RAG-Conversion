@@ -8,6 +8,17 @@ _LANGCHAIN_COMMUNITY_HINT = "pip install langchain-community==0.2.5"
 _LANGCHAIN_CORE_HINT = "pip install langchain-core==0.2.43"
 
 
+
+try:
+    import langchain_core.utils.function_calling as _lc_function_calling
+    if not hasattr(_lc_function_calling, "convert_to_json_schema"):
+        def convert_to_json_schema(*args, **kwargs):
+            return _lc_function_calling.convert_to_openai_function(*args, **kwargs)
+        _lc_function_calling.convert_to_json_schema = convert_to_json_schema
+except Exception:  # pragma: no cover - defensive patching only
+    _lc_function_calling = None
+
+
 try:
     from langchain.chains import RetrievalQA
     _HAS_LANGCHAIN = True
