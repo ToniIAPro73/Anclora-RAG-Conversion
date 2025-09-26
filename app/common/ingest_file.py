@@ -525,7 +525,10 @@ def does_vectorstore_exist(settings, collection_name: str) -> bool:
     try:
         return collection.count() > 0
     except Exception:  # pragma: no cover - compatibility fallback
-        response = collection.get(include=["ids"])
+        try:
+            response = collection.get(include=["metadatas"])
+        except ValueError:
+            response = collection.get()
         return bool(response.get("ids"))
 
 def ingest_file_priority(uploaded_file, file_name, file_size=None):

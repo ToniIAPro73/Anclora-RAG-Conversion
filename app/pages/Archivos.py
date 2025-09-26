@@ -546,10 +546,10 @@ if INGEST_AVAILABLE:
                 end_idx = min(start_idx + page_size, len(display_df))
                 display_page_df = display_df.iloc[start_idx:end_idx].copy()
 
-                st.dataframe(display_page_df, use_container_width=True)
+                st.dataframe(display_page_df, width='stretch')
                 show_caption(f"Mostrando {start_idx + 1}-{end_idx} de {len(display_df)} archivos" if st.session_state.language == 'es' else f"Showing {start_idx + 1}-{end_idx} of {len(display_df)} files")
             else:
-                st.dataframe(display_df, use_container_width=True)
+                st.dataframe(display_df, width='stretch')
 
             # Delete file functionality
             st.subheader("🗑️ Eliminar archivo" if st.session_state.language == 'es' else "🗑️ Delete file")

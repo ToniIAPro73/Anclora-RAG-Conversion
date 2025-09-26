@@ -373,7 +373,7 @@ with col1:
         showlegend=True
     )
     
-    st.plotly_chart(fig_times, use_container_width=True)
+    st.plotly_chart(fig_times, width='stretch')
 
 with col2:
     st.subheader("📈 Tasa de Éxito y Volumen")
@@ -413,7 +413,7 @@ with col2:
     fig_success.update_yaxes(title_text="Tasa (%)", row=1, col=1)
     fig_success.update_yaxes(title_text="Cantidad", row=2, col=1)
     
-    st.plotly_chart(fig_success, use_container_width=True)
+    st.plotly_chart(fig_success, width='stretch')
 
 # Tabla de benchmarks comparativos
 st.subheader("🏆 Comparación con Competidores")
@@ -436,7 +436,7 @@ def highlight_anclora(row):
     return [''] * len(row)
 
 styled_benchmark = benchmark_df.style.apply(highlight_anclora, axis=1)
-st.dataframe(styled_benchmark, use_container_width=True)
+st.dataframe(styled_benchmark, width='stretch')
 
 st.caption("📊 Datos actualizados semanalmente basados en tests independientes")
 

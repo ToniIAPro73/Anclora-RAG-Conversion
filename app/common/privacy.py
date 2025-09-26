@@ -357,22 +357,35 @@ class PrivacyManager:
     def _find_matching_ids(self, collection: Any, filename: str) -> list[str]:
         """Return ids within *collection* that reference *filename*."""
 
+        def _safe_get(*, where: dict[str, Any] | None = None):
+            for include in (["metadatas"], None):
+                try:
+                    kwargs = {}
+                    if where is not None:
+                        kwargs["where"] = where
+                    if include is not None:
+                        kwargs["include"] = include
+                    return collection.get(**kwargs)
+                except ValueError:
+                    continue
+                except Exception:
+                    return None
+            return None
+
         queries = (
             {"uploaded_file_name": filename},
             {"source": filename},
         )
         for query in queries:
-            try:
-                response = collection.get(where=query, include=["ids", "metadatas"])
-            except Exception:
+            response = _safe_get(where=query)
+            if not response:
                 continue
             ids = self._extract_matching_ids(response, filename)
             if ids:
                 return ids
 
-        try:
-            response = collection.get(include=["ids", "metadatas"])
-        except Exception:  # pragma: no cover - compatibility fallback
+        response = _safe_get(where=None)
+        if not response:
             return []
         return self._extract_matching_ids(response, filename)
 

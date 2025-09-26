@@ -458,7 +458,7 @@ if quality_score_data:
     )
 
 fig_performance.update_layout(height=600, showlegend=False)
-st.plotly_chart(fig_performance, use_container_width=True)
+st.plotly_chart(fig_performance, width='stretch')
 
 # Agent Performance Section
 st.header(get_text('agent_performance'))
@@ -480,7 +480,7 @@ with col1:
         color_discrete_sequence=px.colors.qualitative.Set3
     )
     fig_agents.update_layout(height=400)
-    st.plotly_chart(fig_agents, use_container_width=True)
+    st.plotly_chart(fig_agents, width='stretch')
 
 with col2:
     st.subheader(get_text('format_distribution'))
@@ -498,7 +498,7 @@ with col2:
         color_discrete_sequence=px.colors.qualitative.Pastel
     )
     fig_formats.update_layout(height=400, xaxis_tickangle=-45)
-    st.plotly_chart(fig_formats, use_container_width=True)
+    st.plotly_chart(fig_formats, width='stretch')
 
 # Peak Hours Analysis
 st.subheader(get_text('peak_hours'))
@@ -514,7 +514,7 @@ fig_peak = px.bar(
     color_continuous_scale='Viridis'
 )
 fig_peak.update_layout(height=300)
-st.plotly_chart(fig_peak, use_container_width=True)
+st.plotly_chart(fig_peak, width='stretch')
 
 # Security Overview Section
 st.header(get_text('security_overview'))
@@ -566,7 +566,7 @@ with col1:
             'Archivos Bloqueados': '#F8BBD9'   # Rosa pastel suave
         }
     )
-    st.plotly_chart(fig_scan, use_container_width=True)
+    st.plotly_chart(fig_scan, width='stretch')
 
 with col2:
     st.subheader("Tipos de Eventos de Seguridad")
@@ -582,7 +582,7 @@ with col2:
         names='Tipo',
         color_discrete_sequence=px.colors.qualitative.Set2
     )
-    st.plotly_chart(fig_events, use_container_width=True)
+    st.plotly_chart(fig_events, width='stretch')
 
 # Predictive Analytics Section
 st.header(get_text('predictive_analytics'))
@@ -624,7 +624,7 @@ with col1:
     ))
     
     fig_forecast.update_layout(height=400)
-    st.plotly_chart(fig_forecast, use_container_width=True)
+    st.plotly_chart(fig_forecast, width='stretch')
 
 with col2:
     st.subheader(get_text('optimization_impact'))
@@ -650,7 +650,7 @@ with col2:
         color_continuous_scale='RdYlGn_r'
     )
     fig_optimization.update_layout(height=400)
-    st.plotly_chart(fig_optimization, use_container_width=True)
+    st.plotly_chart(fig_optimization, width='stretch')
 
 # Recommendations Section
 st.header(get_text('optimization_recommendations'))

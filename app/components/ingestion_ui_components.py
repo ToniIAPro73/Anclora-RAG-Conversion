@@ -89,9 +89,9 @@ class MarkdownEditor:
         content = st.text_area("Markdown de fuentes", value=default_text, height=300)
         col1, col2 = st.columns(2)
         with col1:
-            ingest = st.button("Procesar Markdown", use_container_width=True)
+            ingest = st.button("Procesar Markdown", width='stretch')
         with col2:
-            preview = st.button("Validar formato", use_container_width=True)
+            preview = st.button("Validar formato", width='stretch')
         return {"content": content, "ingest": ingest, "preview": preview}
 
 
@@ -119,7 +119,7 @@ class JobMonitor:
                 }
             )
         df = pd.DataFrame.from_records(records)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width='stretch')
 
     @staticmethod
     def _format_datetime(value: Optional[datetime]) -> str:
@@ -148,7 +148,7 @@ class StatisticsDisplay:
             color_discrete_sequence=["#2EAFC4", "#FF6B6B"],
         )
         fig.update_layout(height=240, margin=dict(l=20, r=20, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         st.caption(f"Tasa de exito: {success_rate:.2f}%")
 
 

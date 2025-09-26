@@ -117,7 +117,7 @@ with col1:
             }
         )
         fig_complexity.update_traces(textposition='inside', textinfo='percent+label')
-        st.plotly_chart(fig_complexity, use_container_width=True)
+        st.plotly_chart(fig_complexity, width='stretch')
     else:
         st.info("No hay datos de complejidad disponibles")
 
@@ -139,7 +139,7 @@ with col2:
             hover_data=['avg_processing_time', 'complexity']
         )
         fig_patterns.update_layout(yaxis={'categoryorder': 'total ascending'})
-        st.plotly_chart(fig_patterns, use_container_width=True)
+        st.plotly_chart(fig_patterns, width='stretch')
     else:
         st.info("No hay patrones suficientes para mostrar")
 
@@ -234,7 +234,7 @@ fig_trends.update_xaxes(title_text="Fecha", row=2, col=1)
 fig_trends.update_yaxes(title_text="Tasa de Éxito (%)", row=1, col=1)
 fig_trends.update_yaxes(title_text="Tiempo (segundos)", row=2, col=1)
 
-st.plotly_chart(fig_trends, use_container_width=True)
+st.plotly_chart(fig_trends, width='stretch')
 
 # Tabla de patrones detallada
 st.subheader("📋 Análisis Detallado de Patrones")
@@ -269,7 +269,7 @@ if top_patterns:
         style_complexity, subset=['Complejidad']
     )
     
-    st.dataframe(styled_df, use_container_width=True)
+    st.dataframe(styled_df, width='stretch')
 else:
     st.info("No hay patrones detallados para mostrar")
 

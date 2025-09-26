@@ -122,7 +122,7 @@ def _render_job_results(job: IngestionJob) -> None:
 
     st.subheader("Resumen de ingesta")
     df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, width='stretch')
 
 
 with tab_archivos:
@@ -141,7 +141,7 @@ with tab_archivos:
                 }
             )
         df_info = pd.DataFrame(info_rows)
-        st.dataframe(df_info, use_container_width=True)
+        st.dataframe(df_info, width='stretch')
         if st.button("Procesar archivos seleccionados"):
             with st.spinner("Procesando archivos..."):
                 job = asyncio.run(
@@ -188,7 +188,7 @@ with tab_carpetas:
         st.subheader("Resumen de carpeta")
         details = report["discovered_files"]["by_category"]
         df_report = pd.DataFrame(list(details.items()), columns=["Categoria", "Cantidad"])
-        st.dataframe(df_report, use_container_width=True)
+        st.dataframe(df_report, width='stretch')
         st.caption("Recomendaciones")
         for item in report.get("recommendations", []):
             st.write(f"- {item}")
@@ -290,7 +290,7 @@ with tab_github:
                 sorted(((ext, count) for ext, count in by_ext.items()), key=lambda item: item[1], reverse=True),
                 columns=["Extension", "Cantidad"],
             )
-            st.dataframe(df_ext, use_container_width=True)
+            st.dataframe(df_ext, width='stretch')
 
 with tab_jobs:
     stored_jobs = list(st.session_state.get("advanced_ingestion_jobs", {}).values())
