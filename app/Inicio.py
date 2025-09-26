@@ -4,9 +4,27 @@ os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
 import streamlit as st
 from pathlib import Path
+from typing import Any, cast
 
 # Importar colores de Anclora RAG
 from common.anclora_colors import apply_anclora_theme, ANCLORA_RAG_COLORS, create_colored_alert
+
+# Streamlit compatibility helpers (similar to Archivos.py)
+_st = cast(Any, st)
+
+def inject_css(css_content: str) -> None:
+    """Inject CSS content properly into Streamlit app."""
+    try:
+        # Try using components.html for CSS injection
+        from streamlit.components.v1 import html
+        html(f"<style>{css_content}</style>")
+    except Exception:
+        # Fallback to markdown if components.html fails
+        try:
+            st.markdown(f"<style>{css_content}</style>")
+        except Exception:
+            # Final fallback - just write the CSS (will show as text)
+            st.code(css_content, language='css')
 
 # Set page config
 st.set_page_config(layout='wide', page_title='Anclora AI RAG', page_icon='🤖')
@@ -51,7 +69,8 @@ chat_style = f"""
             transform: scale(1.05) !important;
         }}
 """
-st.markdown(f"<style>{chat_style}</style>")
+# Apply CSS using inject_css function (works with Streamlit 1.28+)
+inject_css(chat_style)
 
 # Initialize language in session state
 if 'language' not in st.session_state:
@@ -81,11 +100,12 @@ section[data-testid="stSidebar"] label {
     color: white !important;
 }
 """
-st.markdown(f"<style>{sidebar_style}</style>")
+# Apply sidebar CSS using inject_css function (works with Streamlit 1.28+)
+inject_css(sidebar_style)
 
 # Sidebar for language selection
 with st.sidebar:
-    st.markdown("<h3>🌐 Idioma</h3>")
+    st.header("🌐 Idioma")
 
     language_options = {
         'es': 'Español',

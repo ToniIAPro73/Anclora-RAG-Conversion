@@ -26,6 +26,20 @@ GRADIENTS = {
     "success": f"linear-gradient(135deg, {ANCLORA_RAG_COLORS['success']}, {ANCLORA_RAG_COLORS['accent_green']})"
 }
 
+def _inject_theme_css(css_content: str) -> None:
+    """Inject theme CSS content properly into Streamlit app."""
+    try:
+        # Try using components.html for CSS injection (most reliable method)
+        from streamlit.components.v1 import html
+        html(f"<style>{css_content}</style>")
+    except Exception:
+        # Fallback to markdown if components.html fails
+        try:
+            st.markdown(f"<style>{css_content}</style>")
+        except Exception:
+            # Final fallback - just write the CSS (will show as text)
+            st.code(css_content, language='css')
+
 def apply_anclora_theme():
     """Apply Anclora RAG color theme to Streamlit"""
     css = f"""
@@ -145,7 +159,8 @@ def apply_anclora_theme():
         color: {ANCLORA_RAG_COLORS['text_primary']};
     }}
     """
-    st.markdown(f"<style>{css}</style>")
+    # Use safe CSS injection function to properly inject CSS
+    _inject_theme_css(css)
 
 def create_colored_alert(message: str, alert_type: str = "info") -> str:
     """Create a colored alert box"""
