@@ -73,7 +73,7 @@ try:
 except (ImportError, AttributeError):  # pragma: no cover - fallback for lightweight stubs
     def _get_unique_sources_df(chroma_settings) -> pd.DataFrame:  # type: ignore
         logger.warning("Using fallback get_unique_sources_df function - ChromaDB settings not available")
-        return pd.DataFrame(columns=["uploaded_file_name", "domain", "collection"])
+        return pd.DataFrame(data=None, columns=["uploaded_file_name", "domain", "collection"])
 from common.constants import CHROMA_SETTINGS
 from common.text_normalization import Document, normalize_documents_nfc
 from common.privacy import PrivacyManager
@@ -625,7 +625,16 @@ def ingest_file(uploaded_file, file_name):
                         for doc in texts
                     ]
                 except TypeError:
-                    langchain_docs = texts  # Fallback for lightweight stubs during testing
+                    # Fallback for lightweight stubs during testing - ensure proper type conversion
+                    try:
+                        langchain_docs = [
+                            LangChainDocument(page_content=doc.page_content, metadata=dict(doc.metadata))
+                            for doc in texts
+                        ]
+                    except (TypeError, AttributeError):
+                        # If conversion still fails, skip this batch to avoid type errors
+                        logger.warning(f"Unable to convert documents for {file_name}, skipping ingestion")
+                        return {"success": False, "error": "Document type conversion failed"}
 
                 collection_ref = locals().get('collection')
                 if collection_ref is None:

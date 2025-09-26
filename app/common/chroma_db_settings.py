@@ -4,6 +4,11 @@ from __future__ import annotations
 import os
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["CHROMA_TELEMETRY"] = "False"
+# Additional telemetry disabling for PostHog compatibility issues
+os.environ["CHROMA_SERVER_NO_ANALYTICS"] = "True"
+os.environ["CHROMA_TELEMETRY_DISABLED"] = "True"
+os.environ["POSTHOG_DISABLED"] = "True"
+os.environ["DISABLE_POSTHOG"] = "True"
 
 import base64
 import logging
@@ -927,7 +932,7 @@ def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
 
         if not records:
             logger.info("No records found in any collection, returning empty DataFrame")
-            return pd.DataFrame(columns=["uploaded_file_name", "domain", "collection"])
+            return pd.DataFrame(data=None, columns=["uploaded_file_name", "domain", "collection"])
 
         df = pd.DataFrame(records)
         df = df.drop_duplicates(subset=["uploaded_file_name", "collection"])
@@ -936,4 +941,4 @@ def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
     except Exception as e:
         logger.debug(f"Error in get_unique_sources_df: {e}")
         # Always return a DataFrame, never None
-        return pd.DataFrame(columns=["uploaded_file_name", "domain", "collection"])
+        return pd.DataFrame(data=None, columns=["uploaded_file_name", "domain", "collection"])
