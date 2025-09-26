@@ -15,4 +15,4 @@ def hide_streamlit_style() -> None:
             #stDecoration {display:none;}
         </style>
     """
-    st.markdown(hide_st_style, unsafe_allow_html=True)
+    st.markdown(f"<style>{hide_st_style}</style>")

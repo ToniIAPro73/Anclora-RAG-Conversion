@@ -180,6 +180,81 @@ def rerun() -> None:
     """Rerun the app."""
     pass
 
+def cache_data(
+    func: Optional[Callable] = None,
+    ttl: Optional[Union[int, float]] = None,
+    max_entries: Optional[int] = None,
+    persist: Optional[bool] = None,
+    show_spinner: bool = True,
+    hash_funcs: Optional[Dict[type, Callable]] = None,
+) -> Callable:
+    """Decorator to cache data in Streamlit.
+
+    Args:
+        func: The function to cache.
+        ttl: Time to live for cached data in seconds.
+        max_entries: Maximum number of entries to keep in cache.
+        persist: Whether to persist cache across reruns.
+        show_spinner: Whether to show spinner while computing.
+        hash_funcs: Hash functions for custom types.
+
+    Returns:
+        Callable: The decorated function.
+    """
+    pass
+
+def cache(
+    func: Optional[Callable] = None,
+    ttl: Optional[Union[int, float]] = None,
+    max_entries: Optional[int] = None,
+    persist: Optional[bool] = None,
+    show_spinner: bool = True,
+    hash_funcs: Optional[Dict[type, Callable]] = None,
+    suppress_st_warning: bool = False,
+) -> Callable:
+    """Decorator to cache functions in Streamlit (deprecated, use cache_data instead).
+
+    Args:
+        func: The function to cache.
+        ttl: Time to live for cached data in seconds.
+        max_entries: Maximum number of entries to keep in cache.
+        persist: Whether to persist cache across reruns.
+        show_spinner: Whether to show spinner while computing.
+        hash_funcs: Hash functions for custom types.
+        suppress_st_warning: Whether to suppress deprecation warning.
+
+    Returns:
+        Callable: The decorated function.
+    """
+    pass
+
+def plotly_chart(
+    figure_or_data: Any,
+    use_container_width: bool = False,
+    sharing: str = "streamlit",
+    theme: Optional[str] = None,
+    key: Optional[str] = None,
+    on_change: Optional[Callable[[], None]] = None,
+    args: Optional[tuple] = None,
+    kwargs: Optional[Dict[str, Any]] = None,
+) -> Any:
+    """Display an interactive Plotly chart.
+
+    Args:
+        figure_or_data: The plotly figure or data to display.
+        use_container_width: Whether to use the full container width.
+        sharing: Sharing mode for the chart.
+        theme: Theme for the chart.
+        key: An optional string to use as the unique key for the widget.
+        on_change: An optional callback invoked when this chart's value changes.
+        args: Optional tuple of args to pass to the callback.
+        kwargs: Optional dict of kwargs to pass to the callback.
+
+    Returns:
+        Any: The chart object.
+    """
+    pass
+
 def stop() -> None:
     """Stop execution of the app."""
     pass

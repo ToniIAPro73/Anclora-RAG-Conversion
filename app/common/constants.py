@@ -1,9 +1,31 @@
 """Constants for Anclora RAG application"""
 
+import os
+
+# ChromaDB Settings
+try:
+    import chromadb
+    import chromadb.config
+
+    # Get ChromaDB configuration from environment variables
+    chroma_host = os.getenv('CHROMA_HOST', 'localhost')
+    chroma_port = int(os.getenv('CHROMA_PORT', '8000'))
+
+    # Create ChromaDB client settings
+    chroma_settings = chromadb.config.Settings()
+    chroma_settings.chroma_server_host = chroma_host
+    chroma_settings.chroma_server_http_port = chroma_port
+
+    # Create ChromaDB client instance
+    CHROMA_SETTINGS = chromadb.Client(chroma_settings)
+except ImportError:
+    # Fallback for when chromadb is not available
+    CHROMA_SETTINGS = None
+
 # ChromaDB Collections
 CHROMA_COLLECTIONS = [
     "general_knowledge",
-    "technical_docs", 
+    "technical_docs",
     "business_docs",
     "research_papers",
     "legal_documents"

@@ -16,7 +16,6 @@ apply_anclora_theme()
 
 # CSS personalizado para elementos Streamlit con colores Anclora RAG
 custom_style = f"""
-    <style>
         /* Ocultar elementos de Streamlit */
         #MainMenu {{visibility: hidden;}}
         .stDeployButton {{display:none;}}
@@ -60,20 +59,18 @@ custom_style = f"""
         }}
 
         .stChatInput button:hover {{
-            background-color: {ANCLORA_RAG_COLORS['ai_accent']} !important;
+            background-color: {ANCLORA_RAG_COLORS['primary_deep']} !important;
             transform: scale(1.05) !important;
         }}
-    </style>
 """
-st.markdown(custom_style, unsafe_allow_html=True)
+st.markdown(f"<style>{custom_style}</style>")
 
 # Initialize language in session state
 if 'language' not in st.session_state:
     st.session_state.language = 'es'
 
 # CSS GLOBAL para sidebar antes de crear elementos
-st.markdown("""
-<style>
+sidebar_style = """
 /* FORZAR TODO en blanco en el sidebar */
 div[data-testid="stSidebar"] h3,
 div[data-testid="stSidebar"] .stMarkdown h3,
@@ -95,12 +92,12 @@ section[data-testid="stSidebar"] label {
     border-radius: 8px !important;
     color: white !important;
 }
-</style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(f"<style>{sidebar_style}</style>")
 
 # Sidebar for language selection
 with st.sidebar:
-    st.markdown("<h3>🌐 Idioma</h3>", unsafe_allow_html=True)
+    st.markdown("<h3>🌐 Idioma</h3>")
 
     language_options = {
         'es': 'Español',

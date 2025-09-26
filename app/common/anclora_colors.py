@@ -29,12 +29,11 @@ GRADIENTS = {
 def apply_anclora_theme():
     """Apply Anclora RAG color theme to Streamlit"""
     css = f"""
-    <style>
     /* 🎨 Tema principal Anclora RAG */
     .stApp {{
         background-color: {ANCLORA_RAG_COLORS['neutral_light']};
     }}
-    
+
     /* 📊 Métricas con fondo de gradiente */
     .stMetric {{
         background: {GRADIENTS['primary']};
@@ -43,23 +42,23 @@ def apply_anclora_theme():
         color: {ANCLORA_RAG_COLORS['text_inverse']} !important;
         border: 2px solid {ANCLORA_RAG_COLORS['primary_medium']};
     }}
-    
+
     .stMetric label {{
         color: {ANCLORA_RAG_COLORS['text_inverse']} !important;
         font-weight: 600 !important;
     }}
-    
+
     .stMetric value {{
         color: {ANCLORA_RAG_COLORS['text_inverse']} !important;
         font-weight: 700 !important;
     }}
-    
+
     /* 📋 Tabs con estilo Anclora */
     .stTabs [data-baseweb="tab-list"] {{
         gap: 8px;
         background-color: {ANCLORA_RAG_COLORS['neutral_light']};
     }}
-    
+
     .stTabs [data-baseweb="tab"] {{
         background-color: {ANCLORA_RAG_COLORS['neutral_medium']};
         border-radius: 8px 8px 0 0;
@@ -68,7 +67,7 @@ def apply_anclora_theme():
         border: 2px solid {ANCLORA_RAG_COLORS['neutral_medium']};
         font-weight: 600;
     }}
-    
+
     .stTabs [aria-selected="true"] {{
         background: {GRADIENTS['primary']} !important;
         border-color: {ANCLORA_RAG_COLORS['primary_medium']} !important;
@@ -76,7 +75,7 @@ def apply_anclora_theme():
         font-weight: 700 !important;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
     }}
-    
+
     /* 📂 Expander con degradado sutil */
     .streamlit-expanderHeader {{
         background: {GRADIENTS['primary']} !important;
@@ -85,7 +84,7 @@ def apply_anclora_theme():
         color: {ANCLORA_RAG_COLORS['text_inverse']} !important;
         font-weight: 600 !important;
     }}
-    
+
     /* 📋 Dataframes con bordes elegantes */
     .stDataFrame {{
         border: 2px solid {ANCLORA_RAG_COLORS['primary_light']} !important;
@@ -93,7 +92,7 @@ def apply_anclora_theme():
         overflow: hidden !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
     }}
-    
+
     /* 📁 File uploader con degradado atractivo pero legible */
     .stFileUploader > div {{
         border: 3px dashed {ANCLORA_RAG_COLORS['primary_medium']} !important;
@@ -103,7 +102,7 @@ def apply_anclora_theme():
         font-weight: 600 !important;
         transition: all 0.3s ease !important;
     }}
-    
+
     /* 🎯 Botones con estilo Anclora */
     .stButton > button {{
         background: {GRADIENTS['primary']};
@@ -114,14 +113,14 @@ def apply_anclora_theme():
         font-weight: 600;
         transition: all 0.3s ease;
     }}
-    
+
     .stButton > button:hover {{
         background: {ANCLORA_RAG_COLORS['primary_deep']};
         border-color: {ANCLORA_RAG_COLORS['primary_deep']};
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }}
-    
+
     /* ✅ Mensajes de éxito */
     .stAlert [data-baseweb="notification"] {{
         background-color: {ANCLORA_RAG_COLORS['success']}15;
@@ -129,7 +128,7 @@ def apply_anclora_theme():
         border-radius: 8px;
         color: {ANCLORA_RAG_COLORS['text_primary']};
     }}
-    
+
     /* ⚠️ Mensajes de advertencia */
     .stWarning [data-baseweb="notification"] {{
         background-color: {ANCLORA_RAG_COLORS['warning']}15;
@@ -137,7 +136,7 @@ def apply_anclora_theme():
         border-radius: 8px;
         color: {ANCLORA_RAG_COLORS['text_primary']};
     }}
-    
+
     /* ❌ Mensajes de error */
     .stError [data-baseweb="notification"] {{
         background-color: {ANCLORA_RAG_COLORS['error']}15;
@@ -145,9 +144,8 @@ def apply_anclora_theme():
         border-radius: 8px;
         color: {ANCLORA_RAG_COLORS['text_primary']};
     }}
-    </style>
     """
-    st.markdown(css)
+    st.markdown(f"<style>{css}</style>")
 
 def create_colored_alert(message: str, alert_type: str = "info") -> str:
     """Create a colored alert box"""

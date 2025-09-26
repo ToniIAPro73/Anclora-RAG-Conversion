@@ -41,7 +41,7 @@ def markdown_html(markdown_text: str) -> None:
     markdown_fn = getattr(_st, 'markdown', None)
     if callable(markdown_fn):
         try:
-            markdown_fn(markdown_text, unsafe_allow_html=True)
+            markdown_fn(markdown_text)
         except TypeError:
             markdown_fn(markdown_text)
     else:
@@ -163,8 +163,8 @@ custom_style = f"""
            BUTTON STYLING
            ============================================ */
         .stButton > button {{
-            background: linear-gradient(135deg, {ANCLORA_RAG_COLORS['success_deep']} 0%, {ANCLORA_RAG_COLORS['success_medium']} 100%) !important;
-            border: 2px solid {ANCLORA_RAG_COLORS['success_deep']} !important;
+            background: linear-gradient(135deg, {ANCLORA_RAG_COLORS['success']} 0%, {ANCLORA_RAG_COLORS['primary_medium']} 100%) !important;
+            border: 2px solid {ANCLORA_RAG_COLORS['success']} !important;
             border-radius: 12px !important;
             color: #1a4d47 !important;
             font-weight: 700 !important;
@@ -174,7 +174,7 @@ custom_style = f"""
         }}
 
         .stButton > button:hover {{
-            background: {ANCLORA_RAG_COLORS['success_deep']} !important;
+            background: {ANCLORA_RAG_COLORS['primary_deep']} !important;
             color: #0f3027 !important;
             transform: translateY(-2px) !important;
             box-shadow: 0 6px 16px rgba(0,0,0,0.15) !important;
@@ -209,7 +209,7 @@ custom_style = f"""
         }};
     </script>
 """
-markdown_html(custom_style)
+st.markdown(f"<style>{custom_style}</style>")
 
 # Initialize language in session state
 if 'language' not in st.session_state:
@@ -356,10 +356,8 @@ if st.button(add_button_text):
                                     if result.get("domain"):
                                         domain_info = f" (Dominio: {result.get('domain')})"
                                     elif result.get("collection"):
-                                        # Try to get domain from collection name
-                                        collection_config = CHROMA_COLLECTIONS.get(result.get("collection"))
-                                        if collection_config:
-                                            domain_info = f" (Dominio: {collection_config.domain})"
+                                        # Collection name is already available, no need for additional lookup
+                                        domain_info = f" (Colección: {result.get('collection')})"
 
                                     logger.info(f"File processed successfully: {uploaded_file.name}{domain_info}")
                                     st.success(f"✅ {success_message}: {uploaded_file.name}{domain_info}")

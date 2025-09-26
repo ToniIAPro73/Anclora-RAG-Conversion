@@ -48,7 +48,7 @@ hide_st_style = """
         #stDecoration {display:none;}
     </style>
 """
-st.markdown(hide_st_style, unsafe_allow_html=True)
+st.markdown(f"<style>{hide_st_style}</style>")
 
 # Initialize language in session state
 if 'language' not in st.session_state:
@@ -143,11 +143,12 @@ translations = {
         'last_30d': 'Last 30 days',
         'real_time': 'Real Time',
         'peak_hours': 'Peak Hours',
-        'performance_trend': 'Performance Trend'
+        'performance_trend': 'Performance Trend',
+        'security_overview': 'Security Overview'
     }
 }
 
-def get_text(key):
+def get_text(key: str) -> str:
     # Ensure language is set in session state
     if 'language' not in st.session_state:
         st.session_state.language = 'es'
@@ -155,11 +156,14 @@ def get_text(key):
     # Get the language, fallback to 'es' if not found
     language = st.session_state.get('language', 'es')
 
-    # Return translation or key if not found
-    return translations.get(language, translations['es']).get(key, key)
+    # Get the language dictionary, ensuring we always have a fallback
+    lang_dict = translations.get(language, translations.get('es', {}))
+
+    # Return translation or key if not found, ensuring we never return None
+    return lang_dict.get(key, key) if lang_dict else key
 
 # Get real data from dashboard service
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=300) if hasattr(st, 'cache_data') else st.cache(ttl=300)  # Cache for 5 minutes
 def get_dashboard_data(time_range: str):
     """Get real data from the dashboard service."""
 
@@ -458,7 +462,10 @@ if quality_score_data:
     )
 
 fig_performance.update_layout(height=600, showlegend=False)
-st.plotly_chart(fig_performance, width='stretch')
+if PLOTLY_AVAILABLE:
+    st.plotly_chart(fig_performance, use_container_width=True)
+else:
+    st.error("Plotly no está disponible para mostrar gráficos avanzados.")
 
 # Agent Performance Section
 st.header(get_text('agent_performance'))
@@ -480,7 +487,10 @@ with col1:
         color_discrete_sequence=px.colors.qualitative.Set3
     )
     fig_agents.update_layout(height=400)
-    st.plotly_chart(fig_agents, width='stretch')
+    if PLOTLY_AVAILABLE:
+        st.plotly_chart(fig_agents, use_container_width=True)
+    else:
+        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
 
 with col2:
     st.subheader(get_text('format_distribution'))
@@ -498,7 +508,10 @@ with col2:
         color_discrete_sequence=px.colors.qualitative.Pastel
     )
     fig_formats.update_layout(height=400, xaxis_tickangle=-45)
-    st.plotly_chart(fig_formats, width='stretch')
+    if PLOTLY_AVAILABLE:
+        st.plotly_chart(fig_formats, use_container_width=True)
+    else:
+        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
 
 # Peak Hours Analysis
 st.subheader(get_text('peak_hours'))
@@ -514,10 +527,13 @@ fig_peak = px.bar(
     color_continuous_scale='Viridis'
 )
 fig_peak.update_layout(height=300)
-st.plotly_chart(fig_peak, width='stretch')
+if PLOTLY_AVAILABLE:
+    st.plotly_chart(fig_peak, use_container_width=True)
+else:
+    st.error("Plotly no está disponible para mostrar gráficos avanzados.")
 
 # Security Overview Section
-st.header(get_text('security_overview'))
+st.header(get_text('security_analysis'))
 
 col1, col2, col3 = st.columns(3)
 
@@ -566,7 +582,10 @@ with col1:
             'Archivos Bloqueados': '#F8BBD9'   # Rosa pastel suave
         }
     )
-    st.plotly_chart(fig_scan, width='stretch')
+    if PLOTLY_AVAILABLE:
+        st.plotly_chart(fig_scan, use_container_width=True)
+    else:
+        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
 
 with col2:
     st.subheader("Tipos de Eventos de Seguridad")
@@ -582,7 +601,10 @@ with col2:
         names='Tipo',
         color_discrete_sequence=px.colors.qualitative.Set2
     )
-    st.plotly_chart(fig_events, width='stretch')
+    if PLOTLY_AVAILABLE:
+        st.plotly_chart(fig_events, use_container_width=True)
+    else:
+        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
 
 # Predictive Analytics Section
 st.header(get_text('predictive_analytics'))
@@ -624,7 +646,10 @@ with col1:
     ))
     
     fig_forecast.update_layout(height=400)
-    st.plotly_chart(fig_forecast, width='stretch')
+    if PLOTLY_AVAILABLE:
+        st.plotly_chart(fig_forecast, use_container_width=True)
+    else:
+        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
 
 with col2:
     st.subheader(get_text('optimization_impact'))
@@ -650,7 +675,10 @@ with col2:
         color_continuous_scale='RdYlGn_r'
     )
     fig_optimization.update_layout(height=400)
-    st.plotly_chart(fig_optimization, width='stretch')
+    if PLOTLY_AVAILABLE:
+        st.plotly_chart(fig_optimization, use_container_width=True)
+    else:
+        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
 
 # Recommendations Section
 st.header(get_text('optimization_recommendations'))
