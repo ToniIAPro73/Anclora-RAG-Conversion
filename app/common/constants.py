@@ -1,181 +1,68 @@
-"""Shared application constants."""
-from __future__ import annotations
+"""Constants for Anclora RAG application"""
 
-import logging
-import os
-from dataclasses import dataclass
-from typing import Mapping
-
-# Deshabilitar telemetría de ChromaDB antes de importarlo
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
-
-import chromadb
-from chromadb.config import Settings
-
-logger = logging.getLogger(__name__)
-
-_DEFAULT_CHROMA_HOST = "localhost"
-_DEFAULT_CHROMA_PORT = 8000
-
-
-def _get_chroma_host() -> str:
-    """Return the configured Chroma host or the default value."""
-
-    host = os.getenv("CHROMA_HOST", _DEFAULT_CHROMA_HOST).strip()
-    if not host:
-        logger.warning(
-            "Se recibió un valor vacío para CHROMA_HOST. Se utilizará el valor por defecto '%s'.",
-            _DEFAULT_CHROMA_HOST,
-        )
-        return _DEFAULT_CHROMA_HOST
-    return host
-
-
-def _get_chroma_port() -> int:
-    """Return the configured Chroma port as an integer, with fallbacks."""
-
-    raw_port = os.getenv("CHROMA_PORT")
-    if raw_port is None:
-        return _DEFAULT_CHROMA_PORT
-
-    try:
-        port = int(raw_port)
-    except (TypeError, ValueError):  # pragma: no cover - defensive path
-        logger.warning(
-            "No fue posible interpretar el valor '%s' de CHROMA_PORT. Se utilizará el valor por defecto %s.",
-            raw_port,
-            _DEFAULT_CHROMA_PORT,
-        )
-        return _DEFAULT_CHROMA_PORT
-
-    if port <= 0:  # pragma: no cover - defensive path
-        logger.warning(
-            "El valor de CHROMA_PORT debe ser positivo. Se recibió '%s'. Se utilizará el valor por defecto %s.",
-            raw_port,
-            _DEFAULT_CHROMA_PORT,
-        )
-        return _DEFAULT_CHROMA_PORT
-
-    return port
-
-
-@dataclass(frozen=True)
-class CollectionConfig:
-    """Metadata describing a Chroma collection."""
-
-    domain: str
-    description: str
-    prompt_type: str = "documental"
-
-
-CHROMA_COLLECTIONS: Mapping[str, CollectionConfig] = {
-    "conversion_rules": CollectionConfig(
-        domain="documents",
-        description=(
-            "Colección orientada a manuales, guías y documentación de referencia "
-            "utilizada durante los procesos de conversión y capacitación."
-        ),
-        prompt_type="documental",
-    ),
-    "troubleshooting": CollectionConfig(
-        domain="code",
-        description=(
-            "Snippets de código, ejemplos y procedimientos de diagnóstico para "
-            "dar soporte en escenarios de troubleshooting."
-        ),
-        prompt_type="documental",
-    ),
-    "legal_compliance": CollectionConfig(
-        domain="legal",
-        description=(
-            "Políticas legales, lineamientos regulatorios y criterios de cumplimiento "
-            "que requieren controles adicionales antes de compartirse."
-        ),
-    ),
-    "multimedia_assets": CollectionConfig(
-        domain="multimedia",
-        description=(
-            "Material audiovisual transcrito como subtítulos o descripciones "
-            "para enriquecer respuestas con contenido multimedia."
-        ),
-        prompt_type="multimedia",
-    ),
-    "legal_repository": CollectionConfig(
-        domain="legal",
-        description=(
-            "Cuerpos normativos, cláusulas y lineamientos de cumplimiento para "
-            "responder consultas legales o regulatorias."
-        ),
-        prompt_type="legal",
-    ),
-    "format_specs": CollectionConfig(
-        domain="formats",
-        description=(
-            "Catálogo de convenciones y requisitos de formatos para asegurar "
-            "consistencias en entregables y conversiones."
-        ),
-    ),
-    "knowledge_guides": CollectionConfig(
-        domain="guides",
-        description=(
-            "Guías operativas y playbooks paso a paso que estructuran las "
-            "respuestas de los agentes con mejores prácticas."
-        ),
-    ),
-    "compliance_archive": CollectionConfig(
-        domain="compliance",
-        description=(
-            "Repositorio de lineamientos regulatorios y políticas internas "
-            "para respaldar respuestas con enfoque legal y normativo."
-        ),
-    ),
-    "research_sources": CollectionConfig(
-        domain="references",
-        description=(
-            "Repositorio de fuentes bibliograficas curadas para enriquecer respuestas con contexto academico y de investigacion."
-        ),
-    ),
-
-}
-
-DOMAIN_TO_COLLECTION: Mapping[str, str] = {
-    config.domain: name for name, config in CHROMA_COLLECTIONS.items()
-}
-
-
-def _create_chroma_client() -> chromadb.api.ClientAPI:
-    """Create a ChromaDB client, falling back to an in-memory instance if remote access fails."""
-
-    host = _get_chroma_host()
-    port = _get_chroma_port()
-    settings = Settings(allow_reset=True, anonymized_telemetry=False)
-
-    try:
-        return chromadb.HttpClient(
-            host=host,
-            port=port,
-            settings=settings,
-        )
-    except Exception as exc:  # pragma: no cover - defensive path
-        logger.warning(
-            "No fue posible conectar con el servicio remoto de ChromaDB en %s:%s (%s). Se usará un cliente en memoria.",
-            host,
-            port,
-            exc,
-        )
-        local_settings = Settings(
-            allow_reset=True,
-            anonymized_telemetry=False,
-            is_persistent=False,
-        )
-        return chromadb.EphemeralClient(settings=local_settings)
-
-
-CHROMA_SETTINGS = _create_chroma_client()
-
-__all__ = [
-    "CHROMA_COLLECTIONS",
-    "CHROMA_SETTINGS",
-    "CollectionConfig",
-    "DOMAIN_TO_COLLECTION",
+# ChromaDB Collections
+CHROMA_COLLECTIONS = [
+    "general_knowledge",
+    "technical_docs", 
+    "business_docs",
+    "research_papers",
+    "legal_documents"
 ]
+
+# Supported file formats
+SUPPORTED_FORMATS = {
+    "documents": [".pdf", ".docx", ".doc", ".txt", ".md", ".html"],
+    "spreadsheets": [".xlsx", ".xls", ".csv"],
+    "presentations": [".pptx", ".ppt"],
+    "data": [".json", ".xml", ".yaml", ".yml"],
+    "archives": [".zip", ".rar"]
+}
+
+# API Configuration
+API_CONFIG = {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "debug": True
+}
+
+# Embedding models
+EMBEDDING_MODELS = {
+    "default": "all-MiniLM-L6-v2",
+    "large": "all-mpnet-base-v2"
+}
+
+# Chunking configuration
+CHUNKING_CONFIG = {
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+}
+
+# Processing limits
+PROCESSING_LIMITS = {
+    "max_file_size_mb": 50,
+    "max_files_per_batch": 100,
+    "max_concurrent_operations": 10
+}
+
+# Validation rules
+VALIDATION_RULES = {
+    "min_file_size_kb": 1,
+    "max_file_size_mb": 50,
+    "allowed_characters": "utf-8",
+    "max_filename_length": 255
+}
+
+# Error messages
+ERROR_MESSAGES = {
+    "file_too_large": "El archivo excede el tamaño máximo permitido (50MB)",
+    "invalid_format": "Formato de archivo no soportado",
+    "empty_file": "El archivo está vacío",
+    "corrupted_file": "El archivo parece estar corrupto"
+}
+
+# Success messages
+SUCCESS_MESSAGES = {
+    "file_processed": "Archivo procesado exitosamente",
+    "batch_completed": "Lote de archivos procesado exitosamente",
+    "conversion_success": "Conversión completada exitosamente"
+}

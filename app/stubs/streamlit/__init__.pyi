@@ -180,6 +180,84 @@ def rerun() -> None:
     """Rerun the app."""
     pass
 
+def stop() -> None:
+    """Stop execution of the app."""
+    pass
+
+def json(body: Any, expanded: bool = True) -> None:
+    """Display object or string as a JSON string."""
+    pass
+
+def tabs(tabs: List[str]) -> List[Any]:
+    """Create tabs for organizing content."""
+    pass
+
+def caption(text: str) -> None:
+    """Display text in caption formatting."""
+    pass
+
+def header(text: str) -> None:
+    """Display text in header formatting."""
+    pass
+
+def checkbox(
+    label: str,
+    value: bool = False,
+    key: Optional[str] = None,
+    help: Optional[str] = None,
+    on_change: Optional[Callable[[], None]] = None,
+    args: Optional[tuple] = None,
+    kwargs: Optional[Dict[str, Any]] = None,
+    disabled: bool = False,
+    label_visibility: str = "visible",
+) -> bool:
+    """Display a checkbox widget."""
+    pass
+
+def text_input(
+    label: str,
+    value: str = "",
+    max_chars: Optional[int] = None,
+    key: Optional[str] = None,
+    type: str = "default",
+    help: Optional[str] = None,
+    autocomplete: Optional[str] = None,
+    on_change: Optional[Callable[[], None]] = None,
+    args: Optional[tuple] = None,
+    kwargs: Optional[Dict[str, Any]] = None,
+    placeholder: Optional[str] = None,
+    disabled: bool = False,
+    label_visibility: str = "visible",
+) -> str:
+    """Display a text input widget."""
+    pass
+
+def slider(
+    label: str,
+    min_value: Optional[Union[int, float]] = None,
+    max_value: Optional[Union[int, float]] = None,
+    value: Optional[Union[int, float]] = None,
+    step: Optional[Union[int, float]] = None,
+    format: Optional[str] = None,
+    key: Optional[str] = None,
+    help: Optional[str] = None,
+    on_change: Optional[Callable[[], None]] = None,
+    args: Optional[tuple] = None,
+    kwargs: Optional[Dict[str, Any]] = None,
+    disabled: bool = False,
+    label_visibility: str = "visible",
+) -> Union[int, float]:
+    """Display a slider widget."""
+    pass
+
+def expander(
+    label: str,
+    expanded: bool = False,
+    key: Optional[str] = None,
+) -> ContextManager[Any]:
+    """Create an expandable container."""
+    pass
+
 def error(body: str, icon: Optional[str] = None) -> None:
     """Display an error message."""
     pass
@@ -190,6 +268,39 @@ def warning(body: str, icon: Optional[str] = None) -> None:
 
 def info(body: str, icon: Optional[str] = None) -> None:
     """Display an informational message."""
+    pass
+
+def metric(
+    label: str,
+    value: str,
+    delta: Optional[str] = None,
+    delta_color: str = "normal",
+) -> None:
+    """Display a metric in big bold font with an optional delta indicator."""
+    pass
+
+def code(
+    body: str,
+    language: Optional[str] = None,
+) -> None:
+    """Display code with optional syntax highlighting."""
+    pass
+
+def download_button(
+    label: str,
+    data: Any,
+    file_name: Optional[str] = None,
+    mime: Optional[str] = None,
+    key: Optional[str] = None,
+    help: Optional[str] = None,
+    on_change: Optional[Callable[[], None]] = None,
+    args: Optional[tuple] = None,
+    kwargs: Optional[Dict[str, Any]] = None,
+    type: str = "primary",
+    disabled: bool = False,
+    use_container_width: bool = False,
+) -> bool:
+    """Display a download button widget."""
     pass
 
 def spinner(text: str) -> ContextManager[None]:
