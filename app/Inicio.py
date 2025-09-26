@@ -33,8 +33,46 @@ st.set_page_config(layout='wide', page_title='Anclora AI RAG', page_icon='🤖')
 apply_anclora_theme()
 
 # Use centralized styling from anclora_colors
-# Only add specific overrides for chat input if needed
-chat_style = f"""
+# Layout and positioning fixes - Move content to top
+layout_style = f"""
+        /* 🎯 Move everything to top - minimal padding */
+        .main .block-container {{
+            padding-top: 0rem !important;
+            padding-bottom: 1rem !important;
+            max-width: 100% !important;
+        }}
+
+        /* 📱 Move title to very top */
+        h1 {{
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+            margin-bottom: 0.5rem !important;
+        }}
+
+        /* 📝 Adjust subtitle spacing - closer to title */
+        .main p {{
+            margin-top: 0.25rem !important;
+            margin-bottom: 1rem !important;
+        }}
+
+        /* 💬 Chat input positioning - closer to subtitle */
+        .stChatInput {{
+            margin-top: 1rem !important;
+        }}
+
+        /* 📊 Chat messages spacing */
+        .stChatMessage {{
+            margin-bottom: 1rem !important;
+        }}
+
+        /* 🎨 Center column positioning */
+        .stColumns {{
+            margin-top: 0 !important;
+        }}
+"""
+
+# Merge layout styles with chat styles
+chat_style = layout_style + f"""
         /* 💬 Estilo específico para el campo de chat - menos agresivo */
         .stChatInput input {{
             background-color: {ANCLORA_RAG_COLORS['neutral_medium']} !important;
@@ -125,14 +163,20 @@ with st.sidebar:
         st.session_state.language = selected_language
         st.rerun()
 
-# Main content
+# Main content positioned at top
 if st.session_state.language == 'es':
-    st.title("🤖 Anclora AI RAG")
-    st.markdown("Bienvenido al sistema de Recuperación y Generación Aumentada de Anclora AI")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.title("🤖 Anclora AI RAG")
+        st.markdown("**Bienvenido al sistema de Recuperación y Generación Aumentada de Anclora AI**")
+
     chat_placeholder = "Escribe tu pregunta aquí..."
 else:
-    st.title("🤖 Anclora AI RAG")
-    st.markdown("Welcome to Anclora AI's Retrieval-Augmented Generation system")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.title("🤖 Anclora AI RAG")
+        st.markdown("**Welcome to Anclora AI's Retrieval-Augmented Generation system**")
+
     chat_placeholder = "Type your question here..."
 
 # Initialize chat history

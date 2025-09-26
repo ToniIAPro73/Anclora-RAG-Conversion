@@ -84,7 +84,7 @@ def is_venv_active() -> bool:
 
 
 def activate_virtual_environment() -> None:
-    """Activate the virtual environment."""
+    """Activate the virtual environment by modifying environment variables and sys.path."""
     venv_path = Path("venv_rag")
     if not venv_path.exists():
         print("Virtual environment 'venv_rag' not found. Please create it first.")
@@ -92,17 +92,35 @@ def activate_virtual_environment() -> None:
         sys.exit(1)
 
     if os.name == 'nt':  # Windows
-        activate_script = venv_path / "Scripts" / "activate.bat"
-        if activate_script.exists():
-            # For Windows, we need to run the activate script in a new shell
-            abs_activate = str(activate_script.resolve())
-            print(f"Activating virtual environment: {abs_activate}")
-            print("Please activate the virtual environment manually by running:")
-            print(f"  {abs_activate}")
-            print("Then run this script again.")
-            sys.exit(1)
+        # Set up paths for Windows virtual environment
+        scripts_path = venv_path / "Scripts"
+        site_packages_path = venv_path / "Lib" / "site-packages"
+        python_path = venv_path / "Scripts" / "python.exe"
+
+        if scripts_path.exists() and python_path.exists():
+            print(f"Activating virtual environment: {venv_path}")
+
+            # Add the virtual environment's Scripts directory to PATH
+            if "PATH" in os.environ:
+                os.environ["PATH"] = f"{scripts_path};{os.environ['PATH']}"
+            else:
+                os.environ["PATH"] = str(scripts_path)
+
+            # Set VIRTUAL_ENV environment variable
+            os.environ["VIRTUAL_ENV"] = str(venv_path)
+
+            # Add the site-packages to sys.path
+            if str(site_packages_path) not in sys.path:
+                sys.path.insert(0, str(site_packages_path))
+
+            # Update sys.prefix to point to the virtual environment
+            sys.prefix = str(venv_path)
+
+            print("Virtual environment activated successfully.")
+            return
         else:
-            print("Virtual environment activation script not found.")
+            print("Virtual environment structure not found.")
+            print("Please ensure the virtual environment was created correctly.")
             sys.exit(1)
     else:  # Unix-like systems
         activate_script = venv_path / "bin" / "activate"
