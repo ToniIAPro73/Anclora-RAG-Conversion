@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+# IMPORTANT: Set telemetry environment variables BEFORE any other imports
+import os
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+os.environ["CHROMA_TELEMETRY"] = "False"
+
 import base64
 import logging
-import os
 import uuid
 from typing import (
     TYPE_CHECKING,
@@ -27,10 +31,6 @@ from langchain_core.vectorstores import VectorStore
 from langchain_community.vectorstores.utils import maximal_marginal_relevance
 
 from common.constants import CHROMA_COLLECTIONS
-
-# Deshabilitar telemetría de ChromaDB para evitar errores
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
-os.environ["CHROMA_TELEMETRY"] = "False"
 
 logger = logging.getLogger(__name__)
 

@@ -22,14 +22,14 @@ except ImportError:
     # Fallback for when chromadb is not available
     CHROMA_SETTINGS = None
 
-# ChromaDB Collections
-CHROMA_COLLECTIONS = [
-    "general_knowledge",
-    "technical_docs",
-    "business_docs",
-    "research_papers",
-    "legal_documents"
-]
+# ChromaDB Collections with domain information
+CHROMA_COLLECTIONS = {
+    "general_knowledge": type('CollectionConfig', (), {'domain': 'documents'})(),
+    "technical_docs": type('CollectionConfig', (), {'domain': 'documents'})(),
+    "business_docs": type('CollectionConfig', (), {'domain': 'documents'})(),
+    "research_papers": type('CollectionConfig', (), {'domain': 'documents'})(),
+    "legal_documents": type('CollectionConfig', (), {'domain': 'documents'})()
+}
 
 # Supported file formats
 SUPPORTED_FORMATS = {

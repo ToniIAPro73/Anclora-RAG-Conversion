@@ -14,34 +14,21 @@ st.set_page_config(layout='wide', page_title='Anclora AI RAG', page_icon='🤖')
 # Aplicar tema de colores Anclora
 apply_anclora_theme()
 
-# CSS personalizado para elementos Streamlit con colores Anclora RAG
-custom_style = f"""
-        /* Ocultar elementos de Streamlit */
-        #MainMenu {{visibility: hidden;}}
-        .stDeployButton {{display:none;}}
-        footer {{visibility: hidden;}}
-        #stDecoration {{display:none;}}
-
-        /* 💬 Estilo para el campo de chat - MISMO BORDE que selector de idiomas */
-        .stChatInput > div > div > div > div {{
+# Use centralized styling from anclora_colors
+# Only add specific overrides for chat input if needed
+chat_style = f"""
+        /* 💬 Estilo específico para el campo de chat - menos agresivo */
+        .stChatInput input {{
             background-color: {ANCLORA_RAG_COLORS['neutral_medium']} !important;
             border: 2px solid {ANCLORA_RAG_COLORS['primary_medium']} !important;
             color: {ANCLORA_RAG_COLORS['text_primary']} !important;
-            transition: all 0.3s ease !important;
         }}
 
-        /* FORZAR el mismo color en focus - eliminar rojo completamente */
-        .stChatInput > div > div > div > div:focus-within,
-        .stChatInput > div > div > div > div:focus,
+        /* Focus state para chat input */
         .stChatInput input:focus {{
             border-color: {ANCLORA_RAG_COLORS['primary_medium']} !important;
             outline: none !important;
-            box-shadow: none !important;
-        }}
-
-        /* Eliminar TODOS los estilos rojos de Streamlit */
-        .stChatInput * {{
-            border-color: {ANCLORA_RAG_COLORS['primary_medium']} !important;
+            box-shadow: 0 0 0 2px {ANCLORA_RAG_COLORS['primary_medium']}33 !important;
         }}
 
         /* Placeholder del chat */
@@ -53,17 +40,18 @@ custom_style = f"""
         /* Botón de envío del chat */
         .stChatInput button {{
             background-color: {ANCLORA_RAG_COLORS['primary_medium']} !important;
-            border: none !important;
+            border: 2px solid {ANCLORA_RAG_COLORS['primary_medium']} !important;
             color: {ANCLORA_RAG_COLORS['text_inverse']} !important;
             transition: all 0.3s ease !important;
         }}
 
         .stChatInput button:hover {{
             background-color: {ANCLORA_RAG_COLORS['primary_deep']} !important;
+            border-color: {ANCLORA_RAG_COLORS['primary_deep']} !important;
             transform: scale(1.05) !important;
         }}
 """
-st.markdown(f"<style>{custom_style}</style>")
+st.markdown(f"<style>{chat_style}</style>")
 
 # Initialize language in session state
 if 'language' not in st.session_state:
