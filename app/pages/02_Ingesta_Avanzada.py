@@ -29,12 +29,12 @@ logger = logging.getLogger(__name__)
 
 # Importar módulos de ingesta
 try:
-    from app.ingestion.advanced_ingestion_system import AdvancedIngestionSystem, IngestionStatus
-    from app.ingestion.validation_service import ValidationService
-    from app.ingestion.github_processor import RepositoryOptions
+    from ingestion.advanced_ingestion_system import AdvancedIngestionSystem, IngestionStatus
+    from ingestion.validation_service import ValidationService
+    from ingestion.github_processor import RepositoryOptions
     
     # Importar la nueva integración de NotebookLM
-    from app.ingestion.integration.notebooklm_integration import render_notebooklm_conversion_ui
+    from ingestion.integration.notebooklm_integration import render_notebooklm_conversion_ui
     
 except ImportError as e:
     logger.error(f"Error importing ingestion modules: {e}")
@@ -43,8 +43,8 @@ except ImportError as e:
 
 # Importar constantes y configuraciones
 try:
-    from app.common.constants import CHROMA_COLLECTIONS
-    from app.common.anclora_colors import apply_anclora_theme
+    from common.constants import CHROMA_COLLECTIONS
+    from common.anclora_colors import apply_anclora_theme
 except ImportError:
     # Fallback si no están disponibles
     CHROMA_COLLECTIONS = ["default_collection"]

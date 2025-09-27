@@ -6,8 +6,8 @@ import io
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from app.common.logger import Logger
-from app.common import ingest_file as ingest_module
+from common.logger import Logger
+from common import ingest_file as ingest_module
 
 
 class FileProcessor:

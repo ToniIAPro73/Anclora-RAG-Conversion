@@ -45,7 +45,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 EXPOSE 8081
 
 # Comando para ejecutar la API
-CMD ["python", "-c", "import api_endpoints; import uvicorn; uvicorn.run(api_endpoints.app, host='0.0.0.0', port=8081)"]
+CMD ["python", "start_api.py"]
 
 # ==========================================
 # Stage for UI service (default)

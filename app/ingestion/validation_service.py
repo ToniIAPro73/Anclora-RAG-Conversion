@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 
-from app.common.logger import Logger
+from common.logger import Logger
 
 
 class ValidationService:

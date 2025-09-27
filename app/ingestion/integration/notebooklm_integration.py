@@ -9,7 +9,7 @@ from typing import Iterable
 import pandas as pd
 import streamlit as st
 
-from app.ingestion.markdown_source_parser import MarkdownSourceParser
+from ingestion.markdown_source_parser import MarkdownSourceParser
 
 def _run_async(coro):
     """Execute *coro* reusing or creating an event loop as needed."""

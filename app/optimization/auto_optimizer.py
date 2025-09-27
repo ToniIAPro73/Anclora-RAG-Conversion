@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Callable
 from dataclasses import dataclass, asdict
 from enum import Enum
 
-from app.analytics.predictive_analyzer import PredictiveAnalyzer, PredictiveInsight
+from analytics.predictive_analyzer import PredictiveAnalyzer, PredictiveInsight
 from common.observability import record_rag_response
 
 

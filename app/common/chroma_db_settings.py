@@ -36,7 +36,7 @@ from langchain_core.vectorstores import VectorStore
 
 from langchain_community.vectorstores.utils import maximal_marginal_relevance
 
-from app.common.constants import CHROMA_COLLECTIONS
+from common.constants import CHROMA_COLLECTIONS
 
 logger = logging.getLogger(__name__)
 

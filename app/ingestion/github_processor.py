@@ -15,7 +15,7 @@ try:
 except Exception:  # pragma: no cover - fallback to stdlib
     from fnmatch import fnmatchcase  # type: ignore
 
-from app.common.logger import Logger
+from common.logger import Logger
 
 try:  # pragma: no cover - optional dependency
     from git import Repo, GitCommandError  # type: ignore

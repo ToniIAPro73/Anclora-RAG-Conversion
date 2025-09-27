@@ -19,6 +19,18 @@ x-environment: &default-environment
   PROMETHEUS_METRICS_HOST: 0.0.0.0
   LLAMA_CLOUD_API_KEY: ${LLAMA_CLOUD_API_KEY:-}
   WHISPER_MODEL: ${WHISPER_MODEL:-base}
+  # Docker network configuration
+  CHROMA_HOST: chroma
+  CHROMA_PORT: 8000
+  OLLAMA_HOST: ollama
+  OLLAMA_PORT: 11434
+  # Telemetry disabled
+  ANONYMIZED_TELEMETRY: false
+  CHROMA_TELEMETRY: false
+  CHROMA_SERVER_NO_ANALYTICS: true
+  CHROMA_TELEMETRY_DISABLED: true
+  POSTHOG_DISABLED: true
+  DISABLE_POSTHOG: true
 
 # Resource limits for production services
 x-resource-limits: &resource-limits
@@ -41,12 +53,11 @@ services:
     <<: *restart-policy
     image: ollama/ollama:latest
     volumes:
-      - ollama_models:/ollama/models
+      - ollama_models:/root/.ollama
     networks:
       - anclora-network
     environment:
       <<: *default-environment
-      OLLAMA_MODELS: /ollama/models
     deploy:
       resources:
         limits:
@@ -123,6 +134,7 @@ services:
     build:
       context: ./app
       dockerfile: Dockerfile
+      target: ui-service
     ports:
       - 8501:8501
       - 9000:9000
@@ -166,6 +178,7 @@ services:
     build:
       context: ./app
       dockerfile: Dockerfile
+      target: api-service
     ports:
       - 8081:8081
       - 9001:9001
@@ -280,10 +293,6 @@ volumes:
   # Ollama models storage
   ollama_models:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /ollama/models
 
   # ChromaDB vector database storage
   chroma_data:

@@ -10,17 +10,17 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.documents import Document as LangChainDocument
 
-from app.common.logger import Logger
-from app.common.constants import CHROMA_SETTINGS
-from app.common.ingest_file import does_vectorstore_exist, get_embeddings
-from app.ingestion.config import IngestionConfig, get_ingestion_config
-from app.ingestion.file_processor import FileProcessor
-from app.ingestion.folder_processor import FolderProcessor
-from app.ingestion.markdown_source_parser import MarkdownSourceParser
-from app.ingestion.validation_service import ValidationService
-from app.common.chroma_utils import add_langchain_documents
-from app.ingestion.github_processor import GitHubRepositoryProcessor, RepositoryOptions
-from app.common.chroma_db_settings import Chroma
+from common.logger import Logger
+from common.constants import CHROMA_SETTINGS
+from common.ingest_file import does_vectorstore_exist, get_embeddings
+from ingestion.config import IngestionConfig, get_ingestion_config
+from ingestion.file_processor import FileProcessor
+from ingestion.folder_processor import FolderProcessor
+from ingestion.markdown_source_parser import MarkdownSourceParser
+from ingestion.validation_service import ValidationService
+from common.chroma_utils import add_langchain_documents
+from ingestion.github_processor import GitHubRepositoryProcessor, RepositoryOptions
+from common.chroma_db_settings import Chroma
 
 
 class IngestionStatus(Enum):

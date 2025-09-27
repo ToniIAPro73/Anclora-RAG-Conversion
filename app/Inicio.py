@@ -124,7 +124,7 @@ def _load_api_settings() -> dict[str, str]:
         'ANCLORA_API_URL',
         'ANCLORA_API_BASE_URL',
         'RAG_API_URL',
-    ) or 'http://localhost:8081'
+    ) or 'http://api:8081'  # Use service name for Docker networking
     base_url = base_url.rstrip('/')
 
     chat_path = _get_env_or_secret('api_chat_path', 'ANCLORA_API_CHAT_PATH', 'API_CHAT_PATH') or '/chat'
@@ -184,14 +184,14 @@ def _candidate_urls(chat_url: str) -> list[str]:
     path_part = parsed.path or '/chat'
 
     candidates = [chat_url]
-    defaults = ['localhost', 'host.docker.internal', 'api']
+    defaults = ['api', 'host.docker.internal', 'localhost']
 
     if host in ('localhost', '127.0.0.1'):
-        fallback_hosts = ['host.docker.internal', 'api']
+        fallback_hosts = ['api', 'host.docker.internal']
     elif host == 'host.docker.internal':
-        fallback_hosts = ['localhost', 'api']
+        fallback_hosts = ['api', 'localhost']
     elif host == 'api':
-        fallback_hosts = ['localhost', 'host.docker.internal']
+        fallback_hosts = ['host.docker.internal', 'localhost']
     else:
         fallback_hosts = [value for value in defaults if value != host]
 

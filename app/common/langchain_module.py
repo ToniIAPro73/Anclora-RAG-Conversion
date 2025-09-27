@@ -132,10 +132,10 @@ RUNNABLE_LAMBDA_AVAILABLE = RunnableLambda is not None
 
 
 try:
-    from app.common.chroma_db_settings import Chroma
-    from app.common.translations import get_text
-    from app.common.assistant_prompt import assistant_prompt
-    from app.common.text_normalization import normalize_to_nfc
+    from common.chroma_db_settings import Chroma
+    from common.translations import get_text
+    from common.assistant_prompt import assistant_prompt
+    from common.text_normalization import normalize_to_nfc
 except ImportError:
     print("Error: common modules not found. Make sure the modules exist and are in the Python path.")
     import sys
@@ -207,7 +207,7 @@ model = os.environ.get("MODEL")
 target_source_chunks = int(os.environ.get('TARGET_SOURCE_CHUNKS',5))
 
 try:
-    from app.common.constants import CHROMA_COLLECTIONS, CHROMA_SETTINGS
+    from common.constants import CHROMA_COLLECTIONS, CHROMA_SETTINGS
 except (ImportError, AttributeError):  # pragma: no cover - defensive fallback
     CHROMA_COLLECTIONS = {
         "conversion_rules": SimpleNamespace(domain="documents"),
@@ -221,8 +221,8 @@ except (ImportError, AttributeError):  # pragma: no cover - defensive fallback
 
     CHROMA_SETTINGS = SimpleNamespace(get_collection=lambda *_: _EmptyCollection())
 
-from app.common.embeddings_manager import get_embeddings_manager
-from app.common.observability import record_rag_response
+from common.embeddings_manager import get_embeddings_manager
+from common.observability import record_rag_response
 
 
 DetectorFactory.seed = 0

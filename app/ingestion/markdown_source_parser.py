@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from app.common.logger import Logger
+from common.logger import Logger
 
 
 @dataclass
