@@ -11,10 +11,6 @@ _LANGCHAIN_CORE_HINT = "pip install langchain-core==0.2.43"
 
 try:
     import langchain_core.utils.function_calling as _lc_function_calling
-    if not hasattr(_lc_function_calling, "convert_to_json_schema"):
-        def convert_to_json_schema(*args, **kwargs):
-            return _lc_function_calling.convert_to_openai_function(*args, **kwargs)
-        _lc_function_calling.convert_to_json_schema = convert_to_json_schema
 except Exception:  # pragma: no cover - defensive patching only
     _lc_function_calling = None
 
@@ -136,10 +132,10 @@ RUNNABLE_LAMBDA_AVAILABLE = RunnableLambda is not None
 
 
 try:
-    from common.chroma_db_settings import Chroma
-    from common.translations import get_text
-    from common.assistant_prompt import assistant_prompt
-    from common.text_normalization import normalize_to_nfc
+    from app.common.chroma_db_settings import Chroma
+    from app.common.translations import get_text
+    from app.common.assistant_prompt import assistant_prompt
+    from app.common.text_normalization import normalize_to_nfc
 except ImportError:
     print("Error: common modules not found. Make sure the modules exist and are in the Python path.")
     import sys
@@ -171,7 +167,10 @@ import time
 from collections import Counter
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from langchain_community.embeddings import HuggingFaceEmbeddings
 from types import SimpleNamespace
 
 # Configurar logging
@@ -208,7 +207,7 @@ model = os.environ.get("MODEL")
 target_source_chunks = int(os.environ.get('TARGET_SOURCE_CHUNKS',5))
 
 try:
-    from common.constants import CHROMA_COLLECTIONS, CHROMA_SETTINGS
+    from app.common.constants import CHROMA_COLLECTIONS, CHROMA_SETTINGS
 except (ImportError, AttributeError):  # pragma: no cover - defensive fallback
     CHROMA_COLLECTIONS = {
         "conversion_rules": SimpleNamespace(domain="documents"),
@@ -222,8 +221,8 @@ except (ImportError, AttributeError):  # pragma: no cover - defensive fallback
 
     CHROMA_SETTINGS = SimpleNamespace(get_collection=lambda *_: _EmptyCollection())
 
-from common.embeddings_manager import get_embeddings_manager
-from common.observability import record_rag_response
+from app.common.embeddings_manager import get_embeddings_manager
+from app.common.observability import record_rag_response
 
 
 DetectorFactory.seed = 0
@@ -439,7 +438,7 @@ class _TaskDirectives:
 
 
 def _get_collection_store(
-    collection_name: str, embeddings: HuggingFaceEmbeddings
+    collection_name: str, embeddings: Any
 ) -> Chroma:
     """Return a cached :class:`Chroma` instance for *collection_name*."""
 
@@ -453,7 +452,7 @@ def _get_collection_store(
         if store is None:
             store = chroma_cls(
                 collection_name=collection_name,
-                embedding_function=(lambda docs, _emb=embeddings: _emb.embed_documents(docs)),
+                embedding_function=embeddings,
                 client=getattr(module, "CHROMA_SETTINGS", CHROMA_SETTINGS),
             )
             _collections_cache[cache_key] = store
@@ -868,7 +867,7 @@ def _retrieve_from_collections(
     return [doc for doc, _ in scored_documents[:max_results]]
 
 
-def get_embeddings(domain: Optional[str] = None) -> HuggingFaceEmbeddings:
+def get_embeddings(domain: Optional[str] = None) -> Any:
     """Return embeddings for *domain* using the shared manager."""
 
     if not _HAS_LANGCHAIN_COMMUNITY:

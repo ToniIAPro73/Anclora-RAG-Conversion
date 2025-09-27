@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List
 
 try:  # pragma: no cover - the import path is environment dependent
-    from langchain_core.documents.base import Document as _LangChainDocument  # type: ignore[assignment]
+    from langchain_core.documents import Document as _LangChainDocument  # type: ignore[assignment]
 except Exception:  # pragma: no cover - fallback for stripped environments
     @dataclass
     class _LangChainDocument:  # type: ignore[override]

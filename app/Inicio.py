@@ -164,20 +164,23 @@ with st.sidebar:
         st.rerun()
 
 # Main content positioned at top
+
 if st.session_state.language == 'es':
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.title("🤖 Anclora AI RAG")
-        st.markdown("**Bienvenido al sistema de Recuperación y Generación Aumentada de Anclora AI**")
-
-    chat_placeholder = "Escribe tu pregunta aquí..."
+    hero_subtitle = 'Bienvenido al sistema de Recuperación y Generación Aumentada de Anclora AI'
+    chat_placeholder = 'Escribe tu pregunta aquí...'
 else:
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.title("🤖 Anclora AI RAG")
-        st.markdown("**Welcome to Anclora AI's Retrieval-Augmented Generation system**")
+    hero_subtitle = "Welcome to Anclora AI's Retrieval-Augmented Generation system"
+    chat_placeholder = 'Type your question here...'
 
-    chat_placeholder = "Type your question here..."
+st.markdown(
+    f"""
+    <div class='home-hero'>
+        <h1>&#129302; Anclora AI RAG</h1>
+        <p><strong>{hero_subtitle}</strong></p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Initialize chat history
 if "messages" not in st.session_state:

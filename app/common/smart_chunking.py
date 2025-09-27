@@ -10,15 +10,15 @@ from pathlib import Path
 try:
     from langchain.text_splitter import RecursiveCharacterTextSplitter
     from langchain_community.document_loaders import TextLoader
-    from langchain.schema import Document
+    from langchain_core.documents import Document
 except ImportError:
     # Fallback para entornos sin langchain
-    class RecursiveCharacterTextSplitter:
-        def __init__(self, chunk_size: int = 500, chunk_overlap: int = 0, separators: List[str] = None):
+    class _FallbackRecursiveCharacterTextSplitter:
+        def __init__(self, chunk_size: int = 500, chunk_overlap: int = 0, separators: Optional[List[str]] = None):
             self.chunk_size = chunk_size
             self.chunk_overlap = chunk_overlap
             self.separators = separators or ["\n\n", "\n", " "]
-        
+
         def split_text(self, text: str) -> List[str]:
             # Implementación básica de fallback
             chunks = []
@@ -28,11 +28,15 @@ except ImportError:
                 chunks.append(text[start:end])
                 start += self.chunk_size - self.chunk_overlap
             return chunks
-    
-    class Document:
-        def __init__(self, page_content: str, metadata: Dict[str, Any] = None):
+
+    class _FallbackDocument:
+        def __init__(self, page_content: str, metadata: Optional[Dict[str, Any]] = None):
             self.page_content = page_content
             self.metadata = metadata or {}
+
+    # Use fallback classes as the main classes when imports fail
+    RecursiveCharacterTextSplitter = _FallbackRecursiveCharacterTextSplitter  # type: ignore
+    Document = _FallbackDocument  # type: ignore
 
 class SmartChunker:
     """Chunker inteligente que adapta la estrategia según el tipo de contenido"""
@@ -155,7 +159,7 @@ class SmartChunker:
                 separators=config["separators"]
             )
     
-    def detect_content_type(self, file_path: str, content: str = None) -> str:
+    def detect_content_type(self, file_path: str, content: Optional[str] = None) -> str:
         """Detecta el tipo de contenido basado en la extensión y contenido"""
         
         # Primero, usar la extensión del archivo
@@ -182,7 +186,7 @@ class SmartChunker:
         
         return content_type
     
-    def chunk_content(self, content: str, file_path: str = "", metadata: Dict[str, Any] = None) -> List[Document]:
+    def chunk_content(self, content: str, file_path: str = "", metadata: Optional[Dict[str, Any]] = None) -> List[Any]:
         """Divide el contenido en chunks inteligentes"""
         
         # Detectar tipo de contenido
@@ -276,7 +280,7 @@ class SmartChunker:
         
         return metadata
     
-    def get_chunking_stats(self, documents: List[Document]) -> Dict[str, Any]:
+    def get_chunking_stats(self, documents: List[Any]) -> Dict[str, Any]:
         """Obtiene estadísticas del chunking realizado"""
         if not documents:
             return {}
