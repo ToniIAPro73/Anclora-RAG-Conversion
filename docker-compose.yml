@@ -31,24 +31,9 @@ x-resource-limits: &resource-limits
         cpus: '0.5'
         memory: 512M
 
-# Health check configuration
-x-healthcheck: &default-healthcheck
-  interval: 30s
-  timeout: 10s
-  retries: 3
-  start_period: 40s
-
 # Restart policy for critical services
 x-restart-policy: &restart-policy
   restart: unless-stopped
-
-# Logging configuration
-x-logging: &logging-config
-  logging:
-    driver: json-file
-    options:
-      max-size: 100m
-      max-file: "3"
 
 services:
   # Language Model Service - Ollama
@@ -90,7 +75,7 @@ services:
   # Vector Database - ChromaDB
   # =============================================================================
   chroma:
-    <<: *restart-policy
+    <<: [*restart-policy, *resource-limits]
     image: chromadb/chroma:0.5.15
     volumes:
       - chroma_data:/chroma/.chroma/index
@@ -98,14 +83,6 @@ services:
       - 8000:8000
     networks:
       - anclora-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
     logging:
       driver: json-file
       options:
@@ -142,7 +119,7 @@ services:
   # User Interface - Streamlit Application
   # =============================================================================
   ui:
-    <<: *restart-policy
+    <<: [*restart-policy, *resource-limits]
     build:
       context: ./app
       dockerfile: Dockerfile
@@ -169,14 +146,6 @@ services:
       PROMETHEUS_METRICS_PORT: 9000
       # Disable Streamlit telemetry to prevent capture() error
       STREAMLIT_BROWSER_GATHER_USAGE_STATS: false
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
     logging:
       driver: json-file
       options:
@@ -193,7 +162,7 @@ services:
   # REST API Service - FastAPI Application
   # =============================================================================
   api:
-    <<: *restart-policy
+    <<: [*restart-policy, *resource-limits]
     build:
       context: ./app
       dockerfile: Dockerfile
@@ -212,20 +181,21 @@ services:
     environment:
       <<: *default-environment
       PROMETHEUS_METRICS_PORT: 9001
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
+      PYTHONPATH: /app
+      # API Authentication tokens
+      ANCLORA_API_TOKENS: ${ANCLORA_API_TOKENS:-}
+      ANCLORA_API_TOKEN: ${ANCLORA_API_TOKEN:-}
+      ANCLORA_DEFAULT_API_TOKEN: ${ANCLORA_DEFAULT_API_TOKEN:-}
+      ANCLORA_JWT_SECRET: ${ANCLORA_JWT_SECRET:-}
+      ANCLORA_JWT_ALGORITHMS: ${ANCLORA_JWT_ALGORITHMS:-HS256}
+      ANCLORA_JWT_AUDIENCE: ${ANCLORA_JWT_AUDIENCE:-}
+      ANCLORA_JWT_ISSUER: ${ANCLORA_JWT_ISSUER:-}
     logging:
       driver: json-file
       options:
         max-size: 100m
         max-file: "3"
-    command: ["python", "-m", "uvicorn", "api_endpoints:app", "--host", "0.0.0.0", "--port", "8081"]
+    command: ["python", "-c", "import api_endpoints; import uvicorn; uvicorn.run(api_endpoints.app, host='0.0.0.0', port=8081)"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 30s
@@ -338,27 +308,4 @@ networks:
 # =============================================================================
 # Service Profiles
 # =============================================================================
-# Development profile - includes volume mounts for live reloading
-x-dev-overrides: &dev-overrides
-  volumes:
-    - ./app:/app
-    - /app/__pycache__
-  environment:
-    - ENV=development
-    - LOG_LEVEL=DEBUG
-
-# Production profile - optimized for production deployment
-x-prod-overrides: &prod-overrides
-  environment:
-    - ENV=production
-    - LOG_LEVEL=INFO
-  deploy:
-    resources:
-      limits:
-        cpus: '2.0'
-        memory: 4G
-      reservations:
-        cpus: '1.0'
-        memory: 1G
-
-# Apply development overrides to existing services
+# Note: Service profiles can be added here as needed for different deployment environments

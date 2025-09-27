@@ -18,6 +18,8 @@ from common.langchain_module import LegalComplianceGuardError, response
 from common.privacy import PrivacyManager
 from common.translations import get_text
 from security import AdvancedSecurityManager, SecurityPolicy
+from agents.orchestrator.service import OrchestratorService, create_default_orchestrator
+from agents.base import AgentTask, AgentResponse
 
 try:  # pragma: no cover - compatibilidad con httpx 0.28+
     import httpx
@@ -160,27 +162,16 @@ def _build_agent_http_response(
 class ChatRequest(BaseModel):
     message: str = Field(
         ...,
-        description=(
-            "Mensaje de la consulta o pregunta que se enviará al motor RAG.\n"
-            "Query message or question that will be processed by the RAG engine."
-        ),
-        example="¿Cuál es la política de respaldo de datos?"
+        title="Message",
+        description="Mensaje de la consulta o pregunta que se enviará al motor RAG. Query message or question that will be processed by the RAG engine."
     )
     max_length: Optional[int] = Field(
         1000,
-        description=(
-            "Longitud máxima permitida para el mensaje. Ajusta el límite si necesitas respuestas extensas.\n"
-            "Maximum number of characters allowed in the message. Increase the limit for longer prompts."
-        ),
-        example=800
+        description="Longitud máxima permitida para el mensaje. Ajusta el límite si necesitas respuestas extensas. Maximum number of characters allowed in the message. Increase the limit for longer prompts."
     )
     language: Optional[str] = Field(
         'es',
-        description=(
-            "Idioma preferido para la respuesta (`es` o `en`).\n"
-            "Preferred response language (`es` or `en`)."
-        ),
-        example="en"
+        description="Idioma preferido para la respuesta (`es` o `en`). Preferred response language (`es` or `en`)."
     )
 
     class Config:
@@ -204,38 +195,37 @@ class ChatRequest(BaseModel):
             ]
         }
 
+class ChatResponse(BaseModel):
+    response: str = Field(
+        ...,
+        description="Respuesta generada por el sistema RAG."
+    )
+    status: str = Field(
+        ...,
+        description="Estado de la respuesta (success, warning, error, guardrail)."
+    )
+    timestamp: str = Field(
+        ...,
+        description="Marca temporal de cuando se generó la respuesta."
+    )
+
+
 class AgentResponseModel(BaseModel):
     success: bool = Field(
         ...,
-        description=(
-            "Indica si la tarea fue atendida exitosamente por un agente especializado.\n"
-            "Whether the orchestrated agent completed the task successfully."
-        ),
-        example=True,
+        description="Indica si la tarea fue atendida exitosamente por un agente especializado. Whether the orchestrated agent completed the task successfully."
     )
     data: Optional[Dict[str, Any]] = Field(
         default=None,
-        description=(
-            "Carga útil retornada por el agente cuando la operación es exitosa.\n"
-            "Payload returned by the agent for successful operations."
-        ),
-        example={"answer": "La política de respaldo realiza copias incrementales cada 24 horas."},
+        description="Carga útil retornada por el agente cuando la operación es exitosa. Payload returned by the agent for successful operations."
     )
     metadata: Optional[Dict[str, Any]] = Field(
         default=None,
-        description=(
-            "Metadatos auxiliares (idioma, marca temporal, tipo de tarea) útiles para la interfaz.\n"
-            "Auxiliary metadata (language, timestamp, task type) useful for clients."
-        ),
-        example={"language": "es", "timestamp": "2024-05-12T14:32:10.456789", "task_type": "document_query"},
+        description="Metadatos auxiliares (idioma, marca temporal, tipo de tarea) útiles para la interfaz. Auxiliary metadata (language, timestamp, task type) useful for clients."
     )
     error: Optional[str] = Field(
         default=None,
-        description=(
-            "Código de error retornado por el agente cuando `success` es `False`.\n"
-            "Agent-specific error code when `success` is `False`."
-        ),
-        example="question_missing",
+        description="Código de error retornado por el agente cuando `success` es `False`. Agent-specific error code when `success` is `False`."
     )
 
     class Config:
@@ -267,27 +257,15 @@ class AgentResponseModel(BaseModel):
 class MediaTranscriptionRequest(BaseModel):
     media: str = Field(
         ...,
-        description=(
-            "Identificador o ruta del recurso multimedia a transcribir.\n"
-            "Identifier or path of the media resource to transcribe."
-        ),
-        example="s3://datasets/anclora/reuniones/standup-2024-05-01.mp3",
+        description="Identificador o ruta del recurso multimedia a transcribir. Identifier or path of the media resource to transcribe."
     )
     language: Optional[str] = Field(
         default=None,
-        description=(
-            "Idioma sugerido para la transcripción o resumen resultante.\n"
-            "Preferred language for the generated transcription or summary."
-        ),
-        example="es",
+        description="Idioma sugerido para la transcripción o resumen resultante. Preferred language for the generated transcription or summary."
     )
     metadata: Optional[Dict[str, Any]] = Field(
         default=None,
-        description=(
-            "Metadatos adicionales (ej. tipo de reunión, participante principal).\n"
-            "Optional metadata such as meeting type or main speaker."
-        ),
-        example={"meeting": "daily", "speaker": "analyst"},
+        description="Metadatos adicionales (ej. tipo de reunión, participante principal). Optional metadata such as meeting type or main speaker."
     )
 
     class Config:
@@ -303,23 +281,19 @@ class MediaTranscriptionRequest(BaseModel):
 class ForgetRequest(BaseModel):
     filename: str = Field(
         ...,
-        description="Nombre exacto del archivo que debe eliminarse de la base de conocimiento.",
-        example="informe_trimestral.pdf",
+        description="Nombre exacto del archivo que debe eliminarse de la base de conocimiento."
     )
     subject_id: Optional[str] = Field(
         default=None,
-        description="Identificador del titular de los datos que solicita el borrado.",
-        example="cliente-123",
+        description="Identificador del titular de los datos que solicita el borrado."
     )
     reason: Optional[str] = Field(
         default=None,
-        description="Motivo o referencia interna asociada a la solicitud del derecho al olvido.",
-        example="Solicitud formal recibida el 2024-05-20",
+        description="Motivo o referencia interna asociada a la solicitud del derecho al olvido."
     )
     metadata: Optional[dict[str, Any]] = Field(
         default=None,
-        description="Metadatos adicionales que deban registrarse en la auditoría (se anonimizarán automáticamente).",
-        example={"canal": "portal_privacidad", "ticket": "GDPR-77"},
+        description="Metadatos adicionales que deban registrarse en la auditoría (se anonimizarán automáticamente)."
     )
 
 
@@ -340,28 +314,22 @@ class ForgetResponse(BaseModel):
 def _model_to_dict(model: BaseModel) -> dict[str, Any]:
     """Compatibility helper to serialise Pydantic models across versions."""
 
-    dump_method = getattr(model, "model_dump", None)
-    if callable(dump_method):
-        return dump_method()
-    return model.dict()
+    try:
+        # Try Pydantic v2 method first
+        return model.model_dump()
+    except AttributeError:
+        # Fall back to Pydantic v1 method
+        return model.dict()
 
 
 class FileInfo(BaseModel):
     filename: str = Field(
         ...,
-        description=(
-            "Nombre del archivo almacenado en la base de conocimiento.\n"
-            "Filename stored in the knowledge base."
-        ),
-        example="politica_seguridad.pdf"
+        description="Nombre del archivo almacenado en la base de conocimiento. Filename stored in the knowledge base."
     )
     status: str = Field(
         ...,
-        description=(
-            "Estado del procesamiento del archivo.\n"
-            "Processing status for the uploaded file."
-        ),
-        example="indexed"
+        description="Estado del procesamiento del archivo. Processing status for the uploaded file."
     )
 
     class Config:
@@ -375,27 +343,15 @@ class FileInfo(BaseModel):
 class HealthResponse(BaseModel):
     status: str = Field(
         ...,
-        description=(
-            "Estado global del sistema.\n"
-            "Overall health status of the system."
-        ),
-        example="healthy"
+        description="Estado global del sistema. Overall health status of the system."
     )
     version: str = Field(
         ...,
-        description=(
-            "Versión desplegada de la API.\n"
-            "Deployed API version."
-        ),
-        example="1.0.0"
+        description="Versión desplegada de la API. Deployed API version."
     )
     services: dict = Field(
         ...,
-        description=(
-            "Mapa de servicios críticos y su estado operativo.\n"
-            "Mapping of critical services and their operational status."
-        ),
-        example={"chroma_db": "healthy", "ollama": "healthy"}
+        description="Mapa de servicios críticos y su estado operativo. Mapping of critical services and their operational status."
     )
 
     class Config:
@@ -492,14 +448,14 @@ def verify_security(request: Request) -> bool:
         client_ip = request.client.host if request.client else "unknown"
 
         # Verificar si la IP está en cuarentena
-        if advanced_security.is_ip_quarantined(client_ip):
+        if advanced_security._is_ip_quarantined(client_ip):
             raise HTTPException(
                 status_code=403,
                 detail="IP address is quarantined due to security violations"
             )
 
         # Verificar rate limiting
-        if not advanced_security.check_rate_limit(client_ip):
+        if not advanced_security._check_rate_limits(client_ip):
             raise HTTPException(
                 status_code=429,
                 detail="Rate limit exceeded"
@@ -578,25 +534,10 @@ async def chat_with_rag(
     http_request: Request,
     request: ChatRequest = Body(
         ...,
-        examples={
-            "consulta_es": {
-                "summary": "Consulta en español",
-                "description": "Solicitud con caracteres acentuados para validar soporte UTF-8.",
-                "value": {
-                    "message": "¿Cuál es el estado del informe trimestral?",
-                    "language": "es",
-                    "max_length": 600,
-                },
-            },
-            "query_en": {
-                "summary": "Request in English",
-                "description": "English request that showcases ñ/accents in the payload.",
-                "value": {
-                    "message": "Please summarize the jalapeño market update.",
-                    "language": "en",
-                    "max_length": 600,
-                },
-            },
+        example={
+            "message": "¿Cuál es el estado del informe trimestral?",
+            "language": "es",
+            "max_length": 600,
         },
     ),
     token: str = Depends(verify_token)
@@ -608,17 +549,17 @@ async def chat_with_rag(
 
     # Análisis de seguridad del contenido
     client_ip = http_request.client.host if http_request.client else "unknown"
-    security_result = advanced_security.analyze_query(
+    is_valid, security_event = advanced_security.validate_request(
+        source_ip=client_ip,
         query=request.message,
         user_id=token[:8] if token else "anonymous",  # Usar parte del token como ID
-        ip_address=client_ip
     )
 
-    if not security_result.is_safe:
-        logger.warning(f"Unsafe query detected from {client_ip}: {security_result.threat_type}")
+    if not is_valid:
+        logger.warning(f"Security violation from {client_ip}: {security_event.description if security_event else 'Unknown'}")
         raise HTTPException(
             status_code=400,
-            detail=f"Query blocked due to security policy: {security_result.threat_type}"
+            detail=f"Query blocked due to security policy: {security_event.description if security_event else 'Security violation'}"
         )
 
     language = (request.language or "es").lower()
@@ -629,7 +570,7 @@ async def chat_with_rag(
         if not request.message or len(request.message.strip()) == 0:
             raise HTTPException(status_code=400, detail="Mensaje vacío")
 
-        if len(request.message) > request.max_length:
+        if request.max_length is not None and len(request.message) > request.max_length:
             raise HTTPException(
                 status_code=400,
                 detail=f"Mensaje demasiado largo (máximo {request.max_length} caracteres)",
@@ -660,7 +601,7 @@ async def chat_with_rag(
                     query=request.message,
                     metadata={
                         "language": language,
-                        "citations": tuple(getattr(inspection, "citations", sensitive_refs)),
+                        "citations": tuple(getattr(inspection, "citations", None) or sensitive_refs),
                     },
                 )
 

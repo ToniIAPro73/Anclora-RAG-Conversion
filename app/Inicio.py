@@ -44,11 +44,37 @@ else:
     print("[WARNING] No se pudo cargar el archivo .env")
 
 # Verificar que los tokens estén disponibles
-tokens_loaded = os.getenv('ANCLORA_API_TOKEN') or os.getenv('ANCLORA_DEFAULT_API_TOKEN')
-if tokens_loaded:
-    print("[INFO] Tokens de API configurados correctamente")
-else:
-    print("[WARNING] Tokens de API no encontrados. Revisa la configuracion.")
+def check_api_tokens():
+    """Verificar disponibilidad de tokens de API con debug detallado"""
+    # Verificar secrets de Streamlit
+    secret_token = _get_secret('ANCLORA_API_TOKEN')
+    secret_default_token = _get_secret('ANCLORA_DEFAULT_API_TOKEN')
+
+    # Verificar variables de entorno
+    env_token = os.getenv('ANCLORA_API_TOKEN')
+    env_default_token = os.getenv('ANCLORA_DEFAULT_API_TOKEN')
+    env_api_token = os.getenv('api_token')
+    env_api_tokens = os.getenv('ANCLORA_API_TOKENS')
+
+    print("[DEBUG] === VERIFICACIÓN DE TOKENS ===")
+    print(f"[DEBUG] Secret ANCLORA_API_TOKEN: {'[SET]' if secret_token else '[NOT SET]'}")
+    print(f"[DEBUG] Secret ANCLORA_DEFAULT_API_TOKEN: {'[SET]' if secret_default_token else '[NOT SET]'}")
+    print(f"[DEBUG] Env ANCLORA_API_TOKEN: {'[SET]' if env_token else '[NOT SET]'}")
+    print(f"[DEBUG] Env ANCLORA_DEFAULT_API_TOKEN: {'[SET]' if env_default_token else '[NOT SET]'}")
+    print(f"[DEBUG] Env api_token: {'[SET]' if env_api_token else '[NOT SET]'}")
+    print(f"[DEBUG] Env ANCLORA_API_TOKENS: {'[SET]' if env_api_tokens else '[NOT SET]'}")
+
+    # Verificar si hay algún token disponible
+    tokens_loaded = secret_token or secret_default_token or env_token or env_default_token or env_api_token
+    if tokens_loaded:
+        print("[INFO] Tokens de API configurados correctamente")
+        return True
+    else:
+        print("[WARNING] Tokens de API no encontrados. Revisa la configuracion.")
+        return False
+
+# Verificar tokens con debug
+tokens_available = check_api_tokens()
 
 import streamlit as st
 from pathlib import Path
@@ -100,6 +126,10 @@ def _load_api_settings() -> dict[str, str]:
     if not chat_path.startswith('/'):
         chat_path = '/' + chat_path
 
+    # Ensure we use the correct chat endpoint based on API spec
+    if chat_path == '/api/chat':
+        chat_path = '/chat'
+
     token = _get_env_or_secret('api_token', 'API_TOKEN', 'ANCLORA_API_TOKEN')
     if not token:
         tokens_value = _get_env_or_secret('api_tokens', 'ANCLORA_API_TOKENS')
@@ -109,6 +139,15 @@ def _load_api_settings() -> dict[str, str]:
                 token = token_candidates[0]
     if not token:
         token = _get_env_or_secret('ANCLORA_DEFAULT_API_TOKEN')
+
+    # Debug logging para el token
+    print("[DEBUG] === API SETTINGS DEBUG ===")
+    print(f"[DEBUG] Base URL: {base_url}")
+    print(f"[DEBUG] Chat path: {chat_path}")
+    print(f"[DEBUG] Token found: {'[SET]' if token and token.strip() else '[NOT SET/EMPTY]'}")
+    if token and token.strip():
+        print(f"[DEBUG] Token preview: {token[:10]}..." if len(token) > 10 else f"[DEBUG] Token: {token}")
+    print(f"[DEBUG] Chat URL: {base_url}{chat_path}")
 
     chat_url = f"{base_url}{chat_path}"
     timeout_value = _get_env_or_secret('ANCLORA_API_TIMEOUT_SECONDS', 'API_TIMEOUT_SECONDS')
@@ -127,7 +166,14 @@ def _load_api_settings() -> dict[str, str]:
 def call_rag_api(message: str, language: str) -> dict[str, str]:
     settings = _load_api_settings()
     token = settings.get('token', '').strip()
+
+    print("[DEBUG] === API CALL DEBUG ===")
+    print(f"[DEBUG] Message length: {len(message)}")
+    print(f"[DEBUG] Language: {language}")
+    print(f"[DEBUG] Token in settings: {'[SET]' if token else '[NOT SET]'}")
+
     if not token:
+        print("[ERROR] No token found in API settings!")
         raise RAGAPIError(
             'No se encontró un token para acceder a la API. Configura ANCLORA_API_TOKEN, '
             'ANCLORA_API_TOKENS o ANCLORA_DEFAULT_API_TOKEN antes de usar el chat.'
@@ -152,24 +198,92 @@ def call_rag_api(message: str, language: str) -> dict[str, str]:
     timeout = float(settings.get('timeout', '60'))
     chat_url = settings['chat_url']
 
+    print("[DEBUG] === REQUEST DETAILS ===")
+    print(f"[DEBUG] URL: {chat_url}")
+    print(f"[DEBUG] Headers: Authorization=[SET], Content-Type=application/json")
+    print(f"[DEBUG] Payload keys: {list(payload.keys())}")
+
     try:
+        print("[DEBUG] Making API request...")
         response = httpx.post(chat_url, json=payload, headers=headers, timeout=timeout)
+        print(f"[DEBUG] Response status: {response.status_code}")
         response.raise_for_status()
+        print("[DEBUG] Request successful")
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code
+        print(f"[ERROR] HTTP Status Error: {status_code}")
+        print(f"[ERROR] Response text: {exc.response.text}")
+
+        # Enhanced error handling for authentication issues
         if status_code == 401:
-            raise RAGAPIError('La API rechazó el token proporcionado (401).') from exc
+            error_msg = (
+                'La API rechazó el token proporcionado (401).\n\n'
+                '🔍 **Posibles causas:**\n'
+                '• El token ha expirado\n'
+                '• El token es inválido\n'
+                '• La API requiere un token diferente\n'
+                '• La API no está configurada correctamente\n\n'
+                '🔧 **Soluciones:**\n'
+                '• Verifica que el token en .env sea correcto\n'
+                '• Reinicia los contenedores Docker\n'
+                '• Revisa los logs de la API para más detalles'
+            )
+            raise RAGAPIError(error_msg) from exc
         if status_code == 403:
             raise RAGAPIError('La API denegó el acceso a la consulta (403).') from exc
         detail = exc.response.text
         raise RAGAPIError(f'Error de la API ({status_code}): {detail}') from exc
     except httpx.RequestError as exc:
-        raise RAGAPIError(f'No fue posible conectar con la API: {exc}') from exc
+        print(f"[ERROR] Request Error: {exc}")
+        error_msg = (
+            f'No fue posible conectar con la API: {exc}\n\n'
+            '🔍 **Posibles causas:**\n'
+            '• La API no está ejecutándose\n'
+            '• Problemas de red o firewall\n'
+            '• URL de la API incorrecta\n\n'
+            '🔧 **Soluciones:**\n'
+            '• Verifica que docker compose ps muestre la API como \"Up\"\n'
+            '• Reinicia los contenedores con: docker compose restart\n'
+            '• Revisa los logs de la API: docker compose logs api'
+        )
+        raise RAGAPIError(error_msg) from exc
 
     try:
-        return response.json()
+        result = response.json()
+        print("[DEBUG] Response parsed successfully")
+        return result
     except ValueError as exc:
+        print(f"[ERROR] Failed to parse JSON response: {exc}")
         raise RAGAPIError('La API devolvió una respuesta inválida.') from exc
+
+
+def call_rag_api_with_fallback(message: str, language: str) -> dict[str, str]:
+    """
+    Intenta llamar a la API RAG con fallback a respuesta simulada si falla.
+    """
+    try:
+        return call_rag_api(message, language)
+    except RAGAPIError as api_error:
+        error_text = str(api_error)
+        print(f"[WARNING] API call failed, using fallback: {error_text}")
+
+        # Return a mock response for development/testing
+        fallback_response = (
+            "⚠️ **Respuesta de Desarrollo (API no disponible)**\n\n"
+            "La API de RAG no está disponible en este momento. "
+            "Esta es una respuesta simulada para fines de desarrollo.\n\n"
+            "**Consulta recibida:** {message}\n\n"
+            "**Solución:**\n"
+            "• Verifica que los contenedores Docker estén ejecutándose\n"
+            "• Revisa la configuración de tokens en el archivo .env\n"
+            "• Consulta los logs de la API para más detalles"
+        )
+
+        return {
+            'response': fallback_response,
+            'status': 'warning',
+            'timestamp': '2024-01-01T00:00:00.000000'
+        }
 
 
 
@@ -390,7 +504,7 @@ if prompt := st.chat_input(chat_placeholder):
         spinner_message = "Consultando motor RAG..." if st.session_state.language == 'es' else "Consulting the RAG engine..."
         try:
             with st.spinner(spinner_message):
-                api_payload = call_rag_api(prompt, st.session_state.language)
+                api_payload = call_rag_api_with_fallback(prompt, st.session_state.language)
 
             response_text = str(api_payload.get("response", "")).strip()
             status = (api_payload.get("status") or "success").lower()
