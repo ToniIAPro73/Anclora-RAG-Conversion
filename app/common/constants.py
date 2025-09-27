@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 
 # Disable Chroma telemetry before importing the client stack
 os.environ['ANONYMIZED_TELEMETRY'] = 'False'
@@ -63,13 +64,42 @@ except ImportError:
     CHROMA_SETTINGS = None
 
 # ChromaDB Collections with domain information
+
+@dataclass(frozen=True)
+class CollectionConfig:
+    domain: str
+
 CHROMA_COLLECTIONS = {
-    "general_knowledge": type('CollectionConfig', (), {'domain': 'documents'})(),
-    "technical_docs": type('CollectionConfig', (), {'domain': 'documents'})(),
-    "business_docs": type('CollectionConfig', (), {'domain': 'documents'})(),
-    "research_papers": type('CollectionConfig', (), {'domain': 'documents'})(),
-    "legal_documents": type('CollectionConfig', (), {'domain': 'documents'})()
+    "conversion_rules": CollectionConfig(domain="documents"),
+    "technical_docs": CollectionConfig(domain="documents"),
+    "business_docs": CollectionConfig(domain="documents"),
+    "general_knowledge": CollectionConfig(domain="documents"),
+    "research_papers": CollectionConfig(domain="documents"),
+    "research_sources": CollectionConfig(domain="research"),
+    "knowledge_guides": CollectionConfig(domain="guides"),
+    "format_specs": CollectionConfig(domain="formats"),
+    "troubleshooting": CollectionConfig(domain="code"),
+    "multimedia_assets": CollectionConfig(domain="multimedia"),
+    "archive_documents": CollectionConfig(domain="archives"),
+    "compliance_archive": CollectionConfig(domain="compliance"),
+    "legal_documents": CollectionConfig(domain="legal"),
+    "legal_repository": CollectionConfig(domain="legal"),
+    "legal_compliance": CollectionConfig(domain="compliance"),
 }
+
+DOMAIN_TO_COLLECTION = {
+    "documents": "conversion_rules",
+    "code": "troubleshooting",
+    "multimedia": "multimedia_assets",
+    "archives": "archive_documents",
+    "research": "research_sources",
+    "guides": "knowledge_guides",
+    "formats": "format_specs",
+    "compliance": "compliance_archive",
+    "legal": "legal_documents",
+    "business": "business_docs",
+}
+
 
 # Supported file formats
 SUPPORTED_FORMATS = {
