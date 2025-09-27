@@ -1,6 +1,40 @@
+import os
+
+# Disable Chroma telemetry before importing the client stack
+os.environ['ANONYMIZED_TELEMETRY'] = 'False'
+os.environ['CHROMA_TELEMETRY'] = 'False'
+
 """Constants for Anclora RAG application"""
 
-import os
+try:
+    from chromadb.telemetry import telemetry
+    telemetry.DEFAULT_CHROMA_TELEMETRY = False
+except Exception:
+    pass
+
+try:
+    from chromadb.telemetry.product import posthog as _chroma_posthog
+except Exception:
+    _chroma_posthog = None
+else:
+    def _noop_capture(*_args, **_kwargs):
+        return None
+    class _SilentPosthog:
+        def __init__(self, *args, **kwargs):
+            pass
+        def capture(self, *_args, **_kwargs):
+            return None
+        def flush(self) -> None:
+            return None
+        def dependencies(self):
+            return []
+        def start(self):
+            return None
+        def stop(self):
+            return None
+    _chroma_posthog.capture = _noop_capture
+    _chroma_posthog.client = _SilentPosthog()
+    _chroma_posthog.Posthog = lambda *args, **kwargs: _SilentPosthog(*args, **kwargs)
 
 # ChromaDB Settings
 try:
@@ -11,13 +45,19 @@ try:
     chroma_host = os.getenv('CHROMA_HOST', 'localhost')
     chroma_port = int(os.getenv('CHROMA_PORT', '8000'))
 
-    # Create ChromaDB client settings
-    chroma_settings = chromadb.config.Settings()
-    chroma_settings.chroma_server_host = chroma_host
-    chroma_settings.chroma_server_http_port = chroma_port
+    settings = chromadb.config.Settings(
+        allow_reset=True,
+        anonymized_telemetry=False,
+    )
 
-    # Create ChromaDB client instance
-    CHROMA_SETTINGS = chromadb.Client(chroma_settings)
+    try:
+        CHROMA_SETTINGS = chromadb.HttpClient(
+            host=chroma_host,
+            port=chroma_port,
+            settings=settings,
+        )
+    except Exception:
+        CHROMA_SETTINGS = chromadb.EphemeralClient(settings=settings)
 except ImportError:
     # Fallback for when chromadb is not available
     CHROMA_SETTINGS = None

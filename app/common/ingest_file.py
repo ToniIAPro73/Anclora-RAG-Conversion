@@ -59,7 +59,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
 from common.chroma_db_settings import Chroma
-from common.embeddings_manager import get_embeddings_manager
+from app.common.embeddings_manager import get_embeddings_manager
 from app.common.chroma_utils import add_langchain_documents, _make_metadata_serializable
 
 # Custom security exception

@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
 
 try:
     print("Probando importación de langchain_module...")
-    from common.langchain_module import response
+    from app.common.langchain_module import response
     print("✅ Importación exitosa de langchain_module")
     
     print("Probando función response...")

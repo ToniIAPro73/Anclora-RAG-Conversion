@@ -15,9 +15,9 @@ if app_dir not in sys.path:
     sys.path.insert(0, app_dir)
 
 from agents.base import AgentResponse, AgentTask, BaseAgent
-from common import langchain_module
-from common.langchain_module import LegalComplianceGuardError
-from common.observability import record_agent_invocation
+from app.common import langchain_module
+from app.common.langchain_module import LegalComplianceGuardError
+from app.common.observability import record_agent_invocation
 
 QueryFunction = Callable[[str, Optional[str], Optional[str], Optional[Mapping[str, Any]]], str]
 
@@ -54,7 +54,7 @@ class DocumentAgent(BaseAgent):
             return AgentResponse(success=False, error="question_missing")
 
         try:
-            answer = self._query_function(str(question), language if language else None)
+            answer = self._query_function(str(question), language if language else None, task.task_type, task.metadata)
         except LegalComplianceGuardError as exc:
             record_agent_invocation(
                 self.name,

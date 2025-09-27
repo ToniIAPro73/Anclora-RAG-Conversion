@@ -69,6 +69,23 @@ layout_style = f"""
         .stColumns {{
             margin-top: 0 !important;
         }}
+        /* 🏠 Hero headline positioning */
+        .home-hero {{
+            margin: 3rem 0 2rem 3rem !important;
+            max-width: 32rem !important;
+            text-align: left !important;
+        }}
+
+        .home-hero h1 {{
+            margin-bottom: 0.5rem !important;
+        }}
+
+        .home-hero p {{
+            margin: 0 !important;
+            font-size: 1.1rem !important;
+            line-height: 1.6 !important;
+        }}
+
 """
 
 # Merge layout styles with chat styles

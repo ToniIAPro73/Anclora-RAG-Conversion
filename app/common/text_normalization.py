@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Optional
 
 try:  # pragma: no cover - the import path is environment dependent
     from langchain_core.documents import Document as _LangChainDocument  # type: ignore[assignment]
@@ -16,8 +16,9 @@ except Exception:  # pragma: no cover - fallback for stripped environments
         environments where the upstream dependency is unavailable.
         """
 
-        page_content: str
-        metadata: Dict[str, Any] = field(default_factory=dict)
+        def __init__(self, page_content: str, **kwargs):
+            self.page_content = page_content
+            self.metadata = kwargs
 
 
 Document = _LangChainDocument
@@ -52,7 +53,7 @@ def normalize_documents_nfc(documents: Iterable[Document]) -> List[Document]:
         metadata["original_page_content"] = original_content
         metadata["normalization"] = NORMALIZATION_FORM
         normalized_docs.append(
-            Document(page_content=normalized_content, metadata=metadata)
+            Document(page_content=normalized_content, **metadata)
         )
     return normalized_docs
 
