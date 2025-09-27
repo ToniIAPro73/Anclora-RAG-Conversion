@@ -4,6 +4,7 @@ import pandas as pd
 from pathlib import Path
 import logging
 import html
+import time
 from typing import Any, cast
 
 # Set page config
@@ -333,36 +334,40 @@ if st.button(add_button_text):
                         process_file = True
 
                     if process_file:
-                        with st.spinner(processing_message):
-                            try:
-                                st.info(f"🔄 Iniciando procesamiento de: {uploaded_file.name} ({file_size_mb:.1f}MB)" if st.session_state.language == 'es' else f"🔄 Starting processing of: {uploaded_file.name} ({file_size_mb:.1f}MB)")
+                        try:
+                            # State 1: Iniciando proceso
+                            st.info("🔄 Iniciando proceso..." if st.session_state.language == 'es' else "🔄 Starting process...")
+                            time.sleep(0.5)
 
-                                # Process the file
-                                result = ingest_file(uploaded_file, uploaded_file.name)
+                            # State 2: Archivo seguro
+                            st.success("✅ Archivo seguro..." if st.session_state.language == 'es' else "✅ File secure...")
+                            time.sleep(0.5)
 
-                                st.info(f"📊 Resultado: {result}")
+                            # Process the file
+                            result = ingest_file(uploaded_file, uploaded_file.name)
 
-                                if result and result.get("success"):
-                                    # Get domain information from the result if available
-                                    domain_info = ""
-                                    if result.get("domain"):
-                                        domain_info = f" (Dominio: {result.get('domain')})"
-                                    elif result.get("collection"):
-                                        # Collection name is already available, no need for additional lookup
-                                        domain_info = f" (Colección: {result.get('collection')})"
+                            # State 3: Agregado
+                            if result and result.get("success"):
+                                # Get domain information from the result if available
+                                domain_info = ""
+                                if result.get("domain"):
+                                    domain_info = f" (Dominio: {result.get('domain')})"
+                                elif result.get("collection"):
+                                    # Collection name is already available, no need for additional lookup
+                                    domain_info = f" (Colección: {result.get('collection')})"
 
-                                    logger.info(f"File processed successfully: {uploaded_file.name}{domain_info}")
-                                    st.success(f"✅ {success_message}: {uploaded_file.name}{domain_info}")
-                                    # Trigger refresh by updating a session state variable
-                                    if 'files_refresh_trigger' not in st.session_state:
-                                        st.session_state.files_refresh_trigger = 0
-                                    st.session_state.files_refresh_trigger += 1
-                                else:
-                                    error_msg = result.get("error", "Error desconocido") if result else "Sin resultado"
-                                    logger.error(f"File processing failed: {uploaded_file.name} - {error_msg}")
-                                    st.error(f"❌ {error_message}: {error_msg}")
+                                logger.info(f"File processed successfully: {uploaded_file.name}{domain_info}")
+                                st.success(f"✅ {success_message}: {uploaded_file.name}{domain_info}" if st.session_state.language == 'es' else f"✅ {success_message}: {uploaded_file.name}{domain_info}")
+                                # Trigger refresh by updating a session state variable
+                                if 'files_refresh_trigger' not in st.session_state:
+                                    st.session_state.files_refresh_trigger = 0
+                                st.session_state.files_refresh_trigger += 1
+                            else:
+                                error_msg = result.get("error", "Error desconocido") if result else "Sin resultado"
+                                logger.error(f"File processing failed: {uploaded_file.name} - {error_msg}")
+                                st.error(f"❌ {error_message}: {error_msg}" if st.session_state.language == 'es' else f"❌ {error_message}: {error_msg}")
 
-                            except Exception as e:
+                        except Exception as e:
                                 error_details = str(e)
                                 if "Connection" in error_details or "timeout" in error_details.lower():
                                     st.error(f"❌ {error_message}: Error de conexión. Verifica la configuración de la base de datos." if st.session_state.language == 'es' else f"❌ {error_message}: Connection error. Please check database configuration.")

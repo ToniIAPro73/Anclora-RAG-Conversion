@@ -172,18 +172,30 @@ class EmbeddingsManager:
                 embedding_cls = getattr(
                     langchain_module, "HuggingFaceEmbeddings", embedding_cls
                 )
+
+            # Try to load the updated langchain_huggingface package first (recommended)
             if embedding_cls is None or not callable(embedding_cls):
                 try:
                     from langchain_huggingface import HuggingFaceEmbeddings as _HF
-                except Exception as exc:  # pragma: no cover - optional dependency may fail at import time
+                    logger.info("Using updated langchain_huggingface.HuggingFaceEmbeddings")
+                    embedding_cls = _HF
+                    globals()["HuggingFaceEmbeddings"] = _HF
+                except ImportError as exc:
                     logger.warning(
-                        "Fallo al cargar langchain_huggingface.HuggingFaceEmbeddings: %s. Usando langchain_community.",
+                        "langchain_huggingface not available: %s. Trying langchain_community...",
                         exc,
                     )
-                    from langchain_community.embeddings import HuggingFaceEmbeddings as _HF  # type: ignore[assignment]
-
-                embedding_cls = _HF
-                globals()["HuggingFaceEmbeddings"] = _HF
+                    try:
+                        from langchain_community.embeddings import HuggingFaceEmbeddings as _HF  # type: ignore[assignment]
+                        logger.info("Using langchain_community.embeddings.HuggingFaceEmbeddings (deprecated)")
+                        embedding_cls = _HF
+                        globals()["HuggingFaceEmbeddings"] = _HF
+                    except ImportError as exc2:
+                        logger.error(
+                            "Failed to load HuggingFaceEmbeddings from both langchain_huggingface and langchain_community: %s, %s",
+                            exc, exc2,
+                        )
+                        raise ImportError("No HuggingFaceEmbeddings implementation available") from exc2
 
             return embedding_cls(model_name=model_name)
 

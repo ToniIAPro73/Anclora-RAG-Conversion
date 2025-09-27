@@ -912,6 +912,12 @@ def response(
     context_collections_breakdown: Dict[str, int] = {}
     available_documents: Optional[int] = None
 
+    # Initialize collection tracking variables early to avoid scope issues
+    per_collection_counts: Dict[str, int] = {name: 0 for name in CHROMA_COLLECTIONS}
+    collection_domains: Dict[str, str] = {
+        name: config.domain for name, config in CHROMA_COLLECTIONS.items()
+    }
+
     try:
         detected_language = detect_language(query)
         requested_language = (language or "").strip().lower()
@@ -977,11 +983,6 @@ def response(
         collection_states = _prepare_collection_states()
         selected_states = _select_collection_states(collection_states, directives)
         prompt_variant = directives.prompt_variant
-
-        per_collection_counts: Dict[str, int] = {name: 0 for name in CHROMA_COLLECTIONS}
-        collection_domains: Dict[str, str] = {
-            name: config.domain for name, config in CHROMA_COLLECTIONS.items()
-        }
 
         # Update per_collection_counts with actual document counts
         for state in collection_states:
