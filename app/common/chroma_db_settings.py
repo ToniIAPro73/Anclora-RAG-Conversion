@@ -12,6 +12,7 @@ os.environ["DISABLE_POSTHOG"] = "True"
 
 import base64
 import logging
+import time
 import uuid
 from typing import (
     TYPE_CHECKING,
@@ -38,6 +39,25 @@ from langchain_community.vectorstores.utils import maximal_marginal_relevance
 from app.common.constants import CHROMA_COLLECTIONS
 
 logger = logging.getLogger(__name__)
+
+
+_SOURCES_CACHE_TTL_SECONDS = 5.0
+_SOURCES_CACHE: Dict[str, Any] = {"timestamp": 0.0, "data": None}
+
+
+def invalidate_sources_cache() -> None:
+    """Clear cached collection metadata snapshots."""
+
+    _SOURCES_CACHE["timestamp"] = 0.0
+    _SOURCES_CACHE["data"] = None
+
+
+
+def _empty_sources_df() -> pd.DataFrame:
+    """Return an empty dataframe matching the sources schema."""
+
+    return pd.DataFrame(data=None, columns=["uploaded_file_name", "domain", "collection"])
+
 
 if TYPE_CHECKING:
     import chromadb
@@ -842,103 +862,110 @@ class Chroma(VectorStore):
         return self._collection.count()
 
 
+
 def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
     """Return a dataframe describing the files stored across all collections."""
 
-    records: List[Dict[str, str]] = []
+    if chroma_settings is None:
+        return _empty_sources_df()
+
+    cached_df = _SOURCES_CACHE["data"]
+    now = time.monotonic()
+    if cached_df is not None and now - _SOURCES_CACHE["timestamp"] < _SOURCES_CACHE_TTL_SECONDS:
+        return cached_df.copy()
 
     try:
-        for collection_name, collection_config in CHROMA_COLLECTIONS.items():
+        records: List[Dict[str, str]] = []
+
+        try:
+            collections = chroma_settings.list_collections()
+        except Exception as exc:
+            logger.debug(f"Error listing collections: {exc}")
+            collections = []
+
+        for collection_entry in collections:
             try:
-                collection = chroma_settings.get_or_create_collection(collection_name)
+                collection_name = getattr(collection_entry, "name", None)
+                if collection_name is None and isinstance(collection_entry, dict):
+                    collection_name = collection_entry.get("name")
+                if not collection_name:
+                    continue
+
+                domain = getattr(CHROMA_COLLECTIONS.get(collection_name), "domain", None) or "documents"
+
+                if hasattr(collection_entry, "get"):
+                    collection = collection_entry
+                else:
+                    try:
+                        collection = chroma_settings.get_collection(collection_name)
+                    except Exception as exc:
+                        logger.debug(f"Error retrieving collection {collection_name}: {exc}")
+                        continue
 
                 try:
                     response = collection.get(include=["metadatas"])
-                except TypeError:  # pragma: no cover - compatibility with legacy clients
+                except TypeError:
                     response = collection.get()
-                except Exception as e:
-                    logger.debug(f"Error getting collection {collection_name}: {e}")
+                except Exception as exc:
+                    logger.debug(f"Error fetching metadata for {collection_name}: {exc}")
                     continue
 
-                # Debug logging
-                logger.debug(f"Collection {collection_name}: response type = {type(response)}")
-
-                metadata_items: Iterable[Any] = []
-
-                if response is None:
-                    logger.debug(f"Collection {collection_name} returned None response - skipping")
-                    continue
-                elif isinstance(response, dict):
-                    try:
-                        metadata_items = response.get("metadatas", []) or []
-                        logger.debug(f"Collection {collection_name}: got {len(metadata_items)} metadata items")
-                    except Exception as e:
-                        logger.debug(f"Error getting metadatas from dict response for collection {collection_name}: {e}")
-                        continue
+                if isinstance(response, dict):
+                    metadata_items = response.get("metadatas", []) or []
                 elif hasattr(response, "get"):
                     try:
-                        # Additional safety check - ensure response is not None before calling get()
-                        if response is None:
-                            logger.debug(f"Collection {collection_name}: response is None despite hasattr check")
-                            continue
                         metadata_items = response.get("metadatas", []) or []
-                        logger.debug(f"Collection {collection_name}: got {len(metadata_items)} metadata items from object")
-                    except Exception as e:
-                        logger.debug(f"Error calling get() on response for collection {collection_name}: {e}")
+                    except Exception as exc:
+                        logger.debug(f"Error calling get() on response for {collection_name}: {exc}")
                         continue
                 else:
-                    logger.debug(f"Collection {collection_name}: unexpected response type {type(response)} - skipping")
                     continue
 
-                for i, metadata in enumerate(metadata_items):
-                    # Verificación más robusta de metadata - sin logging verbose
-                    if metadata is None or not isinstance(metadata, dict) or not metadata:
+                for metadata in metadata_items:
+                    if not isinstance(metadata, dict) or not metadata:
                         continue
 
-                    try:
-                        file_name = metadata.get("uploaded_file_name") if metadata else None
-                    except Exception:
-                        continue
-
+                    file_name = metadata.get("uploaded_file_name")
                     if not file_name:
-                        try:
-                            source_path = metadata.get("source") if metadata else None
-                            if source_path:
+                        source_path = metadata.get("source")
+                        if source_path:
+                            try:
                                 file_name = os.path.basename(str(source_path))
-                        except Exception:
-                            continue
-
+                            except Exception:
+                                file_name = None
                     if not file_name:
                         continue
 
-                    try:
-                        domain = metadata.get("domain") if metadata else None
-                        domain = domain or collection_config.domain
-                        collection_label = metadata.get("collection") if metadata else None
-                        collection_label = collection_label or collection_name
-                    except Exception:
-                        continue
+                    collection_label = str(metadata.get("collection") or collection_name)
+                    domain_label = str(metadata.get("domain") or domain)
 
                     records.append(
                         {
                             "uploaded_file_name": str(file_name),
-                            "domain": str(domain),
-                            "collection": str(collection_label),
+                            "domain": domain_label,
+                            "collection": collection_label,
                         }
                     )
-            except Exception as e:
-                logger.debug(f"Error processing collection {collection_name}: {e}")
+            except Exception as exc:
+                logger.debug(f"Error processing collection entry: {exc}")
                 continue
 
         if not records:
             logger.info("No records found in any collection, returning empty DataFrame")
-            return pd.DataFrame(data=None, columns=["uploaded_file_name", "domain", "collection"])
+            df = _empty_sources_df()
+        else:
+            df = (
+                pd.DataFrame(records)
+                .drop_duplicates(subset=["uploaded_file_name", "collection"])
+                .sort_values(by=["uploaded_file_name", "collection"])
+                .reset_index(drop=True)
+            )
 
-        df = pd.DataFrame(records)
-        df = df.drop_duplicates(subset=["uploaded_file_name", "collection"])
-        return df.sort_values(by=["uploaded_file_name", "collection"]).reset_index(drop=True)
+        _SOURCES_CACHE["timestamp"] = now
+        _SOURCES_CACHE["data"] = df.copy()
+        return df
 
-    except Exception as e:
-        logger.debug(f"Error in get_unique_sources_df: {e}")
-        # Always return a DataFrame, never None
-        return pd.DataFrame(data=None, columns=["uploaded_file_name", "domain", "collection"])
+    except Exception as exc:
+        logger.debug(f"Error in get_unique_sources_df: {exc}")
+        return _empty_sources_df()
+

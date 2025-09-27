@@ -85,6 +85,16 @@ class BaseFileIngestor:
 
         try:
             documents = loader.load()
+        except TypeError as exc:
+            record_ingestion(
+                self.domain,
+                extension,
+                "error",
+                duration_seconds=time.perf_counter() - start_time,
+            )
+            raise TypeError(
+                f"Loader {loader.__class__.__name__} raised TypeError: {exc}"
+            ) from exc
         except Exception:
             record_ingestion(
                 self.domain,

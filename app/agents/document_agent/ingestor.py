@@ -36,6 +36,13 @@ def _build_loader_mapping() -> Tuple[Dict[str, Tuple[type, Dict[str, object]]], 
     except Exception:  # pragma: no cover - fallback path used in tests without langchain
         PLAIN_TEXT_FALLBACK = True
 
+        class _FallbackDocument:
+            __slots__ = ("page_content", "metadata")
+
+            def __init__(self, page_content: str, metadata: Dict[str, object]) -> None:
+                self.page_content = page_content
+                self.metadata = metadata
+
         class _PlainTextLoader:
             def __init__(self, file_path: str, encoding: str = "utf8", **_: object) -> None:
                 self.file_path = file_path
@@ -44,7 +51,11 @@ def _build_loader_mapping() -> Tuple[Dict[str, Tuple[type, Dict[str, object]]], 
             def load(self) -> List[Document]:
                 with open(self.file_path, "r", encoding=self.encoding) as handle:
                     content = handle.read()
-                return [Document(page_content=content, metadata={"source": self.file_path})]
+                metadata = {"source": self.file_path}
+                try:
+                    return [Document(page_content=content, metadata=metadata)]
+                except TypeError:
+                    return [_FallbackDocument(page_content=content, metadata=metadata)]
 
         EmailLoader = _PlainTextLoader
 

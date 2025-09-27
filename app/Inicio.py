@@ -6,24 +6,134 @@ import streamlit as st
 from pathlib import Path
 from typing import Any, cast
 
+import httpx
+
 # Importar colores de Anclora RAG
 from common.anclora_colors import apply_anclora_theme, ANCLORA_RAG_COLORS, create_colored_alert
 
 # Streamlit compatibility helpers (similar to Archivos.py)
 _st = cast(Any, st)
 
+
+class RAGAPIError(RuntimeError):
+    """Custom error to represent failures when querying the RAG API."""
+
+
+def _get_secret(key: str) -> str | None:
+    try:
+        return st.secrets[key]
+    except Exception:
+        return None
+
+
+def _get_env_or_secret(*keys: str) -> str | None:
+    for key in keys:
+        secret_value = _get_secret(key)
+        if isinstance(secret_value, str) and secret_value.strip():
+            return secret_value.strip()
+        env_value = os.getenv(key)
+        if env_value and env_value.strip():
+            return env_value.strip()
+    return None
+
+
+@st.cache_resource(show_spinner=False)
+def _load_api_settings() -> dict[str, str]:
+    base_url = _get_env_or_secret(
+        'api_base_url',
+        'API_BASE_URL',
+        'ANCLORA_API_URL',
+        'ANCLORA_API_BASE_URL',
+        'RAG_API_URL',
+    ) or 'http://localhost:8081'
+    base_url = base_url.rstrip('/')
+
+    chat_path = _get_env_or_secret('api_chat_path', 'ANCLORA_API_CHAT_PATH', 'API_CHAT_PATH') or '/chat'
+    if not chat_path.startswith('/'):
+        chat_path = '/' + chat_path
+
+    token = _get_env_or_secret('api_token', 'API_TOKEN', 'ANCLORA_API_TOKEN')
+    if not token:
+        tokens_value = _get_env_or_secret('api_tokens', 'ANCLORA_API_TOKENS')
+        if tokens_value:
+            token_candidates = [tok.strip() for tok in tokens_value.replace(';', ',').split(',') if tok.strip()]
+            if token_candidates:
+                token = token_candidates[0]
+    if not token:
+        token = _get_env_or_secret('ANCLORA_DEFAULT_API_TOKEN')
+
+    chat_url = f"{base_url}{chat_path}"
+    timeout_value = _get_env_or_secret('ANCLORA_API_TIMEOUT_SECONDS', 'API_TIMEOUT_SECONDS')
+    try:
+        timeout_seconds = float(timeout_value) if timeout_value else 60.0
+    except ValueError:
+        timeout_seconds = 60.0
+
+    return {
+        'chat_url': chat_url,
+        'token': token or '',
+        'timeout': str(timeout_seconds),
+    }
+
+
+def call_rag_api(message: str, language: str) -> dict[str, str]:
+    settings = _load_api_settings()
+    token = settings.get('token', '').strip()
+    if not token:
+        raise RAGAPIError(
+            'No se encontró un token para acceder a la API. Configura ANCLORA_API_TOKEN, '
+            'ANCLORA_API_TOKENS o ANCLORA_DEFAULT_API_TOKEN antes de usar el chat.'
+        )
+
+    max_length_value = _get_env_or_secret('ANCLORA_CHAT_MAX_LENGTH')
+    try:
+        max_length = int(max_length_value) if max_length_value else 600
+    except ValueError:
+        max_length = 600
+
+    payload = {
+        'message': message,
+        'language': language,
+        'max_length': max_length,
+    }
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json',
+    }
+
+    timeout = float(settings.get('timeout', '60'))
+    chat_url = settings['chat_url']
+
+    try:
+        response = httpx.post(chat_url, json=payload, headers=headers, timeout=timeout)
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        if status_code == 401:
+            raise RAGAPIError('La API rechazó el token proporcionado (401).') from exc
+        if status_code == 403:
+            raise RAGAPIError('La API denegó el acceso a la consulta (403).') from exc
+        detail = exc.response.text
+        raise RAGAPIError(f'Error de la API ({status_code}): {detail}') from exc
+    except httpx.RequestError as exc:
+        raise RAGAPIError(f'No fue posible conectar con la API: {exc}') from exc
+
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise RAGAPIError('La API devolvió una respuesta inválida.') from exc
+
+
+
 def inject_css(css_content: str) -> None:
     """Inject CSS content properly into Streamlit app."""
     try:
-        # Try using components.html for CSS injection
         from streamlit.components.v1 import html
         html(f"<style>{css_content}</style>")
     except Exception:
-        # Fallback to markdown if components.html fails
         try:
             st.markdown(f"<style>{css_content}</style>")
         except Exception:
-            # Final fallback - just write the CSS (will show as text)
             st.code(css_content, language='css')
 
 # Set page config
@@ -205,29 +315,78 @@ if "messages" not in st.session_state:
 
 # Display chat messages from history on app rerun
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    role = message.get("role", "assistant")
+    content = str(message.get("content", ""))
+    status = (message.get("status") or "").lower()
+    timestamp = message.get("timestamp")
+
+    with st.chat_message(role):
+        prefix = ""
+        if role == "assistant":
+            if status == "warning":
+                prefix = "⚠️ "
+            elif status == "error":
+                prefix = "❌ "
+        st.markdown(f"{prefix}{content}" if prefix else content)
+        if timestamp:
+            st.caption(timestamp)
 
 # Accept user input
 if prompt := st.chat_input(chat_placeholder):
-    # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
-    # Display user message in chat message container
+
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Display assistant response in chat message container
     with st.chat_message("assistant"):
+        spinner_message = "Consultando motor RAG..." if st.session_state.language == 'es' else "Consulting the RAG engine..."
         try:
-            # Simple response for now - replace with actual RAG implementation later
-            if st.session_state.language == 'es':
-                assistant_response = f"Has preguntado: '{prompt}'. El sistema RAG está configurado y listo para procesar consultas."
-            else:
-                assistant_response = f"You asked: '{prompt}'. The RAG system is configured and ready to process queries."
+            with st.spinner(spinner_message):
+                api_payload = call_rag_api(prompt, st.session_state.language)
 
-            st.markdown(assistant_response)
-            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-        except Exception as e:
-            error_message = "Error procesando la solicitud" if st.session_state.language == 'es' else "Error processing request"
-            st.error(f"{error_message}: {str(e)}")
-            st.session_state.messages.append({"role": "assistant", "content": f"{error_message}: {str(e)}"})
+            response_text = str(api_payload.get("response", "")).strip()
+            status = (api_payload.get("status") or "success").lower()
+            timestamp = api_payload.get("timestamp")
+
+            prefix = ""
+            if status == "warning":
+                prefix = "⚠️ "
+            elif status == "error":
+                prefix = "❌ "
+
+            st.markdown(f"{prefix}{response_text}" if prefix else response_text)
+            if timestamp:
+                st.caption(timestamp)
+
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": response_text,
+                    "status": status,
+                    "timestamp": timestamp,
+                }
+            )
+        except RAGAPIError as api_error:
+            error_text = str(api_error)
+            st.error(error_text)
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": error_text,
+                    "status": "error",
+                }
+            )
+        except Exception as unexpected_error:
+            fallback_message = (
+                "Ocurrió un error inesperado al consultar la API." if st.session_state.language == 'es'
+                else "An unexpected error occurred while contacting the API."
+            )
+            full_error = f"{fallback_message} {unexpected_error}"
+            st.error(full_error)
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": full_error,
+                    "status": "error",
+                }
+            )

@@ -23,6 +23,13 @@ except Exception:  # pragma: no cover - fallback for stripped environments
 
 Document = _LangChainDocument
 
+class _SimpleDocument:
+    __slots__ = ("page_content", "metadata")
+
+    def __init__(self, page_content: str, metadata: Dict[str, Any]) -> None:
+        self.page_content = page_content
+        self.metadata = metadata
+
 
 NORMALIZATION_FORM = "NFC"
 
@@ -52,9 +59,12 @@ def normalize_documents_nfc(documents: Iterable[Document]) -> List[Document]:
         metadata = dict(doc.metadata) if doc.metadata else {}
         metadata["original_page_content"] = original_content
         metadata["normalization"] = NORMALIZATION_FORM
-        normalized_docs.append(
-            Document(page_content=normalized_content, **metadata)
-        )
+        try:
+            normalized_docs.append(
+                Document(page_content=normalized_content, metadata=metadata)
+            )
+        except TypeError:
+            normalized_docs.append(_SimpleDocument(page_content=normalized_content, metadata=metadata))
     return normalized_docs
 
 

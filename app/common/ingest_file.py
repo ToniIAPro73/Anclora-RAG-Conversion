@@ -1,5 +1,6 @@
 """Utilities to ingest files into the vector database."""
 from __future__ import annotations
+from types import SimpleNamespace
 
 import logging
 import os
@@ -59,7 +60,7 @@ except ImportError:
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
-from common.chroma_db_settings import Chroma
+from common.chroma_db_settings import Chroma, invalidate_sources_cache
 from app.common.embeddings_manager import get_embeddings_manager
 from app.common.chroma_utils import add_langchain_documents, _make_metadata_serializable
 
@@ -249,7 +250,26 @@ def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Document], Base
 
     try:
         with _temp_file(uploaded_file) as tmp_path:
-            documents = ingestor.load(tmp_path, ext)
+            try:
+                documents = ingestor.load(tmp_path, ext)
+            except TypeError as exc:
+                logger.debug(
+                    "Loader %s failed for %s: %s - falling back to plain reader",
+                    ingestor.__class__.__name__,
+                    file_name,
+                    exc,
+                )
+                try:
+                    with open(tmp_path, 'r', encoding='utf-8') as handle:
+                        fallback_content = handle.read()
+                except UnicodeDecodeError:
+                    with open(tmp_path, 'r', encoding='latin-1', errors='ignore') as handle:
+                        fallback_content = handle.read()
+                fallback_metadata = {"source": tmp_path}
+                try:
+                    documents = [Document(page_content=fallback_content, metadata=fallback_metadata)]
+                except TypeError:
+                    documents = [SimpleNamespace(page_content=fallback_content, metadata=fallback_metadata)]
 
         if documents is None:
             raise ValueError(f"Document loader returned None for file: {file_name}")
@@ -268,7 +288,12 @@ def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Document], Base
                     "uploaded_file_name": file_name,
                 }
             )
-            document.metadata = _make_metadata_serializable(metadata)
+            try:
+                document.metadata = _make_metadata_serializable(metadata)
+            except TypeError as exc:
+                raise TypeError(
+                    f"Cannot update metadata for document type {type(document)}: {exc}"
+                ) from exc
 
         return documents, ingestor
     except Exception as e:
@@ -632,10 +657,20 @@ def ingest_file(uploaded_file, file_name):
                             LangChainDocument(page_content=doc.page_content, metadata=dict(doc.metadata))
                             for doc in texts
                         ]
-                    except (TypeError, AttributeError):
-                        # If conversion still fails, skip this batch to avoid type errors
-                        logger.warning(f"Unable to convert documents for {file_name}, skipping ingestion")
-                        return {"success": False, "error": "Document type conversion failed"}
+                    except (TypeError, AttributeError) as conversion_error:
+                        logger.warning(
+                            "Unable to convert documents for %s (types: %s): %s",
+                            file_name,
+                            [type(doc) for doc in texts],
+                            conversion_error,
+                        )
+                        langchain_docs = [
+                            SimpleNamespace(
+                                page_content=doc.page_content,
+                                metadata=dict(getattr(doc, 'metadata', {})),
+                            )
+                            for doc in texts
+                        ]
 
                 collection_ref = locals().get('collection')
                 if collection_ref is None:
@@ -672,6 +707,7 @@ def ingest_file(uploaded_file, file_name):
                 logger.info("Colección '%s' recibió %s documentos (existía=%s)", ingestor.collection_name, added, existed)
 
                 _safe_streamlit_call("success", f"Se agregó el archivo '{file_name}' con éxito.")
+                invalidate_sources_cache()
                 return {
                     "success": True,
                     "message": f"Archivo procesado y almacenado con {len(result.documents)} documentos",
@@ -845,6 +881,7 @@ def delete_file_from_vectordb(filename: str) -> bool:
         filename,
         ", ".join(summary.removed_collections) or "-",
     )
+    invalidate_sources_cache()
     return True
 
 
@@ -860,3 +897,5 @@ __all__ = [
     "process_file",
     "validate_uploaded_file",
 ]
+
+
