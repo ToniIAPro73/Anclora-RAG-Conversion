@@ -2,6 +2,54 @@ import os
 # Deshabilitar telemetría de ChromaDB antes de cualquier importación
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
+# Cargar variables de entorno desde .env
+def load_env_file():
+    """Cargar variables de entorno desde archivo .env manualmente"""
+    try:
+        # Intentar múltiples rutas posibles para el .env
+        possible_paths = [
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'),  # app/../.env
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'),  # app/.env
+            '.env'  # Directorio actual
+        ]
+
+        for env_path in possible_paths:
+            if os.path.exists(env_path):
+                print(f"[INFO] Cargando .env desde: {env_path}")
+                with open(env_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            key = key.strip()
+                            value = value.strip().strip('"\'')
+
+                            # Solo establecer variables ANCLORA para evitar conflictos
+                            if key.startswith('ANCLORA'):
+                                os.environ[key] = value
+                                print(f"[INFO] Variable cargada: {key}")
+
+                return True
+
+        print(f"[WARNING] No se encontró .env en ninguna de las rutas: {possible_paths}")
+        return False
+    except Exception as e:
+        print(f"[ERROR] Error cargando .env manualmente: {e}")
+        return False
+
+# Intentar cargar .env manualmente
+if load_env_file():
+    print("[INFO] Variables de entorno cargadas correctamente")
+else:
+    print("[WARNING] No se pudo cargar el archivo .env")
+
+# Verificar que los tokens estén disponibles
+tokens_loaded = os.getenv('ANCLORA_API_TOKEN') or os.getenv('ANCLORA_DEFAULT_API_TOKEN')
+if tokens_loaded:
+    print("[INFO] Tokens de API configurados correctamente")
+else:
+    print("[WARNING] Tokens de API no encontrados. Revisa la configuracion.")
+
 import streamlit as st
 from pathlib import Path
 from typing import Any, cast
@@ -21,7 +69,7 @@ class RAGAPIError(RuntimeError):
 
 def _get_secret(key: str) -> str | None:
     try:
-        return st.secrets[key]
+        return st.secrets[key]  # type: ignore
     except Exception:
         return None
 
@@ -37,7 +85,7 @@ def _get_env_or_secret(*keys: str) -> str | None:
     return None
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False)  # type: ignore
 def _load_api_settings() -> dict[str, str]:
     base_url = _get_env_or_secret(
         'api_base_url',
@@ -128,7 +176,7 @@ def call_rag_api(message: str, language: str) -> dict[str, str]:
 def inject_css(css_content: str) -> None:
     """Inject CSS content properly into Streamlit app."""
     try:
-        from streamlit.components.v1 import html
+        from streamlit.components.v1 import html  # type: ignore
         html(f"<style>{css_content}</style>")
     except Exception:
         try:
