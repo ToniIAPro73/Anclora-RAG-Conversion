@@ -77,7 +77,7 @@ python diagnostico_rag.py
 
 # 4. Subir un documento de prueba
 # - Formatos: PDF, DOC, DOCX, TXT, MD, etc.
-# - Tamaño máximo: 10MB
+# - Tamaño máximo: 100MB
 ```
 
 #### **Documentos de prueba recomendados**

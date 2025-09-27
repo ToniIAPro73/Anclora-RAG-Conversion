@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from enum import Enum
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 # Importar optimizador de velocidad
 try:
@@ -49,7 +49,7 @@ class ConversionResult:
     result_data: Dict
     learning_applied: bool
     optimizations_used: List[str]
-    errors: List[str] = None
+    errors: List[str] = []
 
 class HybridOrchestrator:
     """Orquestador híbrido que combina velocidad y flexibilidad"""
@@ -138,7 +138,7 @@ class HybridOrchestrator:
         # Criterios para FAST_PATH (más agresivos para competir)
         fast_path_criteria = [
             doc_data.get('file_type') in ['pdf', 'txt', 'docx'],  # Formatos simples
-            doc_data.get('file_size', 0) < 10 * 1024 * 1024,     # < 10MB (aumentado)
+            doc_data.get('file_size', 0) < 100 * 1024 * 1024,     # < 100MB (aumentado)
             not doc_data.get('has_images', False),                # Sin imágenes
             not doc_data.get('has_tables', False),                # Sin tablas
             doc_data.get('page_count', 1) < 50,                   # < 50 páginas (aumentado)
@@ -431,7 +431,7 @@ class HybridOrchestrator:
         
         try:
             async with aiohttp.ClientSession() as session:
-                await session.post(callback_url, json=result.__dict__)
+                await session.post(callback_url, json=asdict(result))
             logger.info(f"📞 Callback enviado: {callback_url}")
         except Exception as e:
             logger.error(f"❌ Error enviando callback: {str(e)}")

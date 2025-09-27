@@ -1,6 +1,5 @@
 """Utilities to ingest files into the vector database."""
 from __future__ import annotations
-from types import SimpleNamespace
 
 import logging
 import os
@@ -19,7 +18,10 @@ import streamlit as st
 # Provide a lightweight fallback when ``langchain`` is not available during tests.
 try:  # pragma: no cover - prefer the real implementation when installed
     from langchain.text_splitter import RecursiveCharacterTextSplitter  # type: ignore
+    from langchain_core.documents import Document as LangChainDocument  # type: ignore
+    LANGCHAIN_AVAILABLE = True
 except Exception:  # pragma: no cover - fallback path used in constrained environments
+    LANGCHAIN_AVAILABLE = False
     class RecursiveCharacterTextSplitter:  # type: ignore[override]
         """Minimal splitter that returns documents unchanged."""
 
@@ -30,6 +32,14 @@ except Exception:  # pragma: no cover - fallback path used in constrained enviro
 
         def split_documents(self, documents):
             return list(documents)
+
+    # Fallback Document class when langchain is not available
+    class LangChainDocument:  # type: ignore
+        """Fallback Document class that mimics LangChain Document behavior."""
+
+        def __init__(self, page_content: str, metadata: Optional[dict] = None):
+            self.page_content = page_content
+            self.metadata = metadata or {}
 import sys
 
 # Ensure project root and app package are importable
@@ -241,7 +251,7 @@ def _temp_file(uploaded_file) -> Iterator[str]:
             os.unlink(tmp_path)
 
 
-def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Document], BaseFileIngestor]:
+def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Any], BaseFileIngestor]:
     ext = os.path.splitext(uploaded_file.name)[1].lower()
     ingestor = _get_ingestor_for_extension(ext)
 
@@ -268,8 +278,15 @@ def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Document], Base
                 fallback_metadata = {"source": tmp_path}
                 try:
                     documents = [Document(page_content=fallback_content, metadata=fallback_metadata)]
-                except TypeError:
-                    documents = [SimpleNamespace(page_content=fallback_content, metadata=fallback_metadata)]
+                except (TypeError, NameError) as doc_error:
+                    # Try to handle missing Document class or initialization issues
+                    logger.debug(
+                        "Document class failed for %s: %s - using LangChain Document",
+                        file_name,
+                        doc_error,
+                    )
+                    # Use LangChain Document as fallback
+                    documents = [LangChainDocument(page_content=fallback_content, metadata=fallback_metadata)]
 
         if documents is None:
             raise ValueError(f"Document loader returned None for file: {file_name}")
@@ -575,12 +592,12 @@ def ingest_file_priority(uploaded_file, file_name, file_size=None):
     file_id = f"{file_name}_{int(time.time())}"
 
     # Prioridad: archivos más pequeños tienen prioridad más alta (número menor)
-    # Archivos < 1MB = prioridad 1, < 10MB = prioridad 2, >= 10MB = prioridad 3
+    # Archivos < 1MB = prioridad 1, < 100MB = prioridad 2, >= 100MB = prioridad 3
     if file_size < 1024 * 1024:  # < 1MB
         priority = 1
-    elif file_size < 10 * 1024 * 1024:  # < 10MB
+    elif file_size < 100 * 1024 * 1024:  # < 100MB
         priority = 2
-    else:  # >= 10MB
+    else:  # >= 100MB
         priority = 3
 
     # Inicializar status
@@ -659,13 +676,14 @@ def ingest_file(uploaded_file, file_name):
                         ]
                     except (TypeError, AttributeError) as conversion_error:
                         logger.warning(
-                            "Unable to convert documents for %s (types: %s): %s",
+                            "Unable to convert documents for %s (types: %s): %s - using fallback conversion",
                             file_name,
                             [type(doc) for doc in texts],
                             conversion_error,
                         )
+                        # Use the same LangChainDocument class for consistency
                         langchain_docs = [
-                            SimpleNamespace(
+                            LangChainDocument(
                                 page_content=doc.page_content,
                                 metadata=dict(getattr(doc, 'metadata', {})),
                             )

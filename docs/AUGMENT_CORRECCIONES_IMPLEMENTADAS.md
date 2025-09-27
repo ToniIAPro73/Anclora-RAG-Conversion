@@ -74,17 +74,17 @@ def response(query: str) -> str:
 #### Mejoras en ingest_file.py
 
 - ✅ Validación de archivos implementada
-- ✅ Límites de tamaño (10MB máximo)
+- ✅ Límites de tamaño (100MB máximo)
 - ✅ Validación de tipos de archivo
 - ✅ Logging de operaciones
 - ✅ Manejo seguro de archivos temporales
 
 ```python
 def validate_uploaded_file(uploaded_file) -> tuple[bool, str]:
-    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-    
+    MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+
     if uploaded_file.size > MAX_FILE_SIZE:
-        return False, "Archivo demasiado grande (máximo 10MB)"
+        return False, "Archivo demasiado grande (máximo 100MB)"
     
     allowed_extensions = ['.csv', '.doc', '.docx', '.pdf', ...]
     file_ext = os.path.splitext(uploaded_file.name)[1].lower()

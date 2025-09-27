@@ -297,7 +297,7 @@ uploaded_file = st.file_uploader(
     upload_label,
     type=supported_types if INGEST_AVAILABLE else ['pdf', 'txt', 'docx', 'md'],
     accept_multiple_files=False,
-    help=f"Límite: 10MB. Tipos soportados: {', '.join(supported_types) if INGEST_AVAILABLE else 'PDF, TXT, DOCX, MD'}"
+    help=f"Límite: 100MB. Tipos soportados: {', '.join(supported_types) if INGEST_AVAILABLE else 'PDF, TXT, DOCX, MD'}"
 )
 
 
@@ -312,7 +312,7 @@ if st.button(add_button_text):
             if is_valid:
                 # Additional security checks
                 file_size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
-                max_size_mb = 10  # 10MB limit
+                max_size_mb = 100  # 100MB limit
 
                 if file_size_mb > max_size_mb:
                     st.error(f"❌ El archivo es demasiado grande: {file_size_mb:.1f}MB. Límite máximo: {max_size_mb}MB" if st.session_state.language == 'es' else f"❌ File is too large: {file_size_mb:.1f}MB. Maximum limit: {max_size_mb}MB")

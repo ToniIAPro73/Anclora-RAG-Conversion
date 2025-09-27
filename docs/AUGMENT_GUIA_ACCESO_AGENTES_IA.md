@@ -263,7 +263,7 @@ rag = AIAgentRAGInterface(api_key=api_key)
 ```python
 # Todas las entradas son validadas automáticamente:
 # - Longitud máxima de mensaje: 1000 caracteres
-# - Tamaño máximo de archivo: 10MB
+# - Tamaño máximo de archivo: 100MB
 # - Tipos de archivo permitidos: PDF, DOC, TXT, etc.
 ```
 

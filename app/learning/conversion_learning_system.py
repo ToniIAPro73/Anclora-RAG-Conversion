@@ -283,7 +283,7 @@ class ConversionLearningSystem:
         """Categoriza tamaño de archivo"""
         if file_size < 1024 * 1024:  # < 1MB
             return "small"
-        elif file_size < 10 * 1024 * 1024:  # < 10MB
+        elif file_size < 100 * 1024 * 1024:  # < 100MB
             return "medium"
         elif file_size < 50 * 1024 * 1024:  # < 50MB
             return "large"
@@ -535,7 +535,7 @@ class SmartAgentOrchestrator:
             complexity_score += 0.4
 
         file_size = document_data.get('file_size', 0)
-        if file_size > 10 * 1024 * 1024:  # > 10MB
+        if file_size > 100 * 1024 * 1024:  # > 100MB
             complexity_score += 0.2
 
         # Normalizar entre 0 y 1

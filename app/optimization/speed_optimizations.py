@@ -4,12 +4,10 @@ Sistema de optimización para alcanzar tiempos competitivos
 """
 
 import asyncio
-import aiofiles
 import concurrent.futures
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable
 import time
 import hashlib
-import pickle
 import os
 from dataclasses import dataclass
 from enum import Enum
@@ -57,10 +55,10 @@ class SpeedOptimizer:
         self._load_disk_cache_index()
         self._init_processing_pool()
     
-    async def optimize_document_processing(self, 
-                                         document_data: Dict, 
-                                         processing_func: callable,
-                                         optimization_level: OptimizationLevel = OptimizationLevel.AGGRESSIVE) -> Dict:
+    async def optimize_document_processing(self,
+                                          document_data: Dict,
+                                          processing_func: Callable,
+                                          optimization_level: OptimizationLevel = OptimizationLevel.AGGRESSIVE) -> Dict:
         """Optimiza el procesamiento de un documento"""
         
         start_time = time.time()
@@ -109,10 +107,10 @@ class SpeedOptimizer:
         
         return optimized_result
     
-    async def _process_with_optimizations(self, 
-                                        document_data: Dict, 
-                                        processing_func: callable,
-                                        optimization_level: OptimizationLevel) -> Dict:
+    async def _process_with_optimizations(self,
+                                         document_data: Dict,
+                                         processing_func: Callable,
+                                         optimization_level: OptimizationLevel) -> Dict:
         """Procesa documento con optimizaciones específicas"""
         
         if optimization_level == OptimizationLevel.BASIC:
@@ -122,7 +120,7 @@ class SpeedOptimizer:
         else:  # ULTRA
             return await self._ultra_optimization(document_data, processing_func)
     
-    async def _basic_optimization(self, document_data: Dict, processing_func: callable) -> Dict:
+    async def _basic_optimization(self, document_data: Dict, processing_func: Callable) -> Dict:
         """Optimizaciones básicas: paralelización simple"""
         
         # Procesamiento directo con timeout
@@ -135,7 +133,7 @@ class SpeedOptimizer:
         except asyncio.TimeoutError:
             return {"success": False, "error": "Processing timeout"}
     
-    async def _aggressive_optimization(self, document_data: Dict, processing_func: callable) -> Dict:
+    async def _aggressive_optimization(self, document_data: Dict, processing_func: Callable) -> Dict:
         """Optimizaciones agresivas: chunking paralelo + pre-procesamiento"""
         
         # 1. Pre-procesamiento rápido
@@ -148,7 +146,7 @@ class SpeedOptimizer:
         # 3. Procesamiento optimizado estándar
         return await self._optimized_sequential_processing(preprocessed_data, processing_func)
     
-    async def _ultra_optimization(self, document_data: Dict, processing_func: callable) -> Dict:
+    async def _ultra_optimization(self, document_data: Dict, processing_func: Callable) -> Dict:
         """Optimizaciones ultra: todas las técnicas disponibles"""
         
         # 1. Pre-análisis ultra-rápido
@@ -172,7 +170,7 @@ class SpeedOptimizer:
         file_type = document_data.get("file_type", "unknown")
         
         # Determinar estrategia de chunking
-        if file_size > 10 * 1024 * 1024:  # > 10MB
+        if file_size > 100 * 1024 * 1024:  # > 100MB
             preprocessed["chunk_strategy"] = "large_file"
             preprocessed["chunk_size"] = 2000
         elif file_type in ["pdf", "docx"]:
@@ -199,7 +197,7 @@ class SpeedOptimizer:
             not document_data.get("has_complex_layout", False)
         )
     
-    async def _parallel_chunk_processing(self, document_data: Dict, processing_func: callable) -> Dict:
+    async def _parallel_chunk_processing(self, document_data: Dict, processing_func: Callable) -> Dict:
         """Procesamiento paralelo por chunks"""
         
         # Simular división en chunks
@@ -222,31 +220,81 @@ class SpeedOptimizer:
         # Combinar resultados
         return self._combine_chunk_results(chunk_results)
     
-    async def _process_chunk(self, chunk_data: Dict, processing_func: callable) -> Dict:
+    async def _process_chunk(self, chunk_data: Dict, processing_func: Callable) -> Dict:
         """Procesa un chunk individual"""
-        
+
         # Simular procesamiento de chunk (más rápido que documento completo)
         await asyncio.sleep(0.1)  # Simular procesamiento
-        
+
         return {
             "success": True,
             "chunk_id": chunk_data["chunk_id"],
             "processed_content": f"Chunk {chunk_data['chunk_id']} processed",
             "processing_time": 0.1
         }
+
+    async def _optimized_sequential_processing(self, document_data: Dict, processing_func: Callable) -> Dict:
+        """Procesamiento secuencial optimizado"""
+
+        # Procesamiento optimizado con timeout y manejo de errores mejorado
+        try:
+            result = await asyncio.wait_for(
+                processing_func(document_data),
+                timeout=25.0  # Timeout más agresivo
+            )
+            return result
+        except asyncio.TimeoutError:
+            return {"success": False, "error": "Optimized processing timeout"}
+        except Exception as e:
+            return {"success": False, "error": f"Processing error: {str(e)}"}
+
+    async def _ultra_parallel_processing(self, document_data: Dict, processing_func: Callable) -> Dict:
+        """Procesamiento ultra-paralelo para documentos medianos"""
+
+        # Dividir en más chunks para procesamiento ultra-paralelo
+        chunk_count = max(4, min(12, document_data.get("file_size", 0) // (512 * 1024)))
+
+        tasks = []
+        for i in range(chunk_count):
+            chunk_data = {
+                **document_data,
+                "chunk_id": i,
+                "chunk_total": chunk_count,
+                "is_chunk": True,
+                "ultra_parallel": True
+            }
+            tasks.append(self._process_chunk(chunk_data, processing_func))
+
+        # Procesar chunks en paralelo ultra-rápido
+        chunk_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Combinar resultados con manejo de errores mejorado
+        return self._combine_chunk_results(chunk_results)
+
+    async def _ultra_hybrid_processing(self, document_data: Dict, processing_func: Callable) -> Dict:
+        """Procesamiento híbrido para documentos complejos"""
+
+        # Combinar análisis previo con procesamiento paralelo
+        analysis = await self._ultra_fast_analysis(document_data)
+
+        if analysis["recommended_strategy"] == "parallel_processing":
+            return await self._ultra_parallel_processing(document_data, processing_func)
+        else:
+            # Procesamiento secuencial con optimizaciones adicionales
+            return await self._optimized_sequential_processing(document_data, processing_func)
     
-    def _combine_chunk_results(self, chunk_results: List[Dict]) -> Dict:
+    def _combine_chunk_results(self, chunk_results) -> Dict:
         """Combina resultados de chunks paralelos"""
-        
+
         successful_chunks = [r for r in chunk_results if isinstance(r, dict) and r.get("success")]
-        
+
         if not successful_chunks:
             return {"success": False, "error": "All chunks failed"}
-        
+
         combined_content = " ".join([
             chunk.get("processed_content", "") for chunk in successful_chunks
         ])
-        
+
         return {
             "success": True,
             "processed_content": combined_content,
@@ -293,7 +341,7 @@ class SpeedOptimizer:
         }
         return strategies.get(complexity, "standard_processing")
     
-    async def _ultra_simple_processing(self, document_data: Dict, processing_func: callable) -> Dict:
+    async def _ultra_simple_processing(self, document_data: Dict, processing_func: Callable) -> Dict:
         """Procesamiento ultra-optimizado para documentos simples"""
         
         # Usar cache de embeddings si está disponible

@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 import os
 from typing import Any, Dict, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from pathlib import Path
 
 import sys
@@ -62,8 +62,8 @@ class SmartConverterAgent(BaseAgent):
         try:
             file_path = task.get("file_path")
             target_format = task.get("target_format")
-            intended_use = task.get("intended_use", "general")
-            optimization_level = task.get("optimization_level", "medium")
+            intended_use = task.get("intended_use") or "general"
+            optimization_level = task.get("optimization_level") or "medium"
             batch_mode = task.get("batch_mode", False)
             
             if not file_path:
@@ -87,7 +87,7 @@ class SmartConverterAgent(BaseAgent):
             
             return AgentResponse(
                 success=result.success,
-                data=result.__dict__
+                data=asdict(result)
             )
             
         except Exception as e:

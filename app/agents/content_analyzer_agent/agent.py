@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from typing import Any, Dict, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 import sys
 import os
@@ -49,9 +49,9 @@ class ContentAnalyzerAgent(BaseAgent):
         start_time = time.perf_counter()
         
         try:
-            content = task.get("content", "")
+            content = task.get("content") or ""
             file_path = task.get("file_path")
-            analysis_type = task.get("analysis_type", "full")
+            analysis_type = task.get("analysis_type") or "full"
             
             if not content and not file_path:
                 return AgentResponse(
@@ -74,7 +74,7 @@ class ContentAnalyzerAgent(BaseAgent):
             return AgentResponse(
                 success=True,
                 data={
-                    "analysis": analysis.__dict__,
+                    "analysis": asdict(analysis),
                     "processing_time": duration
                 }
             )
@@ -154,7 +154,7 @@ class ContentAnalyzerAgent(BaseAgent):
             score = sum(1 for keyword in keywords if keyword in content_lower)
             scores[content_type] = score
         
-        return max(scores, key=scores.get) if scores else "general"
+        return max(scores, key=lambda x: scores[x]) if scores else "general"
 
     def _calculate_complexity(self, content: str) -> float:
         """Calcula la complejidad del contenido."""
