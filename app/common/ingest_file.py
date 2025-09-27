@@ -30,13 +30,14 @@ except Exception:  # pragma: no cover - fallback path used in constrained enviro
         def split_documents(self, documents):
             return list(documents)
 import sys
-import os
 
-# Add the app directory to the path if not already there
+# Ensure project root and app package are importable
 current_dir = os.path.dirname(os.path.abspath(__file__))
 app_dir = os.path.dirname(current_dir)
-if app_dir not in sys.path:
-    sys.path.insert(0, app_dir)
+project_root = os.path.dirname(app_dir)
+for candidate in (project_root, app_dir):
+    if candidate and candidate not in sys.path:
+        sys.path.insert(0, candidate)
 
 from agents import (
     BaseFileIngestor,

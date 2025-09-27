@@ -160,7 +160,7 @@ inject_css(sidebar_style)
 
 # Sidebar for language selection
 with st.sidebar:
-    st.header("🌐 Idioma")
+    st.header("🌐 Selección de Idioma")
 
     language_options = {
         'es': 'Español',
@@ -196,7 +196,7 @@ st.markdown(
         <p><strong>{hero_subtitle}</strong></p>
     </div>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 # Initialize chat history

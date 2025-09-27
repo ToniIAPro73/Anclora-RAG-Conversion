@@ -58,7 +58,7 @@ def subheader(text: str) -> None:
     """Display text in subheader formatting."""
     pass
 
-def markdown(body: str) -> None:
+def markdown(body: str, unsafe_allow_html: bool = False) -> None:
     """Display string formatted as Markdown."""
     pass
 

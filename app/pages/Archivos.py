@@ -9,12 +9,14 @@ from typing import Any, cast
 # Set page config
 st.set_page_config(layout='wide', page_title='Archivos - Anclora AI RAG', page_icon='📁')
 
-# Add the parent directory to Python path for imports
+# Add the app directory to Python path for imports
 import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+app_dir = os.path.dirname(current_dir)
+project_root = os.path.dirname(app_dir)
+for path_option in (project_root, app_dir):
+    if path_option and path_option not in sys.path:
+        sys.path.insert(0, path_option)
 
 # Importar colores de Anclora RAG
 from common.anclora_colors import apply_anclora_theme, ANCLORA_RAG_COLORS, create_colored_alert
@@ -37,11 +39,11 @@ logger = logging.getLogger(__name__)
 _st = cast(Any, st)
 
 def markdown_html(markdown_text: str) -> None:
-    """Render HTML content safely across Streamlit versions."""
+    """Render HTML content with HTML support when available."""
     markdown_fn = getattr(_st, 'markdown', None)
     if callable(markdown_fn):
         try:
-            markdown_fn(markdown_text)
+            markdown_fn(markdown_text, unsafe_allow_html=True)
         except TypeError:
             markdown_fn(markdown_text)
     else:
@@ -198,18 +200,8 @@ custom_style = f"""
             margin-bottom: 1rem !important;
         }}
     </style>
-    <script>
-        // Suppress 404 console errors
-        const originalFetch = window.fetch;
-        window.fetch = function(...args) {{
-            return originalFetch.apply(this, args).catch(err => {{
-                if (!err.message.includes('404')) console.error(err);
-                return Promise.reject(err);
-            }});
-        }};
-    </script>
 """
-st.markdown(f"<style>{custom_style}</style>")
+st.markdown(custom_style, unsafe_allow_html=True)
 
 # Initialize language in session state
 if 'language' not in st.session_state:
@@ -236,7 +228,7 @@ except ImportError as e:
 
 # Sidebar for language selection
 with st.sidebar:
-    markdown_html("<h3>🌐 Idioma</h3>")
+    st.header("🌐 Selección de Idioma")
 
     language_options = {
         'es': 'Español',
