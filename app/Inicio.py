@@ -99,6 +99,8 @@ import streamlit as st
 from pathlib import Path
 from typing import Any, cast
 
+from urllib.parse import urlparse
+
 import httpx
 
 # Importar colores de Anclora RAG
@@ -166,17 +168,45 @@ def _load_api_settings() -> dict[str, str]:
     }
 
 
+
+def _candidate_urls(chat_url: str) -> list[str]:
+    if not chat_url:
+        return []
+
+    try:
+        parsed = urlparse(chat_url)
+    except Exception:
+        return [chat_url]
+
+    scheme = parsed.scheme or 'http'
+    host = (parsed.hostname or '').lower()
+    port = f":{parsed.port}" if parsed.port else ''
+    path_part = parsed.path or '/chat'
+
+    candidates = [chat_url]
+    defaults = ['localhost', 'host.docker.internal', 'api']
+
+    if host in ('localhost', '127.0.0.1'):
+        fallback_hosts = ['host.docker.internal', 'api']
+    elif host == 'host.docker.internal':
+        fallback_hosts = ['localhost', 'api']
+    elif host == 'api':
+        fallback_hosts = ['localhost', 'host.docker.internal']
+    else:
+        fallback_hosts = [value for value in defaults if value != host]
+
+    for fallback_host in fallback_hosts:
+        candidate = f"{scheme}://{fallback_host}{port}{path_part}"
+        if candidate not in candidates:
+            candidates.append(candidate)
+
+    return candidates
+
+
 def call_rag_api(message: str, language: str) -> dict[str, str]:
     settings = _load_api_settings()
     token = settings.get('token', '').strip()
-
-    print("[DEBUG] === API CALL DEBUG ===")
-    print(f"[DEBUG] Message length: {len(message)}")
-    print(f"[DEBUG] Language: {language}")
-    print(f"[DEBUG] Token in settings: {'[SET]' if token else '[NOT SET]'}")
-
     if not token:
-        print("[ERROR] No token found in API settings!")
         raise RAGAPIError(
             'No se encontró un token para acceder a la API. Configura ANCLORA_API_TOKEN, '
             'ANCLORA_API_TOKENS o ANCLORA_DEFAULT_API_TOKEN antes de usar el chat.'
@@ -199,65 +229,44 @@ def call_rag_api(message: str, language: str) -> dict[str, str]:
     }
 
     timeout = float(settings.get('timeout', '60'))
-    chat_url = settings['chat_url']
+    candidate_urls = _candidate_urls(settings.get('chat_url', ''))
+    if not candidate_urls:
+        raise RAGAPIError('No se pudo construir la URL del servicio de chat.')
 
-    print("[DEBUG] === REQUEST DETAILS ===")
-    print(f"[DEBUG] URL: {chat_url}")
-    print(f"[DEBUG] Headers: Authorization=[SET], Content-Type=application/json")
-    print(f"[DEBUG] Payload keys: {list(payload.keys())}")
+    last_connect_error = None
+    tried_urls: list[str] = []
 
-    try:
-        print("[DEBUG] Making API request...")
-        response = httpx.post(chat_url, json=payload, headers=headers, timeout=timeout)
-        print(f"[DEBUG] Response status: {response.status_code}")
-        response.raise_for_status()
-        print("[DEBUG] Request successful")
-    except httpx.HTTPStatusError as exc:
-        status_code = exc.response.status_code
-        print(f"[ERROR] HTTP Status Error: {status_code}")
-        print(f"[ERROR] Response text: {exc.response.text}")
+    for candidate in candidate_urls:
+        tried_urls.append(candidate)
+        try:
+            response = httpx.post(candidate, json=payload, headers=headers, timeout=timeout)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
+            if status_code == 401:
+                raise RAGAPIError('La API rechazó el token proporcionado (401).') from exc
+            if status_code == 403:
+                raise RAGAPIError('La API denegó el acceso a la consulta (403).') from exc
+            detail = exc.response.text
+            raise RAGAPIError(f'Error de la API ({status_code}): {detail}') from exc
+        except httpx.ConnectError as exc:
+            last_connect_error = exc
+            continue
+        except httpx.RequestError as exc:
+            raise RAGAPIError(f'No fue posible conectar con la API: {exc}') from exc
 
-        # Enhanced error handling for authentication issues
-        if status_code == 401:
-            error_msg = (
-                'La API rechazó el token proporcionado (401).\n\n'
-                '🔍 **Posibles causas:**\n'
-                '• El token ha expirado\n'
-                '• El token es inválido\n'
-                '• La API requiere un token diferente\n'
-                '• La API no está configurada correctamente\n\n'
-                '🔧 **Soluciones:**\n'
-                '• Verifica que el token en .env sea correcto\n'
-                '• Reinicia los contenedores Docker\n'
-                '• Revisa los logs de la API para más detalles'
-            )
-            raise RAGAPIError(error_msg) from exc
-        if status_code == 403:
-            raise RAGAPIError('La API denegó el acceso a la consulta (403).') from exc
-        detail = exc.response.text
-        raise RAGAPIError(f'Error de la API ({status_code}): {detail}') from exc
-    except httpx.RequestError as exc:
-        print(f"[ERROR] Request Error: {exc}")
-        error_msg = (
-            f'No fue posible conectar con la API: {exc}\n\n'
-            '🔍 **Posibles causas:**\n'
-            '• La API no está ejecutándose\n'
-            '• Problemas de red o firewall\n'
-            '• URL de la API incorrecta\n\n'
-            '🔧 **Soluciones:**\n'
-            '• Verifica que docker compose ps muestre la API como \"Up\"\n'
-            '• Reinicia los contenedores con: docker compose restart\n'
-            '• Revisa los logs de la API: docker compose logs api'
-        )
-        raise RAGAPIError(error_msg) from exc
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise RAGAPIError('La API devolvió una respuesta inválida.') from exc
 
-    try:
-        result = response.json()
-        print("[DEBUG] Response parsed successfully")
-        return result
-    except ValueError as exc:
-        print(f"[ERROR] Failed to parse JSON response: {exc}")
-        raise RAGAPIError('La API devolvió una respuesta inválida.') from exc
+    if last_connect_error is not None:
+        urls_text = ', '.join(tried_urls)
+        raise RAGAPIError(
+            f'No fue posible conectar con la API tras probar: {urls_text}. Detalle: {last_connect_error}'
+        ) from last_connect_error
+
+    raise RAGAPIError('No fue posible conectar con la API.')
 
 
 def call_rag_api_with_fallback(message: str, language: str) -> dict[str, str]:
@@ -272,14 +281,16 @@ def call_rag_api_with_fallback(message: str, language: str) -> dict[str, str]:
 
         # Return a mock response for development/testing
         fallback_response = (
-            "⚠️ **Respuesta de Desarrollo (API no disponible)**\n\n"
+        fallback_response = (
+            "?? **Respuesta de Desarrollo (API no disponible)**\n\n"
             "La API de RAG no está disponible en este momento. "
             "Esta es una respuesta simulada para fines de desarrollo.\n\n"
-            "**Consulta recibida:** {message}\n\n"
+            f"**Consulta recibida:** {message}\n\n"
+            f"**Detalle técnico:** {error_text}\n\n"
             "**Solución:**\n"
-            "• Verifica que los contenedores Docker estén ejecutándose\n"
-            "• Revisa la configuración de tokens en el archivo .env\n"
-            "• Consulta los logs de la API para más detalles"
+            "- Verifica que los contenedores Docker están ejecutándose\n"
+            "- Revisa la configuración de tokens en el archivo .env\n"
+            "- Consulta los logs de la API para más detalles"
         )
 
         return {
@@ -555,3 +566,5 @@ if prompt := st.chat_input(chat_placeholder):
                     "status": "error",
                 }
             )
+
+
