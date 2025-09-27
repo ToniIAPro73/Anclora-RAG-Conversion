@@ -195,7 +195,6 @@ services:
       options:
         max-size: 100m
         max-file: "3"
-    command: ["python", "-c", "import api_endpoints; import uvicorn; uvicorn.run(api_endpoints.app, host='0.0.0.0', port=8081)"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 30s

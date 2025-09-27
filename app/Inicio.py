@@ -43,6 +43,25 @@ if load_env_file():
 else:
     print("[WARNING] No se pudo cargar el archivo .env")
 
+# Helper functions for secrets and environment variables
+def _get_secret(key: str) -> str | None:
+    try:
+        return st.secrets[key]  # type: ignore
+    except Exception:
+        return None
+
+
+def _get_env_or_secret(*keys: str) -> str | None:
+    for key in keys:
+        secret_value = _get_secret(key)
+        if isinstance(secret_value, str) and secret_value.strip():
+            return secret_value.strip()
+        env_value = os.getenv(key)
+        if env_value and env_value.strip():
+            return env_value.strip()
+    return None
+
+
 # Verificar que los tokens estén disponibles
 def check_api_tokens():
     """Verificar disponibilidad de tokens de API con debug detallado"""
@@ -93,22 +112,6 @@ class RAGAPIError(RuntimeError):
     """Custom error to represent failures when querying the RAG API."""
 
 
-def _get_secret(key: str) -> str | None:
-    try:
-        return st.secrets[key]  # type: ignore
-    except Exception:
-        return None
-
-
-def _get_env_or_secret(*keys: str) -> str | None:
-    for key in keys:
-        secret_value = _get_secret(key)
-        if isinstance(secret_value, str) and secret_value.strip():
-            return secret_value.strip()
-        env_value = os.getenv(key)
-        if env_value and env_value.strip():
-            return env_value.strip()
-    return None
 
 
 @st.cache_resource(show_spinner=False)  # type: ignore
