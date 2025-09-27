@@ -281,7 +281,6 @@ def call_rag_api_with_fallback(message: str, language: str) -> dict[str, str]:
 
         # Return a mock response for development/testing
         fallback_response = (
-        fallback_response = (
             "?? **Respuesta de Desarrollo (API no disponible)**\n\n"
             "La API de RAG no está disponible en este momento. "
             "Esta es una respuesta simulada para fines de desarrollo.\n\n"
