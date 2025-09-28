@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 import os, os.path
 
@@ -6,7 +6,7 @@ import os, os.path
 class ScanResult:
     is_safe: bool
     threat_level: str = "none"   # none|low|medium|high
-    threats_detected: List[str] = []
+    threats_detected: List[str] = field(default_factory=list)
     quarantine_path: Optional[str] = None
 
 def scan_file_for_conversion(path: str) -> ScanResult:
