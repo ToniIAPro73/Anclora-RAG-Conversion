@@ -16,6 +16,12 @@ param(
 
 # Configuration
 $RequiredModels = @("llama3")
+# Auto-detect Ollama host based on environment
+if ($env:DOCKER_CONTAINER) {
+    $OllamaHost = "http://ollama:11434"  # Inside Docker network
+} else {
+    $OllamaHost = "http://localhost:11434"  # External access
+}
 $ChecksumFile = Join-Path $BackupDir "model_checksums.sha256"
 
 # Logging functions

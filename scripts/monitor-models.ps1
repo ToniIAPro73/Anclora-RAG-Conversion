@@ -16,7 +16,12 @@ param(
 
 # Configuration
 $RequiredModels = @("llama3")
-$OllamaHost = "http://localhost:11434"
+# Auto-detect Ollama host based on environment
+if ($env:DOCKER_CONTAINER) {
+    $OllamaHost = "http://ollama:11434"  # Inside Docker network
+} else {
+    $OllamaHost = "http://localhost:11434"  # External access
+}
 $MetricsFile = "model-metrics.json"
 $MaintenanceScript = Join-Path $PSScriptRoot "model-maintenance-scheduler.ps1"
 
