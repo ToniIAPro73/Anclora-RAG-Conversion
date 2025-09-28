@@ -9,6 +9,7 @@ import uuid
 import threading
 import queue
 import time
+import hashlib
 from contextlib import contextmanager
 from typing import Any, Dict, List, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor
@@ -85,31 +86,27 @@ from common.chroma_db_settings import Chroma, invalidate_sources_cache
 from common.embeddings_manager import get_embeddings_manager
 from common.chroma_utils import add_langchain_documents, _make_metadata_serializable
 
-# Custom security exception
-class SecurityError(Exception):
-    """Excepción lanzada cuando se detecta una amenaza de seguridad."""
-    pass
-
-
-try:
-    from common.chroma_db_settings import get_unique_sources_df as _get_unique_sources_df
-except (ImportError, AttributeError):  # pragma: no cover - fallback for lightweight stubs
-    def _get_unique_sources_df(chroma_settings) -> pd.DataFrame:  # type: ignore
-        logger.warning("Using fallback get_unique_sources_df function - ChromaDB settings not available")
-        return pd.DataFrame(data=None, columns=["uploaded_file_name", "domain", "collection"])
+# Import de constantes (cliente Chroma unificado)
 from common.constants import CHROMA_CLIENT, CHROMA_COLLECTIONS
 from common.text_normalization import Document, normalize_documents_nfc
 from common.privacy import PrivacyManager
 
-get_unique_sources_df = _get_unique_sources_df
+get_unique_sources_df = None
+try:
+    from common.chroma_db_settings import get_unique_sources_df as _get_unique_sources_df
+    get_unique_sources_df = _get_unique_sources_df
+except (ImportError, AttributeError):  # pragma: no cover - fallback for lightweight stubs
+    def _get_unique_sources_df(chroma_settings) -> pd.DataFrame:  # type: ignore
+        logger = logging.getLogger(__name__)
+        logger.warning("Using fallback get_unique_sources_df function - ChromaDB settings not available")
+        return pd.DataFrame(data=None, columns=["uploaded_file_name", "domain", "collection"])
+    get_unique_sources_df = _get_unique_sources_df
 
 logger = logging.getLogger(__name__)
 
 
-
 def _safe_streamlit_call(name: str, *args, **kwargs) -> None:
     """Invoke a Streamlit UI helper, ignoring missing script context."""
-
     fn = getattr(st, name, None)
     if not callable(fn):
         return
@@ -117,7 +114,6 @@ def _safe_streamlit_call(name: str, *args, **kwargs) -> None:
         fn(*args, **kwargs)
     except Exception as exc:  # RuntimeError when ScriptRunContext is missing
         logger.debug("Streamlit call %s suppressed: %s", name, exc)
-
 
 
 # Cola de procesamiento global con prioridad por tamaño
@@ -203,10 +199,11 @@ class ProcessedFile:
     def __getitem__(self, item):  # type: ignore[override]
         return self.documents[item]
 
+
 def get_embeddings(domain: Optional[str] = None) -> Any:
     """Obtain embeddings for the requested domain using the shared manager."""
-
     return get_embeddings_manager().get_embeddings(domain)
+
 
 # Ensure the ingestors see the latest loader implementations when the module is re-imported
 refresh_document_loaders(force=True)
@@ -229,15 +226,7 @@ def _get_ingestor_for_extension(extension: str) -> BaseFileIngestor:
 
 
 def _get_text_splitter_for_domain(domain: str) -> RecursiveCharacterTextSplitter:
-    """Get a text splitter configured specifically for the given domain.
-
-    Args:
-        domain: The domain name to get splitter configuration for
-
-    Returns:
-        Configured RecursiveCharacterTextSplitter instance
-    """
-
+    """Get a text splitter configured specifically for the given domain."""
     config = CHUNKING_CONFIG.get(domain, CHUNKING_CONFIG["default"])
     kwargs = {
         "chunk_size": config["chunk_size"],
@@ -256,6 +245,7 @@ def _get_text_splitter_for_domain(domain: str) -> RecursiveCharacterTextSplitter
             splitter.separators = separators
         return splitter
 
+
 @contextmanager
 def _temp_file(uploaded_file) -> Iterator[str]:
     tmp_filename = f"{uuid.uuid4()}_{uploaded_file.name}"
@@ -269,7 +259,24 @@ def _temp_file(uploaded_file) -> Iterator[str]:
             os.unlink(tmp_path)
 
 
-def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Any], BaseFileIngestor]:
+def _read_uploaded_file_bytes(uploaded_file) -> Tuple[bytes, bool]:
+    """Read bytes of the uploaded file and try to reset pointer."""
+    reset_pointer = hasattr(uploaded_file, "seek")
+    if hasattr(uploaded_file, "read"):
+        file_bytes = uploaded_file.read()
+    elif hasattr(uploaded_file, "getvalue"):
+        file_bytes = uploaded_file.getvalue()
+    else:
+        raise AttributeError("Uploaded file object does not support reading")
+    if reset_pointer and hasattr(uploaded_file, "seek"):
+        try:
+            uploaded_file.seek(0)
+        except Exception:
+            reset_pointer = False
+    return file_bytes, reset_pointer
+
+
+def _load_documents(uploaded_file, file_name: str, file_hash: Optional[str] = None) -> Tuple[List[Any], BaseFileIngestor]:
     ext = os.path.splitext(uploaded_file.name)[1].lower()
     ingestor = _get_ingestor_for_extension(ext)
 
@@ -327,6 +334,8 @@ def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Any], BaseFileI
                     "uploaded_file_name": file_name,
                 }
             )
+            if file_hash:
+                metadata["file_hash"] = file_hash
             try:
                 document.metadata = _make_metadata_serializable(metadata)
             except TypeError as exc:
@@ -338,6 +347,11 @@ def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Any], BaseFileI
     except Exception as e:
         logger.error(f"Error loading documents for file {file_name}: {e}")
         raise
+
+
+class SecurityError(Exception):
+    """Excepción lanzada cuando se detecta una amenaza de seguridad."""
+    pass
 
 
 class ProcessResult(Sequence[Document]):
@@ -399,48 +413,17 @@ class ProcessResult(Sequence[Document]):
         return summary
 
 
-def _collection_contains_file(collection, file_name: str) -> bool:
-    # Check if collection is None
-    if collection is None:
-        logger.error(f"Collection is None for file {file_name}")
-        return False
-
+def _collection_contains_file_by_hash(collection, file_hash: str) -> bool:
+    """Check existence by file hash (idempotencia real)."""
     try:
-        results = collection.get(where={"uploaded_file_name": file_name})
-    except Exception as e:  # pragma: no cover - chroma specific failure fallback
-        logger.warning(f"Error querying collection for file {file_name}: {e}")
-        try:
-            results = collection.get()
-        except Exception as e2:
-            logger.error(f"Failed to get collection data for file {file_name}: {e2}")
-            return False
-
-    # Handle case where collection.get() returns None
-    if results is None:
-        logger.warning(f"Collection.get() returned None for file: {file_name}")
+        res = collection.get(where={"file_hash": file_hash}, limit=1)
+        if isinstance(res, dict):
+            ids = res.get("ids", []) or []
+            return len(ids) > 0
         return False
-
-    # Ensure results is a dictionary before accessing keys
-    if not isinstance(results, dict):
-        logger.warning(f"Collection.get() returned non-dict type {type(results)} for file: {file_name}")
+    except Exception as e:
+        logger.warning(f"Hash existence check failed in collection: {e}")
         return False
-
-    ids = results.get("ids", [])
-    metadatas = results.get("metadatas", [])
-
-    # Check if file exists by ID
-    if ids and file_name in ids:
-        return True
-
-    # Check if file exists by metadata
-    if metadatas:
-        return any(
-            isinstance(metadata, dict) and metadata.get("uploaded_file_name") == file_name
-            for metadata in metadatas
-            if metadata is not None
-        )
-
-    return False
 
 
 def validate_uploaded_file(uploaded_file) -> tuple[bool, str]:
@@ -456,16 +439,15 @@ def validate_uploaded_file(uploaded_file) -> tuple[bool, str]:
     return True, "Válido"
 
 
-def load_single_document(uploaded_file, file_name: str) -> Tuple[List[Document], BaseFileIngestor]:
+def load_single_document(uploaded_file, file_name: str, file_hash: Optional[str] = None) -> Tuple[List[Document], BaseFileIngestor]:
     """Load a document from the uploaded file and return its ingestor."""
-
     is_valid, message = validate_uploaded_file(uploaded_file)
     if not is_valid:
         raise ValueError(message)
 
     try:
         logger.info("Cargando documento: %s", uploaded_file.name)
-        documents, ingestor = _load_documents(uploaded_file, file_name)
+        documents, ingestor = _load_documents(uploaded_file, file_name, file_hash=file_hash)
 
         # Validate that we got valid results
         if documents is None:
@@ -484,50 +466,44 @@ def load_single_document(uploaded_file, file_name: str) -> Tuple[List[Document],
 def process_file(uploaded_file, file_name: str) -> ProcessResult:
     """Process a file with security scanning before ingestion.
 
-    This function performs the following steps:
-    1. Security scan (if enabled) to check for malware/threats
-    2. Document loading using appropriate ingestor
-    3. Duplicate checking in vector database
-    4. Text chunking with domain-specific configuration
-    5. Document normalization
-
-    Args:
-        uploaded_file: The uploaded file object to process
-        file_name: Name of the file being processed
-
-    Returns:
-        ProcessResult containing processed documents and ingestor info
-
-    Raises:
-        SecurityError: If security scan detects threats
-        ValueError: If file validation or processing fails
-        ConnectionError: If database connection fails
+    Steps:
+      0. Read bytes + compute SHA-256 (para idempotencia)
+      1. Security scan (if enabled)
+      2. Pre-check duplicate by hash in the destined collection
+      3. Document loading using appropriate ingestor
+      4. Text chunking with domain-specific configuration
+      5. Document normalization
     """
 
-    # 🔒 SECURITY SCAN: Escanear archivo por malware antes de procesarlo
-    if SECURITY_AVAILABLE:
-        reset_pointer = hasattr(uploaded_file, "seek")
-        if hasattr(uploaded_file, "read"):
-            file_bytes = uploaded_file.read()
-        elif hasattr(uploaded_file, "getvalue"):
-            file_bytes = uploaded_file.getvalue()
-        else:
-            raise AttributeError("Uploaded file object does not support reading")
+    # 0) Leer bytes + hash determinista
+    file_bytes, _ = _read_uploaded_file_bytes(uploaded_file)
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
+    file_size = len(file_bytes)
+    file_ext = os.path.splitext(getattr(uploaded_file, "name", file_name))[1].lower()
 
-        # Guardar archivo temporalmente para escaneo
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as temp_file:
+    # Determinar ingestor/colección por extensión para el pre-check rápido
+    ingestor_cls = _get_ingestor_for_extension(file_ext)
+
+    # 1) SECURITY SCAN (opcional)
+    if SECURITY_AVAILABLE:
+        # Temp file para escaneo (uses the same bytes)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
             temp_file.write(file_bytes)
             temp_file_path = temp_file.name
 
         try:
-            # Escanear archivo por amenazas
-            scan_result = scan_file_for_conversion(temp_file_path)
+            try:
+                scan_result = scan_file_for_conversion(temp_file_path)
+            except Exception as e:
+                logger.exception(f"Fallo del escáner de seguridad en {file_name}: {e}")
+                record_security_event(event="security_scan_error", file=file_name, error=str(e))
+                raise SecurityError("Fallo en el escaneo de seguridad. Operación cancelada.")
 
             if not scan_result.is_safe:
                 # Archivo peligroso detectado
                 threat_msg = f"🚨 ARCHIVO BLOQUEADO: {file_name}"
                 security_msg = f"Nivel de amenaza: {scan_result.threat_level.upper()}"
-                threats_msg = "Amenazas detectadas: " + ", ".join(scan_result.threats_detected)
+                threats_msg = "Amenazas detectadas: " + ", ".join(scan_result.threats_detected or [])
 
                 _safe_streamlit_call("error", threat_msg)
                 _safe_streamlit_call("error", security_msg)
@@ -538,32 +514,51 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
 
                 logger.error(f"Archivo bloqueado por seguridad: {file_name} - {scan_result.threat_level}")
                 logger.error(f"Amenazas: {scan_result.threats_detected}")
-
-                # Retornar resultado vacío para bloquear procesamiento
+                record_security_event(
+                    event="security_block",
+                    file=file_name,
+                    level=scan_result.threat_level,
+                    threats=scan_result.threats_detected,
+                )
                 raise SecurityError(f"Archivo bloqueado por seguridad: {scan_result.threat_level}")
 
-            else:
-                # Archivo seguro
-                _safe_streamlit_call("success", f"✅ Archivo seguro: {file_name}")
-                logger.info(f"Archivo aprobado por seguridad: {file_name}")
-
-                # Resetear el puntero del archivo para procesamiento normal
-                if reset_pointer and hasattr(uploaded_file, "seek"):
-                    uploaded_file.seek(0)
+            # Archivo seguro
+            _safe_streamlit_call("success", f"✅ Archivo seguro: {file_name}")
+            logger.info(f"Archivo aprobado por seguridad: {file_name}")
+            record_security_event(event="security_pass", file=file_name)
 
         finally:
             # Limpiar archivo temporal
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-
+            try:
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+            except Exception:
+                pass
     else:
         # Escaneo deshabilitado - mostrar advertencia
         _safe_streamlit_call("warning", "⚠️ Escaneo de seguridad deshabilitado - Procesando sin verificación antimalware")
         logger.warning(f"Procesando archivo sin escaneo de seguridad: {file_name}")
 
-    # Continuar con procesamiento normal si el archivo es seguro
+    # 2) Pre-check duplicado por hash en colección destino
+    #    (Evita cargar/splitear si ya existe)
+    collection = CHROMA_CLIENT.get_or_create_collection(ingestor_cls.collection_name)
+    if _collection_contains_file_by_hash(collection, file_hash):
+        # Invalidar cache de listados para reflejar estado real
+        try:
+            invalidate_sources_cache()
+        except Exception:
+            pass
+        return ProcessResult([], ingestor_cls, duplicate=True)
+
+    # 3) Cargar documento (metadatos incluirán file_hash)
     try:
-        documents, ingestor = load_single_document(uploaded_file, file_name)
+        # Resetear puntero y reinyectar bytes al wrapper de uploaded_file si fuese necesario
+        if hasattr(uploaded_file, "seek"):
+            try:
+                uploaded_file.seek(0)
+            except Exception:
+                pass
+        documents, ingestor = load_single_document(uploaded_file, file_name, file_hash=file_hash)
     except ValueError as ve:
         logger.error(f"Validation error loading document {file_name}: {ve}")
         raise
@@ -574,38 +569,22 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
         logger.error(f"Unexpected error loading document {file_name}: {e}")
         raise
 
-    try:
-        collection = CHROMA_CLIENT.get_or_create_collection(ingestor.collection_name)
-        if collection is None:
-            logger.error(f"Failed to create or get collection '{ingestor.collection_name}' for file {file_name}")
-            raise ValueError(f"No se pudo crear la colección '{ingestor.collection_name}' para el archivo {file_name}")
-
-        if _collection_contains_file(collection, file_name):
-            return ProcessResult([], ingestor, duplicate=True)
-    except ValueError as ve:
-        logger.error(f"Value error checking collection for file {file_name}: {ve}")
-        raise
-    except (ConnectionError, TimeoutError) as conn_error:
-        logger.error(f"Connection error checking collection for file {file_name}: {conn_error}")
-        raise ValueError(f"Error de conexión con la base de datos vectorial: {str(conn_error)}")
-    except Exception as e:
-        logger.error(f"Unexpected error checking collection for file {file_name}: {e}")
-        raise ValueError(f"Error de conexión con la base de datos vectorial: {str(e)}")
-
-    # Usar chunking específico por dominio
+    # 4) Chunking y normalización
     try:
         text_splitter = _get_text_splitter_for_domain(ingestor.domain)
         texts = text_splitter.split_documents(documents)
 
-        # Agregar metadatos de chunking para análisis
+        # Agregar metadatos de chunking y file_hash para cada chunk
         for i, text in enumerate(texts):
-            if hasattr(text, 'metadata') and text.metadata:
+            if hasattr(text, 'metadata') and text.metadata is not None:
                 text.metadata.update({
                     "chunk_index": i,
                     "total_chunks": len(texts),
                     "chunking_domain": ingestor.domain,
                     "chunk_size_config": CHUNKING_CONFIG.get(ingestor.domain, CHUNKING_CONFIG["default"])["chunk_size"],
-                    "chunk_overlap_config": CHUNKING_CONFIG.get(ingestor.domain, CHUNKING_CONFIG["default"])["chunk_overlap"]
+                    "chunk_overlap_config": CHUNKING_CONFIG.get(ingestor.domain, CHUNKING_CONFIG["default"])["chunk_overlap"],
+                    "file_hash": file_hash,
+                    "file_size": file_size,
                 })
                 text.metadata = _make_metadata_serializable(text.metadata)
 
@@ -621,9 +600,9 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
         logger.error(f"Unexpected error processing documents for file {file_name}: {e}")
         raise
 
+
 def does_vectorstore_exist(settings, collection_name: str) -> bool:
     """Check if a vectorstore already contains data for *collection_name*."""
-
     collection = settings.get_or_create_collection(collection_name)
     try:
         return collection.count() > 0
@@ -633,6 +612,7 @@ def does_vectorstore_exist(settings, collection_name: str) -> bool:
         except ValueError:
             response = collection.get()
         return bool(response.get("ids"))
+
 
 def ingest_file_priority(uploaded_file, file_name, file_size=None):
     """Ingesta archivo con prioridad por tamaño (pequeños primero)."""
@@ -644,9 +624,12 @@ def ingest_file_priority(uploaded_file, file_name, file_size=None):
         else:
             # Estimar tamaño leyendo el archivo
             current_pos = uploaded_file.tell() if hasattr(uploaded_file, 'tell') else 0
-            uploaded_file.seek(0, 2)  # Ir al final
-            file_size = uploaded_file.tell()
-            uploaded_file.seek(current_pos)  # Volver a posición original
+            if hasattr(uploaded_file, 'seek'):
+                uploaded_file.seek(0, 2)  # Ir al final
+                file_size = uploaded_file.tell()
+                uploaded_file.seek(current_pos)  # Volver a posición original
+            else:
+                file_size = 0
 
     # Crear ID único para el archivo
     file_id = f"{file_name}_{int(time.time())}"
@@ -681,6 +664,7 @@ def ingest_file_priority(uploaded_file, file_name, file_size=None):
 
     return file_id
 
+
 def ingest_file(uploaded_file, file_name):
     """Process and ingest a file into the vector database (método original)."""
 
@@ -706,6 +690,11 @@ def ingest_file(uploaded_file, file_name):
             if result.duplicate:
                 logger.warning("Archivo duplicado: %s", file_name)
                 _safe_streamlit_call("warning", f"⚠️ Archivo duplicado: {file_name}")
+                # Siempre invalidar cache para sincronizar la vista
+                try:
+                    invalidate_sources_cache()
+                except Exception:
+                    pass
                 summary["duplicate"] = True
                 return {
                     "success": False,
@@ -815,6 +804,7 @@ def ingest_file(uploaded_file, file_name):
 
         return {"success": False, "error": error_msg}
 
+
 def _start_processing_worker():
     """Inicia el worker de procesamiento si no está corriendo."""
 
@@ -826,6 +816,7 @@ def _start_processing_worker():
     # Iniciar nuevo worker
     worker_thread = threading.Thread(target=_processing_worker, name="ingest-worker", daemon=True)
     worker_thread.start()
+
 
 def _processing_worker():
     """Worker que procesa archivos de la cola por prioridad."""
@@ -872,9 +863,11 @@ def _processing_worker():
         except Exception as e:
             logger.error(f"❌ Error en worker: {str(e)}")
 
+
 def get_processing_status(file_id):
     """Obtiene el status de procesamiento de un archivo."""
     return processing_status.get(file_id, {"status": "not_found", "progress": 0.0})
+
 
 def get_queue_status():
     """Obtiene status general de la cola de procesamiento."""
@@ -892,6 +885,7 @@ def get_queue_status():
         "failed": failed,
         "total": len(processing_status)
     }
+
 
 def _original_ingest_file(uploaded_file, file_name):
     """Función original de ingesta (renombrada)."""
@@ -975,5 +969,3 @@ __all__ = [
     "process_file",
     "validate_uploaded_file",
 ]
-
-
