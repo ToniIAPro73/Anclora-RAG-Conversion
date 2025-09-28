@@ -30,14 +30,15 @@ except Exception:  # pragma: no cover - fallback path used in constrained enviro
             self.chunk_overlap = chunk_overlap
             self.separators = separators or ["\n\n", "\n", " "]
 
-        def split_documents(self, documents):
+        def split_documents(self, documents: List[Any]) -> List[Any]:
+            """Split documents into chunks."""
             return list(documents)
 
     # Fallback Document class when langchain is not available
     class LangChainDocument:  # type: ignore
         """Fallback Document class that mimics LangChain Document behavior."""
 
-        def __init__(self, page_content: str, metadata: Optional[dict] = None):
+        def __init__(self, page_content: str, metadata: Optional[Dict[str, Any]] = None):
             self.page_content = page_content
             self.metadata = metadata or {}
 import sys
@@ -228,7 +229,14 @@ def _get_ingestor_for_extension(extension: str) -> BaseFileIngestor:
 
 
 def _get_text_splitter_for_domain(domain: str) -> RecursiveCharacterTextSplitter:
-    """Obtiene un text splitter configurado específicamente para el dominio dado."""
+    """Get a text splitter configured specifically for the given domain.
+
+    Args:
+        domain: The domain name to get splitter configuration for
+
+    Returns:
+        Configured RecursiveCharacterTextSplitter instance
+    """
 
     config = CHUNKING_CONFIG.get(domain, CHUNKING_CONFIG["default"])
     kwargs = {
@@ -240,7 +248,8 @@ def _get_text_splitter_for_domain(domain: str) -> RecursiveCharacterTextSplitter
 
     try:
         return RecursiveCharacterTextSplitter(**kwargs)
-    except TypeError:
+    except TypeError as exc:
+        logger.debug("RecursiveCharacterTextSplitter initialization failed: %s", exc)
         kwargs.pop("separators", None)
         splitter = RecursiveCharacterTextSplitter(**kwargs)
         if hasattr(splitter, "separators"):
@@ -271,7 +280,7 @@ def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Any], BaseFileI
         with _temp_file(uploaded_file) as tmp_path:
             try:
                 documents = ingestor.load(tmp_path, ext)
-            except TypeError as exc:
+            except (TypeError, AttributeError) as exc:
                 logger.debug(
                     "Loader %s failed for %s: %s - falling back to plain reader",
                     ingestor.__class__.__name__,
@@ -281,13 +290,17 @@ def _load_documents(uploaded_file, file_name: str) -> Tuple[List[Any], BaseFileI
                 try:
                     with open(tmp_path, 'r', encoding='utf-8') as handle:
                         fallback_content = handle.read()
-                except UnicodeDecodeError:
+                except UnicodeDecodeError as unicode_error:
+                    logger.debug("UTF-8 decoding failed for %s: %s", file_name, unicode_error)
                     with open(tmp_path, 'r', encoding='latin-1', errors='ignore') as handle:
                         fallback_content = handle.read()
+                except (OSError, IOError) as io_error:
+                    logger.error("IO error reading file %s: %s", file_name, io_error)
+                    raise
                 fallback_metadata = {"source": tmp_path}
                 try:
                     documents = [Document(page_content=fallback_content, metadata=fallback_metadata)]
-                except (TypeError, NameError) as doc_error:
+                except (TypeError, NameError, AttributeError) as doc_error:
                     # Try to handle missing Document class or initialization issues
                     logger.debug(
                         "Document class failed for %s: %s - using LangChain Document",
@@ -469,7 +482,27 @@ def load_single_document(uploaded_file, file_name: str) -> Tuple[List[Document],
 
 
 def process_file(uploaded_file, file_name: str) -> ProcessResult:
-    """Process a file with security scanning before ingestion."""
+    """Process a file with security scanning before ingestion.
+
+    This function performs the following steps:
+    1. Security scan (if enabled) to check for malware/threats
+    2. Document loading using appropriate ingestor
+    3. Duplicate checking in vector database
+    4. Text chunking with domain-specific configuration
+    5. Document normalization
+
+    Args:
+        uploaded_file: The uploaded file object to process
+        file_name: Name of the file being processed
+
+    Returns:
+        ProcessResult containing processed documents and ingestor info
+
+    Raises:
+        SecurityError: If security scan detects threats
+        ValueError: If file validation or processing fails
+        ConnectionError: If database connection fails
+    """
 
     # 🔒 SECURITY SCAN: Escanear archivo por malware antes de procesarlo
     if SECURITY_AVAILABLE:
@@ -531,8 +564,14 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
     # Continuar con procesamiento normal si el archivo es seguro
     try:
         documents, ingestor = load_single_document(uploaded_file, file_name)
+    except ValueError as ve:
+        logger.error(f"Validation error loading document {file_name}: {ve}")
+        raise
+    except (OSError, IOError) as io_error:
+        logger.error(f"IO error loading document {file_name}: {io_error}")
+        raise
     except Exception as e:
-        logger.error(f"Error loading document {file_name}: {e}")
+        logger.error(f"Unexpected error loading document {file_name}: {e}")
         raise
 
     try:
@@ -543,8 +582,14 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
 
         if _collection_contains_file(collection, file_name):
             return ProcessResult([], ingestor, duplicate=True)
+    except ValueError as ve:
+        logger.error(f"Value error checking collection for file {file_name}: {ve}")
+        raise
+    except (ConnectionError, TimeoutError) as conn_error:
+        logger.error(f"Connection error checking collection for file {file_name}: {conn_error}")
+        raise ValueError(f"Error de conexión con la base de datos vectorial: {str(conn_error)}")
     except Exception as e:
-        logger.error(f"Error checking collection for file {file_name}: {e}")
+        logger.error(f"Unexpected error checking collection for file {file_name}: {e}")
         raise ValueError(f"Error de conexión con la base de datos vectorial: {str(e)}")
 
     # Usar chunking específico por dominio
@@ -566,8 +611,14 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
 
         normalized = normalize_documents_nfc(texts)
         return ProcessResult(normalized, ingestor)
+    except ValueError as ve:
+        logger.error(f"Value error processing documents for file {file_name}: {ve}")
+        raise
+    except (MemoryError, OverflowError) as mem_error:
+        logger.error(f"Memory error processing documents for file {file_name}: {mem_error}")
+        raise
     except Exception as e:
-        logger.error(f"Error processing documents for file {file_name}: {e}")
+        logger.error(f"Unexpected error processing documents for file {file_name}: {e}")
         raise
 
 def does_vectorstore_exist(settings, collection_name: str) -> bool:
