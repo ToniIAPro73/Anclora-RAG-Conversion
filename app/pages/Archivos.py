@@ -21,7 +21,7 @@ for path_option in (project_root, app_dir):
 
 # Importar colores de Anclora RAG
 from common.anclora_colors import apply_anclora_theme, ANCLORA_RAG_COLORS, create_colored_alert
-from common.constants import CHROMA_COLLECTIONS
+from common.constants import CHROMA_CLIENT, CHROMA_COLLECTIONS
 
 # Aplicar tema de colores Anclora RAG
 apply_anclora_theme()
@@ -219,7 +219,7 @@ CHROMA_SETTINGS = None
 
 try:
     from common.ingest_file import ingest_file, validate_uploaded_file, get_unique_sources_df, delete_file_from_vectordb, SUPPORTED_EXTENSIONS
-    from common.constants import CHROMA_SETTINGS
+    from common.constants import CHROMA_CLIENT, CHROMA_COLLECTIONS
     INGEST_AVAILABLE = True
     st.success("✅ Módulos de ingesta cargados correctamente")
 except ImportError as e:

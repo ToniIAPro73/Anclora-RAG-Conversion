@@ -86,7 +86,7 @@ except (ImportError, AttributeError):  # pragma: no cover - fallback for lightwe
     def _get_unique_sources_df(chroma_settings) -> pd.DataFrame:  # type: ignore
         logger.warning("Using fallback get_unique_sources_df function - ChromaDB settings not available")
         return pd.DataFrame(data=None, columns=["uploaded_file_name", "domain", "collection"])
-from common.constants import CHROMA_SETTINGS
+from common.constants import CHROMA_CLIENT, CHROMA_COLLECTIONS
 from common.text_normalization import Document, normalize_documents_nfc
 from common.privacy import PrivacyManager
 
@@ -527,7 +527,7 @@ def process_file(uploaded_file, file_name: str) -> ProcessResult:
         raise
 
     try:
-        collection = CHROMA_SETTINGS.get_or_create_collection(ingestor.collection_name)
+        collection = CHROMA_CLIENT.get_or_create_collection(ingestor.collection_name)
         if collection is None:
             logger.error(f"Failed to create or get collection '{ingestor.collection_name}' for file {file_name}")
             raise ValueError(f"No se pudo crear la colección '{ingestor.collection_name}' para el archivo {file_name}")
@@ -692,12 +692,12 @@ def ingest_file(uploaded_file, file_name):
 
                 collection_ref = locals().get('collection')
                 if collection_ref is None:
-                    collection_ref = CHROMA_SETTINGS.get_or_create_collection(ingestor.collection_name)
+                    collection_ref = collection = CHROMA_CLIENT.get_or_create_collection(ingestor.collection_name)
 
                 try:
                     if hasattr(collection_ref, 'add'):
                         existed, added = add_langchain_documents(
-                            CHROMA_SETTINGS,
+                            CHROMA_CLIENT,
                             ingestor.collection_name,
                             embeddings,
                             langchain_docs,
@@ -711,7 +711,7 @@ def ingest_file(uploaded_file, file_name):
                         vector_store = Chroma(
                             collection_name=ingestor.collection_name,
                             embedding_function=embeddings,
-                            client=CHROMA_SETTINGS,
+                            client=CHROMA_CLIENT,
                         )
                         vector_store.add_documents(langchain_docs)
                         existed = preexisting > 0
@@ -856,7 +856,7 @@ def _original_ingest_file(uploaded_file, file_name):
         ]
 
         existed, added = add_langchain_documents(
-            CHROMA_SETTINGS,
+            CHROMA_CLIENT,
             ingestor.collection_name,
             embeddings,
             langchain_docs,

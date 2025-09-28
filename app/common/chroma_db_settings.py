@@ -21,6 +21,7 @@ from typing import (
     Dict,
     Iterable,
     List,
+    Literal,
     Optional,
     Tuple,
     Type,
@@ -903,9 +904,11 @@ def get_unique_sources_df(chroma_settings) -> pd.DataFrame:
                         continue
 
                 try:
-                    response = collection.get(include=["metadatas"])
-                except TypeError:
-                    response = collection.get()
+                    # Type ignore to handle ChromaDB version compatibility issues
+                    response = collection.get(include=["metadatas"])  # type: ignore[arg-type]
+                except (TypeError, AttributeError):
+                    # Fallback for different ChromaDB versions or API changes
+                    response = collection.get()  # type: ignore[call-arg]
                 except Exception as exc:
                     logger.debug(f"Error fetching metadata for {collection_name}: {exc}")
                     continue

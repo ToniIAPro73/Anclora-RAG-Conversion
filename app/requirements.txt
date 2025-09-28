@@ -1,24 +1,36 @@
+# --- Núcleo IA / RAG ---
 openai
-streamlit>=1.28.0
-python-dotenv==1.0.0
-PyYAML
 langchain==0.2.17
+# Deja que langchain resuelva sus core/splitters; si prefieres fijarlos, usa los que instale langchain
 langchain-community==0.2.5
-pydantic==2.10.3
-pydantic-core==2.27.1
-pandas>=1.5.0
-python-docx
 chromadb==0.5.15
-urllib3==2.0.4
-PyMuPDF==1.23.5
-tabulate==0.9.0
-tqdm==4.66.1
+pydantic>=2.10,<3
+pydantic-core>=2.27,<3
+sentence-transformers>=2.2.0
+langchain-huggingface>=0.0.3
+
+# Telemetría (evita conflictos con 'analytics' erróneo)
+analytics-python>=1.4.0
+
+# --- App / Framework ---
+streamlit>=1.28.0
 fastapi>=0.111.0
 uvicorn[standard]
 python-multipart
+prometheus-client
+aiohttp>=3.9.0
+urllib3>=2.0.4
+
+# --- Utilidades y parsing ---
+python-dotenv==1.0.0
+PyYAML
+pandas>=1.5.0
+python-docx
+PyMuPDF==1.23.5
+tabulate==0.9.0
+tqdm==4.66.1
 langdetect==1.0.9
 PyJWT
-prometheus-client
 plotly>=5.0.0
 llama-parse>=0.4.0
 openai-whisper>=20231117
@@ -28,9 +40,4 @@ python-magic>=0.4.27
 nltk>=3.8
 unstructured>=0.10.0
 GitPython>=3.1.40
-aiohttp>=3.9.0
 fnmatch2>=0.0.8
-langchain-core==0.2.43
-langchain-text-splitters==0.2.4
-langchain-huggingface>=0.0.3
-sentence-transformers>=2.2.0

@@ -1,67 +1,30 @@
-import os
+import os, sys, types
 from dataclasses import dataclass
+from pathlib import Path
 
-# Disable Chroma telemetry before importing the client stack
-os.environ['ANONYMIZED_TELEMETRY'] = 'False'
-os.environ['CHROMA_TELEMETRY'] = 'False'
+# --- Apagar telemetría ANTES de importar chromadb ---
+os.environ["ANONYMIZED_TELEMETRY"] = "false"
+os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"  # compat
 
-"""Constants for Anclora RAG application"""
+# (Cinturón) Stub si alguna lib intenta enviar telemetría
+_stub = types.ModuleType("analytics")
+def _noop(*_a, **_k): pass
+_stub.capture = _noop  # type: ignore[attr-defined]
+_stub.track = _noop    # type: ignore[attr-defined]
+_stub.identify = _noop # type: ignore[attr-defined]
+sys.modules.setdefault("analytics", _stub)
+sys.modules.setdefault("posthog", _stub)
 
-try:
-    from chromadb.telemetry import telemetry
-    telemetry.DEFAULT_CHROMA_TELEMETRY = False
-except Exception:
-    pass
-
-try:
-    from chromadb.telemetry.product import posthog as _chroma_posthog
-except Exception:
-    _chroma_posthog = None
-else:
-    def _noop_capture(*_args, **_kwargs):
-        return None
-    class _SilentPosthog:
-        def __init__(self, *args, **kwargs):
-            pass
-        def capture(self, *_args, **_kwargs):
-            return None
-        def flush(self) -> None:
-            return None
-        def dependencies(self):
-            return []
-        def start(self):
-            return None
-        def stop(self):
-            return None
-    _chroma_posthog.capture = _noop_capture
-    _chroma_posthog.client = _SilentPosthog()
-    _chroma_posthog.Posthog = lambda *args, **kwargs: _SilentPosthog(*args, **kwargs)
-
-# ChromaDB Settings
+# ChromaDB (local, sin server HTTP)
 try:
     import chromadb
-    import chromadb.config
-
-    # Get ChromaDB configuration from environment variables
-    chroma_host = os.getenv('CHROMA_HOST', 'localhost')
-    chroma_port = int(os.getenv('CHROMA_PORT', '8000'))
-
-    settings = chromadb.config.Settings(
-        allow_reset=True,
-        anonymized_telemetry=False,
-    )
-
-    try:
-        CHROMA_SETTINGS = chromadb.HttpClient(
-            host=chroma_host,
-            port=chroma_port,
-            settings=settings,
-        )
-    except Exception:
-        CHROMA_SETTINGS = chromadb.EphemeralClient(settings=settings)
 except ImportError:
-    # Fallback for when chromadb is not available
-    CHROMA_SETTINGS = None
+    CHROMA_CLIENT = None
+else:
+    CHROMA_DIR = Path(__file__).resolve().parents[2] / "data" / "chroma"
+    CHROMA_DIR.mkdir(parents=True, exist_ok=True)
+    # 0.5.x: usar PersistentClient con path; no pasar Settings aquí
+    CHROMA_CLIENT = chromadb.PersistentClient(path=str(CHROMA_DIR))
 
 # ChromaDB Collections with domain information
 
