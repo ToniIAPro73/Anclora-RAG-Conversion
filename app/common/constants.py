@@ -121,3 +121,8 @@ SUCCESS_MESSAGES = {
     "batch_completed": "Lote de archivos procesado exitosamente",
     "conversion_success": "Conversión completada exitosamente"
 }
+
+# --- Backwards compatibility shim ---
+CHROMA_SETTINGS = CHROMA_CLIENT  # alias temporal para módulos antiguos
+def get_chroma_client():
+    return CHROMA_CLIENT

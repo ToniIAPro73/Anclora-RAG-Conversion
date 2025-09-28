@@ -59,14 +59,24 @@ from agents import (
     refresh_document_loaders,
 )
 
-# Import security scanner and analytics
+# Import security scanner and analytics (proyecto)
 try:
-    from security import scan_file_for_conversion, is_file_safe_for_conversion, ScanResult
-    from analytics import record_security_event
-    SECURITY_AVAILABLE = True
+    from common.security_scan import scan_file_for_conversion, ScanResult
+    from common.security_gate import SECURITY_ENABLED as SECURITY_AVAILABLE, SILENCE_SECURITY_WARNING
+    # Helper opcional para mantener API antigua:
+    def is_file_safe_for_conversion(path: str) -> bool:
+        return scan_file_for_conversion(path).is_safe
 except ImportError:
     SECURITY_AVAILABLE = False
     # El mensaje se mostrará durante el procesamiento de archivos
+
+# Analytics interno: evita colisión con paquete externo "analytics"
+try:
+    from common.app_analytics import record_security_event  # renombra tu módulo a app_analytics.py
+except ImportError:
+    def record_security_event(*_a, **_k):  # no-op en dev
+        return None
+
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
@@ -236,7 +246,6 @@ def _get_text_splitter_for_domain(domain: str) -> RecursiveCharacterTextSplitter
         if hasattr(splitter, "separators"):
             splitter.separators = separators
         return splitter
-
 
 @contextmanager
 def _temp_file(uploaded_file) -> Iterator[str]:
