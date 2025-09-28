@@ -15,6 +15,7 @@ The implemented solution consists of multiple layers of protection:
 ### 1. Model Backup System (`backup-models.ps1` / `backup-models.sh`)
 
 **Features:**
+
 - Automatic model backup with checksum verification
 - Integrity validation using SHA256 hashes
 - Automatic recovery from backup when corruption is detected
@@ -22,6 +23,7 @@ The implemented solution consists of multiple layers of protection:
 - Cross-platform support (Windows PowerShell + Linux Bash)
 
 **Usage:**
+
 ```bash
 # PowerShell (Windows)
 .\scripts\backup-models.ps1
@@ -36,11 +38,13 @@ The implemented solution consists of multiple layers of protection:
 ### 2. Enhanced Health Checks
 
 **Docker Compose Integration:**
+
 - Modified `ollama` service healthcheck to include integrity verification
 - Automatic model re-download if missing
 - Integration with backup system for corruption detection
 
 **Health Check Process:**
+
 1. Verify model exists in Ollama
 2. Check model integrity against stored checksums
 3. Attempt recovery from backup if corruption detected
@@ -49,6 +53,7 @@ The implemented solution consists of multiple layers of protection:
 ### 3. Maintenance Scheduler (`model-maintenance-scheduler.ps1` / `model-maintenance-scheduler.sh`)
 
 **Features:**
+
 - Automated maintenance cycles with configurable intervals
 - Comprehensive health monitoring
 - Detailed logging with rotation
@@ -56,11 +61,13 @@ The implemented solution consists of multiple layers of protection:
 - Integration with monitoring systems
 
 **Configuration Options:**
+
 - `--interval MINUTES`: Set maintenance interval (default: 60)
 - `--run-once`: Execute once instead of continuous monitoring
 - `--verbose`: Enable detailed logging output
 
 **Usage:**
+
 ```bash
 # Start continuous maintenance (Windows)
 .\scripts\model-maintenance-scheduler.ps1
@@ -75,6 +82,7 @@ The implemented solution consists of multiple layers of protection:
 ### 4. Enhanced Monitoring System (`monitor-models.ps1`)
 
 **Features:**
+
 - Real-time model availability monitoring
 - Detailed health metrics collection
 - Integration with maintenance scheduler
@@ -82,6 +90,7 @@ The implemented solution consists of multiple layers of protection:
 - Historical metrics storage in JSON format
 
 **Metrics Collected:**
+
 - Model availability status
 - Integrity verification results
 - Response times and error rates
@@ -89,6 +98,7 @@ The implemented solution consists of multiple layers of protection:
 - Health trend analysis
 
 **Usage:**
+
 ```powershell
 # Start enhanced monitoring
 .\scripts\monitor-models.ps1
@@ -139,11 +149,13 @@ The solution integrates with existing monitoring infrastructure:
 
 1. **Copy Scripts:** Ensure all scripts are in the `scripts/` directory
 2. **Set Permissions:** Make shell scripts executable
+
    ```bash
    chmod +x scripts/backup-models.sh scripts/model-maintenance-scheduler.sh
    ```
 
 3. **Create Backup Directory:**
+
    ```bash
    mkdir -p model_backups logs
    ```
@@ -209,6 +221,7 @@ All scripts support standard help options:
 ### Alert Conditions
 
 The system generates alerts for:
+
 - Model missing from Ollama
 - Integrity checksum failures
 - Backup restoration failures
