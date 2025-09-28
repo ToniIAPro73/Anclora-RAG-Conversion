@@ -8,7 +8,8 @@
 param(
     [string]$OllamaHost = "http://localhost:11434",
     [int]$MaxRetries = 5,
-    [int]$RetryDelay = 10
+    [int]$RetryDelay = 10,
+    [switch]$UseDocker = $false
 )
 
 # Configuration
@@ -41,14 +42,25 @@ function Wait-ForOllama {
     
     for ($i = 1; $i -le $MaxRetries; $i++) {
         try {
-            $response = Invoke-RestMethod -Uri "$OllamaHost/api/tags" -Method Get -TimeoutSec 5
-            Write-Success "Ollama service is ready"
-            return $true
+            if ($UseDocker) {
+                $result = docker exec anclora_rag-ollama-1 ollama list 2>$null
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "Ollama service is ready"
+                    return $true
+                }
+            }
+            else {
+                $response = Invoke-RestMethod -Uri "$OllamaHost/api/tags" -Method Get -TimeoutSec 5
+                Write-Success "Ollama service is ready"
+                return $true
+            }
         }
         catch {
-            Write-Warning "Ollama not ready, attempt $i/$MaxRetries. Retrying in ${RetryDelay}s..."
-            Start-Sleep -Seconds $RetryDelay
+            # Continue to retry
         }
+        
+        Write-Warning "Ollama not ready, attempt $i/$MaxRetries. Retrying in ${RetryDelay}s..."
+        Start-Sleep -Seconds $RetryDelay
     }
     
     Write-Error "Ollama service failed to become ready after $MaxRetries attempts"
@@ -60,8 +72,14 @@ function Test-ModelExists {
     param([string]$ModelName)
     
     try {
-        $response = Invoke-RestMethod -Uri "$OllamaHost/api/tags" -Method Get
-        return $response.models | Where-Object { $_.name -eq $ModelName } | Measure-Object | Select-Object -ExpandProperty Count
+        if ($UseDocker) {
+            $result = docker exec anclora_rag-ollama-1 ollama list 2>$null
+            return $result -match $ModelName
+        }
+        else {
+            $response = Invoke-RestMethod -Uri "$OllamaHost/api/tags" -Method Get
+            return $response.models | Where-Object { $_.name -eq $ModelName } | Measure-Object | Select-Object -ExpandProperty Count
+        }
     }
     catch {
         return $false
@@ -75,10 +93,23 @@ function Get-Model {
     Write-Info "Downloading model: $ModelName"
     
     try {
-        $body = @{ name = $ModelName } | ConvertTo-Json
-        $response = Invoke-RestMethod -Uri "$OllamaHost/api/pull" -Method Post -Body $body -ContentType "application/json"
-        Write-Success "Model $ModelName downloaded successfully"
-        return $true
+        if ($UseDocker) {
+            $result = docker exec anclora_rag-ollama-1 ollama pull $ModelName
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "Model $ModelName downloaded successfully"
+                return $true
+            }
+            else {
+                Write-Error "Failed to download model $ModelName via Docker"
+                return $false
+            }
+        }
+        else {
+            $body = @{ name = $ModelName } | ConvertTo-Json
+            $response = Invoke-RestMethod -Uri "$OllamaHost/api/pull" -Method Post -Body $body -ContentType "application/json"
+            Write-Success "Model $ModelName downloaded successfully"
+            return $true
+        }
     }
     catch {
         Write-Error "Failed to download model $ModelName : $($_.Exception.Message)"
