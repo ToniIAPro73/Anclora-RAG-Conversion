@@ -523,7 +523,7 @@ async def health_check():
 
 @app.post(
     "/chat",
-    response_model=AgentResponseModel,
+    response_model=ChatResponse,
     summary="Conversación con el RAG / Chat with RAG",
     description=(
         "Envía una consulta en español o inglés al motor RAG y recibe una respuesta contextualizada.\n\n"
