@@ -37,14 +37,6 @@
       "type": "sse",
       "url": "http://127.0.0.1:3845/sse"
     },
-    "firebase": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "firebase-tools@14.15.2",
-        "experimental:mcp"
-      ]
-    },
     "supabase": {
       "command": "npx",
       "args": [
