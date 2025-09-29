@@ -736,18 +736,49 @@ async def upload_document(
 async def list_documents(token: str = Depends(verify_token)):
     """Obtiene el catálogo de documentos actualmente indexados."""
     try:
-        from common.constants import CHROMA_SETTINGS
-        from common.ingest_file import get_unique_sources_df
+        from common.constants import CHROMA_CLIENT
 
-        files_df = get_unique_sources_df(CHROMA_SETTINGS)
-        documents = files_df['uploaded_file_name'].tolist() if not files_df.empty else []
-        
+        # Usar la misma lógica que la UI para obtener documentos de ChromaDB
+        documents = []
+        try:
+            collections = CHROMA_CLIENT.list_collections()
+        except Exception as e:
+            logger.error(f"Error listando colecciones: {e}")
+            return {"status": "success", "documents": [], "count": 0}
+
+        for collection_info in collections:
+            try:
+                collection = CHROMA_CLIENT.get_or_create_collection(collection_info.name)
+                # Obtener solo metadatos para no cargar documentos completos
+                try:
+                    result = collection.get(include=["metadatas"], limit=2000)  # type: ignore
+                except Exception:
+                    result = collection.get(limit=2000)
+
+                metadatas = (result or {}).get("metadatas", []) or []
+
+                for meta in metadatas:
+                    if isinstance(meta, dict) and meta.get("uploaded_file_name"):
+                        documents.append(meta.get("uploaded_file_name"))
+
+            except Exception as e2:
+                logger.warning(f"No se pudo leer la colección '{collection_info.name}': {e2}")
+                continue
+
+        # Eliminar duplicados manteniendo el orden
+        seen = set()
+        unique_documents = []
+        for doc in documents:
+            if doc not in seen:
+                seen.add(doc)
+                unique_documents.append(doc)
+
         return {
             "status": "success",
-            "documents": documents,
-            "count": len(documents)
+            "documents": unique_documents,
+            "count": len(unique_documents)
         }
-        
+
     except Exception as e:
         logger.error(f"Error al listar documentos: {str(e)}")
         raise HTTPException(status_code=500, detail="Error al obtener documentos")

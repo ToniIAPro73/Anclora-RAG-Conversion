@@ -1,4 +1,5 @@
 import os
+
 # Deshabilitar telemetría de ChromaDB antes de cualquier importación
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
@@ -113,9 +114,6 @@ _st = cast(Any, st)
 class RAGAPIError(RuntimeError):
     """Custom error to represent failures when querying the RAG API."""
 
-
-
-
 @st.cache_resource(show_spinner=False)  # type: ignore
 def _load_api_settings() -> dict[str, str]:
     base_url = _get_env_or_secret(
@@ -166,9 +164,6 @@ def _load_api_settings() -> dict[str, str]:
         'token': token or '',
         'timeout': str(timeout_seconds),
     }
-
-
-
 def _candidate_urls(chat_url: str) -> list[str]:
     if not chat_url:
         return []
@@ -297,8 +292,6 @@ def call_rag_api_with_fallback(message: str, language: str) -> dict[str, str]:
             'status': 'warning',
             'timestamp': '2024-01-01T00:00:00.000000'
         }
-
-
 
 def inject_css(css_content: str) -> None:
     """Inject CSS content properly into Streamlit app."""
