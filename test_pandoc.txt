@@ -1,0 +1,1 @@
+"Pandoc es un conversor universal de documentos que transforma archivos entre diferentes formatos de marcado como Markdown, HTML, LaTeX, Word, y muchos m s." 

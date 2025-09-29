@@ -247,8 +247,9 @@ def _get_text_splitter_for_domain(domain: str) -> RecursiveCharacterTextSplitter
 
 
 @contextmanager
-def _temp_file(uploaded_file) -> Iterator[str]:
-    tmp_filename = f"{uuid.uuid4()}_{uploaded_file.name}"
+def _temp_file(uploaded_file, filename: str | None = None) -> Iterator[str]:
+    file_name = filename or getattr(uploaded_file, 'filename', None) or getattr(uploaded_file, 'name', None) or 'unknown_file'
+    tmp_filename = f"{uuid.uuid4()}_{file_name}"
     tmp_path = os.path.join(tempfile.gettempdir(), tmp_filename)
     with open(tmp_path, "wb") as tmp_file:
         tmp_file.write(uploaded_file.getvalue())
@@ -277,7 +278,7 @@ def _read_uploaded_file_bytes(uploaded_file) -> Tuple[bytes, bool]:
 
 
 def _load_documents(uploaded_file, file_name: str, file_hash: Optional[str] = None) -> Tuple[List[Any], BaseFileIngestor]:
-    ext = os.path.splitext(uploaded_file.name)[1].lower()
+    ext = os.path.splitext(file_name)[1].lower()
     ingestor = _get_ingestor_for_extension(ext)
 
     if ingestor is None:
@@ -432,7 +433,8 @@ def validate_uploaded_file(uploaded_file) -> tuple[bool, str]:
     if uploaded_file.size > MAX_FILE_SIZE:
         return False, "Archivo demasiado grande (máximo 200MB)"
 
-    file_ext = os.path.splitext(uploaded_file.name)[1].lower()
+    filename = getattr(uploaded_file, 'filename', None) or getattr(uploaded_file, 'name', None) or 'unknown_file'
+    file_ext = os.path.splitext(filename)[1].lower()
     if file_ext not in SUPPORTED_EXTENSIONS:
         return False, f"Tipo de archivo no soportado: {file_ext}"
 
@@ -446,7 +448,7 @@ def load_single_document(uploaded_file, file_name: str, file_hash: Optional[str]
         raise ValueError(message)
 
     try:
-        logger.info("Cargando documento: %s", uploaded_file.name)
+        logger.info("Cargando documento: %s", file_name)
         documents, ingestor = _load_documents(uploaded_file, file_name, file_hash=file_hash)
 
         # Validate that we got valid results
@@ -459,7 +461,7 @@ def load_single_document(uploaded_file, file_name: str, file_hash: Optional[str]
 
         return documents, ingestor
     except Exception as exc:
-        logger.error("Error al cargar documento %s: %s", uploaded_file.name, exc)
+        logger.error("Error al cargar documento %s: %s", file_name, exc)
         raise
 
 

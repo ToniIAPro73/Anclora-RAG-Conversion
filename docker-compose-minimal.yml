@@ -1,0 +1,116 @@
+services:
+  # Vector Database - ChromaDB
+  chroma:
+    image: chromadb/chroma:0.5.15
+    volumes:
+      - chroma_data:/chroma/.chroma/index
+    ports:
+      - "8000:8000"
+    networks:
+      - anclora-network
+    environment:
+      - ANONYMIZED_TELEMETRY=False
+      - CHROMA_TELEMETRY=False
+      - CHROMA_SERVER_NO_ANALYTICS=True
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Language Model Service - Ollama
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    networks:
+      - anclora-network
+    environment:
+      - OLLAMA_MODELS=/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # REST API Service - FastAPI
+  api:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      target: api-service
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./app:/app
+    networks:
+      - anclora-network
+    depends_on:
+      chroma:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      - MODEL=llama3
+      - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
+      - TARGET_SOURCE_CHUNKS=5
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - OLLAMA_HOST=ollama
+      - OLLAMA_PORT=11434
+      - ANCLORA_API_TOKEN=iFqEvYPHcqfyCQvDV8vPcS0Z10SZDeVJ9ErCAR5uEU4
+      - ANCLORA_JWT_SECRET=dd2a293a0bf26f016dac6435950ee410a2275d323c8ee0bf650fbaabde96421a29f696e1e87c9543eb11b57f74ad29f5f057d08c059c6ceb0867dbd27230fc85
+      - ENV=development
+      - LOG_LEVEL=DEBUG
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # User Interface - Streamlit
+  ui:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      target: ui-service
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./app:/app
+    networks:
+      - anclora-network
+    depends_on:
+      chroma:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      - MODEL=llama3
+      - EMBEDDINGS_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
+      - TARGET_SOURCE_CHUNKS=5
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - ANCLORA_API_TOKEN=iFqEvYPHcqfyCQvDV8vPcS0Z10SZDeVJ9ErCAR5uEU4
+      - ENV=development
+      - LOG_LEVEL=DEBUG
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  chroma_data:
+    driver: local
+  ollama_models:
+    driver: local
+
+networks:
+  anclora-network:
+    driver: bridge

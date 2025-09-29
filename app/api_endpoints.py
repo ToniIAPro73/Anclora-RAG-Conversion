@@ -709,13 +709,14 @@ async def upload_document(
             raise HTTPException(status_code=400, detail=message)
         
         # Procesar archivo
-        logger.info(f"Procesando archivo API: {file.filename}")
-        ingest_file(file, file.filename)
+        filename = getattr(file, 'filename', None) or getattr(file, 'name', None) or 'unknown_file'
+        logger.info(f"Procesando archivo API: {filename}")
+        ingest_file(file, filename)
         
         return {
             "status": "success",
-            "message": f"Archivo '{file.filename}' procesado exitosamente",
-            "filename": file.filename
+            "message": f"Archivo '{filename}' procesado exitosamente",
+            "filename": filename
         }
         
     except HTTPException:
