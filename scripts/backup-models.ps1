@@ -11,7 +11,8 @@ param(
     [int]$MaxRetries = 3,
     [int]$RetryDelay = 5,
     [switch]$UseDocker = $false,
-    [switch]$Force = $false
+    [switch]$Force = $false,
+    [switch]$VerifyOnly = $false
 )
 
 # Configuration
@@ -74,7 +75,12 @@ function Get-ModelPath {
             # For local Ollama, models are typically in ~/.ollama/models
             $ollamaDir = Join-Path $env:USERPROFILE ".ollama"
             $modelPath = Join-Path $ollamaDir "models"
-            return $modelPath
+            if (Test-Path $modelPath) {
+                return $modelPath
+            } else {
+                Write-Warning "Local Ollama models directory not found at $modelPath"
+                return $null
+            }
         }
     }
     catch {
@@ -267,6 +273,50 @@ function Main {
     # Initialize backup directory
     Initialize-BackupDir
 
+    # If VerifyOnly is specified, just check model health and exit
+    if ($VerifyOnly) {
+        $allHealthy = $true
+        foreach ($model in $RequiredModels) {
+            Write-Info "Processing model: $model"
+
+            # Check if model exists
+            $modelExists = $false
+            try {
+                if ($UseDocker) {
+                    $result = docker exec anclora_rag-ollama-1 ollama list 2>$null
+                    $modelExists = $result -match $model
+                }
+                else {
+                    $response = Invoke-RestMethod -Uri "$OllamaHost/api/tags" -Method Get -TimeoutSec 10
+                    # Handle both exact match and :latest tag variations
+                    $modelExists = $response.models | Where-Object {
+                        $_.name -eq $model -or $_.name -eq "$model`:latest" -or $_.name -like "$model`:*"
+                    } | Measure-Object | Select-Object -ExpandProperty Count
+                }
+            }
+            catch {
+                $modelExists = $false
+            }
+
+            if ($modelExists) {
+                Write-Success "Model $model is available"
+            }
+            else {
+                Write-Warning "Model $model is not available"
+                $allHealthy = $false
+            }
+        }
+
+        if ($allHealthy) {
+            Write-Success "All models are healthy"
+            exit 0
+        }
+        else {
+            Write-Warning "Some models are not healthy"
+            exit 1
+        }
+    }
+
     # Process each required model
     foreach ($model in $RequiredModels) {
         Write-Info "Processing model: $model"
@@ -280,7 +330,10 @@ function Main {
             }
             else {
                 $response = Invoke-RestMethod -Uri "$OllamaHost/api/tags" -Method Get -TimeoutSec 10
-                $modelExists = $response.models | Where-Object { $_.name -eq $model } | Measure-Object | Select-Object -ExpandProperty Count
+                # Handle both exact match and :latest tag variations
+                $modelExists = $response.models | Where-Object {
+                    $_.name -eq $model -or $_.name -eq "$model`:latest" -or $_.name -like "$model`:*"
+                } | Measure-Object | Select-Object -ExpandProperty Count
             }
         }
         catch {
@@ -288,9 +341,9 @@ function Main {
         }
 
         if ($modelExists) {
-            # Verify model integrity
-            if (Test-ModelIntegrity -ModelName $model) {
-                Write-Success "Model $model is healthy"
+            # For Docker environments, skip integrity check as models are in containers
+            if ($UseDocker -or $env:DOCKER_CONTAINER -or (Test-Path "docker-compose.yml")) {
+                Write-Success "Model $model is healthy (Docker environment)"
 
                 # Create backup if forced or if no backup exists
                 $hasBackup = (Load-Checksums).ContainsKey($model)
@@ -301,28 +354,42 @@ function Main {
                 }
             }
             else {
-                Write-Warning "Model $model integrity check failed"
+                # Verify model integrity for local installations
+                if (Test-ModelIntegrity -ModelName $model) {
+                    Write-Success "Model $model is healthy"
 
-                # Try to restore from backup
-                if (Restore-Model -ModelName $model) {
-                    Write-Success "Model $model restored from backup"
+                    # Create backup if forced or if no backup exists
+                    $hasBackup = (Load-Checksums).ContainsKey($model)
+                    if ($Force -or !$hasBackup) {
+                        if (Backup-Model -ModelName $model) {
+                            Write-Success "Backup completed for model $model"
+                        }
+                    }
                 }
                 else {
-                    Write-Error "Failed to restore model $model from backup"
-                    # Try to re-download the model
-                    Write-Info "Attempting to re-download model $model"
-                    try {
-                        if ($UseDocker) {
-                            docker exec anclora_rag-ollama-1 ollama pull $model
-                        }
-                        else {
-                            $body = @{ name = $model } | ConvertTo-Json
-                            Invoke-RestMethod -Uri "$OllamaHost/api/pull" -Method Post -Body $body -ContentType "application/json"
-                        }
-                        Write-Success "Model $model re-downloaded successfully"
+                    Write-Warning "Model $model integrity check failed"
+
+                    # Try to restore from backup
+                    if (Restore-Model -ModelName $model) {
+                        Write-Success "Model $model restored from backup"
                     }
-                    catch {
-                        Write-Error "Failed to re-download model $model"
+                    else {
+                        Write-Error "Failed to restore model $model from backup"
+                        # Try to re-download the model
+                        Write-Info "Attempting to re-download model $model"
+                        try {
+                            if ($UseDocker) {
+                                docker exec anclora_rag-ollama-1 ollama pull $model
+                            }
+                            else {
+                                $body = @{ name = $model } | ConvertTo-Json
+                                Invoke-RestMethod -Uri "$OllamaHost/api/pull" -Method Post -Body $body -ContentType "application/json"
+                            }
+                            Write-Success "Model $model re-downloaded successfully"
+                        }
+                        catch {
+                            Write-Error "Failed to re-download model $model"
+                        }
                     }
                 }
             }

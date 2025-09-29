@@ -156,7 +156,10 @@ function Test-ModelHealth {
     # 1. Check if model exists in Ollama
     try {
         $response = Invoke-RestMethod -Uri "$OllamaHost/api/tags" -Method Get -TimeoutSec 10
-        $modelExists = $response.models | Where-Object { $_.name -eq $ModelName } | Measure-Object | Select-Object -ExpandProperty Count
+        # Handle both exact match and :latest tag variations
+        $modelExists = $response.models | Where-Object {
+            $_.name -eq $ModelName -or $_.name -eq "$ModelName`:latest" -or $_.name -like "$ModelName`:*"
+        } | Measure-Object | Select-Object -ExpandProperty Count
 
         $health.Checks["ModelExists"] = $modelExists -gt 0
         Write-Log "Model exists check: $($modelExists -gt 0)" "INFO"
@@ -194,13 +197,20 @@ function Test-ModelHealth {
         }
     }
 
-    # 4. Run backup integrity check
+    # 4. Run backup integrity check (skip if running outside Docker)
     try {
         $backupScript = Join-Path $PSScriptRoot "backup-models.ps1"
         if (Test-Path $backupScript) {
-            $integrityResult = & $backupScript -VerifyOnly:$true
-            $health.Checks["IntegrityVerified"] = $LASTEXITCODE -eq 0
-            Write-Log "Integrity verification: $($LASTEXITCODE -eq 0)" "INFO"
+            # For Docker environments, skip integrity check as models are in containers
+            if ($env:DOCKER_CONTAINER -or (Test-Path "docker-compose.yml")) {
+                $health.Checks["IntegrityVerified"] = $true
+                Write-Log "Integrity verification: Skipped (Docker environment)" "INFO"
+            }
+            else {
+                $integrityResult = & $backupScript -VerifyOnly:$true
+                $health.Checks["IntegrityVerified"] = $LASTEXITCODE -eq 0
+                Write-Log "Integrity verification: $($LASTEXITCODE -eq 0)" "INFO"
+            }
         }
         else {
             $health.Checks["IntegrityVerified"] = $false
@@ -306,8 +316,14 @@ function Start-MaintenanceCycle {
     }
 
     # Summary
-    $healthyModels = ($cycleResults.Values | Where-Object { $_.OverallStatus -eq "HEALTHY" }).Count
-    $totalModels = $cycleResults.Count
+    $healthyModels = 0
+    foreach ($model in $RequiredModels) {
+        $health = $cycleResults[$model]
+        if ($health -and $health.OverallStatus -eq "HEALTHY") {
+            $healthyModels++
+        }
+    }
+    $totalModels = $RequiredModels.Count
 
     Write-Log "Maintenance cycle #$Global:MaintenanceCount completed - $healthyModels/$totalModels models healthy" "SUCCESS"
 

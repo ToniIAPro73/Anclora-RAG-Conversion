@@ -78,7 +78,10 @@ function Test-ModelExists {
         }
         else {
             $response = Invoke-RestMethod -Uri "$OllamaHost/api/tags" -Method Get
-            return $response.models | Where-Object { $_.name -eq $ModelName } | Measure-Object | Select-Object -ExpandProperty Count
+            # Handle both exact match and :latest tag variations
+            return $response.models | Where-Object {
+                $_.name -eq $ModelName -or $_.name -eq "$ModelName`:latest" -or $_.name -like "$ModelName`:*"
+            } | Measure-Object | Select-Object -ExpandProperty Count
         }
     }
     catch {
