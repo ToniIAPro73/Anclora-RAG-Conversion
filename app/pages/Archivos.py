@@ -5,7 +5,7 @@ from pathlib import Path
 import logging
 import html
 import time
-from typing import Any, cast
+from typing import Any, cast, Dict, Union, Optional
 
 # Set page config
 st.set_page_config(layout='wide', page_title='Archivos - Anclora AI RAG', page_icon='📁')
@@ -38,6 +38,32 @@ logger = logging.getLogger(__name__)
 
 # Streamlit compatibility helpers
 _st = cast(Any, st)
+
+# Type-safe session state helpers
+def get_session_state_value(key: str, default: Any = None) -> Any:
+    """Safely get a value from session state."""
+    try:
+        return st.session_state.get(key, default)
+    except AttributeError:
+        return default
+
+def set_session_state_value(key: str, value: Any) -> None:
+    """Safely set a value in session state."""
+    try:
+        st.session_state[key] = value  # type: ignore
+    except (AttributeError, TypeError):
+        # Fallback: try using setattr if dict-style assignment fails
+        try:
+            setattr(st.session_state, key, value)
+        except AttributeError:
+            logger.warning(f"Could not set session state value for key: {key}")
+
+def has_session_state_key(key: str) -> bool:
+    """Check if a key exists in session state."""
+    try:
+        return key in st.session_state
+    except (AttributeError, TypeError):
+        return False
 
 def markdown_html(markdown_text: str) -> None:
     """Render HTML content with HTML support when available."""
@@ -205,8 +231,8 @@ custom_style = f"""
 st.markdown(custom_style, unsafe_allow_html=True)
 
 # Initialize language in session state
-if 'language' not in st.session_state:
-    st.session_state.language = 'es'
+if not has_session_state_key('language'):
+    set_session_state_value('language', 'es')
 
 # Try to import ingest functions
 INGEST_AVAILABLE = False
@@ -215,7 +241,7 @@ validate_uploaded_file = None
 get_unique_sources_df = None
 delete_file_from_vectordb = None
 SUPPORTED_EXTENSIONS = []
-CHROMA_SETTINGS = None
+CHROMA_SETTINGS = None  # ya no se usa para listar, pero se mantiene por compat
 
 try:
     from common.ingest_file import ingest_file, validate_uploaded_file, get_unique_sources_df, delete_file_from_vectordb, SUPPORTED_EXTENSIONS
@@ -226,7 +252,6 @@ except ImportError as e:
     st.error(f"❌ Error al importar módulos de ingesta: {e}")
     st.info("🔧 Verificando configuración del sistema...")
 
-
 # Sidebar for language selection
 with st.sidebar:
     st.header("🌐 Selección de Idioma")
@@ -236,21 +261,24 @@ with st.sidebar:
         'en': 'English'
     }
 
+    current_language = get_session_state_value('language', 'es')
     selected_language = st.selectbox(
         "Selecciona idioma:",
         options=list(language_options.keys()),
         format_func=lambda x: language_options[x],
-        index=0 if st.session_state.language == 'es' else 1,
+        index=0 if current_language == 'es' else 1,
         key="language_selector"
     )
 
     # Update session state if language changed
-    if selected_language != st.session_state.language:
-        st.session_state.language = selected_language
+    current_language = get_session_state_value('language', 'es')
+    if selected_language != current_language:
+        set_session_state_value('language', selected_language)
         st.rerun()
 
 # Main content
-if st.session_state.language == 'es':
+current_language = get_session_state_value('language', 'es')
+if current_language == 'es':
     st.title("📁 Gestión de Archivos")
     show_caption("Sube y gestiona documentos para el sistema RAG")
     upload_label = "Subir archivo"
@@ -277,7 +305,7 @@ else:
 
 # Check if ingest functionality is available
 if not INGEST_AVAILABLE:
-    if st.session_state.language == 'es':
+    if current_language == 'es':
         st.error("⚠️ Los módulos de ingesta no están disponibles. Verifica la configuración del sistema.")
     else:
         st.error("⚠️ Ingest modules are not available. Please check system configuration.")
@@ -286,11 +314,10 @@ if not INGEST_AVAILABLE:
 # Show supported file types
 if INGEST_AVAILABLE:
     supported_types = [ext.replace('.', '') for ext in SUPPORTED_EXTENSIONS]
-    if st.session_state.language == 'es':
+    if current_language == 'es':
         st.info(f"📋 **Tipos de archivo soportados:** {', '.join(supported_types)}")
     else:
         st.info(f"📋 **Supported file types:** {', '.join(supported_types)}")
-
 
 # File uploader
 uploaded_file = st.file_uploader(
@@ -299,7 +326,6 @@ uploaded_file = st.file_uploader(
     accept_multiple_files=False,
     help=f"Límite: 100MB. Tipos soportados: {', '.join(supported_types) if INGEST_AVAILABLE else 'PDF, TXT, DOCX, MD'}"
 )
-
 
 if st.button(add_button_text):
     if uploaded_file:
@@ -315,7 +341,7 @@ if st.button(add_button_text):
                 max_size_mb = 100  # 100MB limit
 
                 if file_size_mb > max_size_mb:
-                    st.error(f"❌ El archivo es demasiado grande: {file_size_mb:.1f}MB. Límite máximo: {max_size_mb}MB" if st.session_state.language == 'es' else f"❌ File is too large: {file_size_mb:.1f}MB. Maximum limit: {max_size_mb}MB")
+                    st.error(f"❌ El archivo es demasiado grande: {file_size_mb:.1f}MB. Límite máximo: {max_size_mb}MB" if current_language == 'es' else f"❌ File is too large: {file_size_mb:.1f}MB. Maximum limit: {max_size_mb}MB")
                 else:
                     # Check for suspicious file patterns
                     filename = uploaded_file.name.lower()
@@ -323,12 +349,12 @@ if st.button(add_button_text):
                     is_suspicious = any(pattern in filename for pattern in suspicious_patterns)
 
                     if is_suspicious:
-                        st.warning(f"⚠️ El archivo '{uploaded_file.name}' tiene una extensión potencialmente peligrosa. ¿Estás seguro de que quieres procesarlo?" if st.session_state.language == 'es' else f"⚠️ The file '{uploaded_file.name}' has a potentially dangerous extension. Are you sure you want to process it?")
+                        st.warning(f"⚠️ El archivo '{uploaded_file.name}' tiene una extensión potencialmente peligrosa. ¿Estás seguro de que quieres procesarlo?" if current_language == 'es' else f"⚠️ The file '{uploaded_file.name}' has a potentially dangerous extension. Are you sure you want to process it?")
 
-                        if st.button("🔓 Procesar archivo de todos modos" if st.session_state.language == 'es' else "🔓 Process file anyway", type="secondary"):
+                        if st.button("🔓 Procesar archivo de todos modos" if current_language == 'es' else "🔓 Process file anyway", type="secondary"):
                             process_file = True
                         else:
-                            st.info("✅ Procesamiento cancelado por seguridad" if st.session_state.language == 'es' else "✅ Processing cancelled for security")
+                            st.info("✅ Procesamiento cancelado por seguridad" if current_language == 'es' else "✅ Processing cancelled for security")
                             process_file = False
                     else:
                         process_file = True
@@ -336,11 +362,11 @@ if st.button(add_button_text):
                     if process_file:
                         try:
                             # State 1: Iniciando proceso
-                            st.info("🔄 Iniciando proceso..." if st.session_state.language == 'es' else "🔄 Starting process...")
+                            st.info("🔄 Iniciando proceso..." if current_language == 'es' else "🔄 Starting process...")
                             time.sleep(0.5)
 
                             # State 2: Archivo seguro
-                            st.success("✅ Archivo seguro..." if st.session_state.language == 'es' else "✅ File secure...")
+                            st.success("✅ Archivo seguro..." if current_language == 'es' else "✅ File secure...")
                             time.sleep(0.5)
 
                             # Process the file
@@ -353,32 +379,30 @@ if st.button(add_button_text):
                                 if result.get("domain"):
                                     domain_info = f" (Dominio: {result.get('domain')})"
                                 elif result.get("collection"):
-                                    # Collection name is already available, no need for additional lookup
                                     domain_info = f" (Colección: {result.get('collection')})"
 
                                 logger.info(f"File processed successfully: {uploaded_file.name}{domain_info}")
-                                st.success(f"✅ {success_message}: {uploaded_file.name}{domain_info}" if st.session_state.language == 'es' else f"✅ {success_message}: {uploaded_file.name}{domain_info}")
-                                # Trigger refresh by updating a session state variable
-                                if 'files_refresh_trigger' not in st.session_state:
-                                    st.session_state.files_refresh_trigger = 0
-                                st.session_state.files_refresh_trigger += 1
+                                current_language = get_session_state_value('language', 'es')
+                                st.success(f"✅ {success_message}: {uploaded_file.name}{domain_info}" if current_language == 'es' else f"✅ {success_message}: {uploaded_file.name}{domain_info}")
+                                # Trigger refresh by bumping nonce
+                                current_nonce = get_session_state_value('files_refresh_nonce', 0)
+                                set_session_state_value('files_refresh_nonce', current_nonce + 1)
                             else:
                                 error_msg = result.get("error", "Error desconocido") if result else "Sin resultado"
                                 logger.error(f"File processing failed: {uploaded_file.name} - {error_msg}")
-                                st.error(f"❌ {error_message}: {error_msg}" if st.session_state.language == 'es' else f"❌ {error_message}: {error_msg}")
+                                st.error(f"❌ {error_message}: {error_msg}" if current_language == 'es' else f"❌ {error_message}: {error_msg}")
 
                         except Exception as e:
                                 error_details = str(e)
                                 if "Connection" in error_details or "timeout" in error_details.lower():
-                                    st.error(f"❌ {error_message}: Error de conexión. Verifica la configuración de la base de datos." if st.session_state.language == 'es' else f"❌ {error_message}: Connection error. Please check database configuration.")
+                                    st.error(f"❌ {error_message}: Error de conexión. Verifica la configuración de la base de datos." if current_language == 'es' else f"❌ {error_message}: Connection error. Please check database configuration.")
                                 elif "Permission" in error_details or "access" in error_details.lower():
-                                    st.error(f"❌ {error_message}: Error de permisos. Verifica los permisos de escritura en la base de datos." if st.session_state.language == 'es' else f"❌ {error_message}: Permission error. Please check database write permissions.")
+                                    st.error(f"❌ {error_message}: Error de permisos. Verifica los permisos de escritura en la base de datos." if current_language == 'es' else f"❌ {error_message}: Permission error. Please check database write permissions.")
                                 elif "Memory" in error_details or "out of memory" in error_details.lower():
-                                    st.error(f"❌ {error_message}: Error de memoria. El archivo podría ser demasiado grande." if st.session_state.language == 'es' else f"❌ {error_message}: Memory error. The file might be too large.")
+                                    st.error(f"❌ {error_message}: Error de memoria. El archivo podría ser demasiado grande." if current_language == 'es' else f"❌ {error_message}: Memory error. The file might be too large.")
                                 else:
-                                    st.error(f"❌ {error_message}: {error_details}" if st.session_state.language == 'es' else f"❌ {error_message}: {error_details}")
-                                # Only show stack trace in development/debug mode
-                                if show_checkbox("Mostrar detalles técnicos" if st.session_state.language == 'es' else "Show technical details", key="show_error_details"):
+                                    st.error(f"❌ {error_message}: {error_details}" if current_language == 'es' else f"❌ {error_message}: {error_details}")
+                                if show_checkbox("Mostrar detalles técnicos" if current_language == 'es' else "Show technical details", key="show_error_details"):
                                     show_code(f"Error: {type(e).__name__}: {error_details}", language="text")
             else:
                 st.error(f"❌ {validation_message}")
@@ -387,60 +411,117 @@ if st.button(add_button_text):
     else:
         st.warning(f"⚠️ {upload_first_message}")
 
-# Display current files in database
+# -------------------------------
+# NUEVO: Listado real desde Chroma
+# -------------------------------
 markdown_html(f'<h3 class="files-title">{files_table_title}</h3>')
+
+def _collect_files_from_chroma(max_per_collection: int = 2000):
+    rows = []
+    try:
+        cols = CHROMA_CLIENT.list_collections()
+    except Exception as e:
+        st.error(f"Error listando colecciones: {e}")
+        return rows
+
+    for c in cols:
+        try:
+            col = CHROMA_CLIENT.get_or_create_collection(c.name)
+            # Preferir traer solo metadatos para no cargar documentos completos
+            try:
+                res = col.get(include=["metadatas"], limit=max_per_collection)  # type: ignore
+            except Exception:
+                res = col.get(limit=max_per_collection)
+        except Exception as e2:
+            st.warning(f"No se pudo leer la colección '{c.name}': {e2}")
+            continue
+
+        metadatas = (res or {}).get("metadatas", []) or []
+        ids = (res or {}).get("ids", []) or []
+
+        for i, meta in enumerate(metadatas):
+            if isinstance(meta, dict):
+                rows.append({
+                    "collection": c.name,
+                    "uploaded_file_name": meta.get("uploaded_file_name"),
+                    "file_hash": meta.get("file_hash"),
+                    "domain": meta.get("domain"),
+                    "size_bytes": meta.get("file_size"),
+                    "id": ids[i] if i < len(ids) else None,
+                })
+    return rows
+
+@st.cache_data(ttl=15)
+def _get_files_df(_nonce: int = 0):
+    data = _collect_files_from_chroma()
+    if not data:
+        return pd.DataFrame(columns=["collection","uploaded_file_name","file_hash","domain","size_bytes","id"])
+    df = pd.DataFrame(data)
+    # Quitar filas sin nombre de archivo (p.ej. embeddings internos)
+    df = df[df["uploaded_file_name"].notna()]
+    # Deduplicar por (collection, file_hash) si hay hash
+    if "file_hash" in df.columns:
+        df = df.sort_values(["collection","uploaded_file_name"]).drop_duplicates(["collection","file_hash"], keep="last")
+    return df
+
+# Barra de acciones de listado
+topA, topB = st.columns([1,3])
+with topA:
+    if st.button("🔄 Actualizar", type="secondary"):
+        # Forzar recarga inmediata invalidando cache y moviendo el nonce
+        _get_files_df.clear()
+        current_nonce = get_session_state_value('files_refresh_nonce', 0)
+        set_session_state_value('files_refresh_nonce', current_nonce + 1)
+with topB:
+    st.caption("Lista de archivos detectados en todas las colecciones de Chroma.")
+
+# Nonce para invalidar cache tras ingesta/eliminación
+nonce = get_session_state_value('files_refresh_nonce', 0)
+files_df = _get_files_df(nonce)
 
 if INGEST_AVAILABLE:
     try:
-        # Get files from database
-        files_df = get_unique_sources_df(CHROMA_SETTINGS)
-
         if not files_df.empty:
-            # Filters section
-            st.subheader("🔍 Filtros de búsqueda" if st.session_state.language == 'es' else "🔍 Search filters")
+            # Filtros de búsqueda
+            st.subheader("🔍 Filtros de búsqueda" if current_language == 'es' else "🔍 Search filters")
 
             col1, col2 = st.columns(2)
 
             with col1:
-                # Domain filter
-                available_domains = sorted(files_df['domain'].unique().tolist())
-                domain_options = ['Todos los dominios'] + available_domains if st.session_state.language == 'es' else ['All domains'] + available_domains
-
+                # Dominio
+                available_domains = sorted(files_df['domain'].dropna().unique().tolist())
+                domain_options = (['Todos los dominios'] if current_language == 'es' else ['All domains']) + available_domains
                 selected_domain = st.selectbox(
-                    "Dominio:" if st.session_state.language == 'es' else "Domain:",
+                    "Dominio:" if current_language == 'es' else "Domain:",
                     options=domain_options,
                     index=0,
                     key="domain_filter"
                 )
 
             with col2:
-                # Collection filter
-                available_collections = sorted(files_df['collection'].unique().tolist())
-                collection_options = ['Todas las colecciones'] + available_collections if st.session_state.language == 'es' else ['All collections'] + available_collections
-
+                # Colección
+                available_collections = sorted(files_df['collection'].dropna().unique().tolist())
+                collection_options = (['Todas las colecciones'] if current_language == 'es' else ['All collections']) + available_collections
                 selected_collection = st.selectbox(
-                    "Colección:" if st.session_state.language == 'es' else "Collection:",
+                    "Colección:" if current_language == 'es' else "Collection:",
                     options=collection_options,
                     index=0,
                     key="collection_filter"
                 )
 
-            # Apply filters using a more maintainable approach
             def apply_filter(df, filter_value, filter_column, all_values_text):
-                """Apply a single filter to the dataframe"""
                 if filter_value != all_values_text:
                     return df[df[filter_column] == filter_value]
                 return df
 
-            # Apply filters
-            all_domains_text = 'Todos los dominios' if st.session_state.language == 'es' else 'All domains'
-            all_collections_text = 'Todas las colecciones' if st.session_state.language == 'es' else 'All collections'
+            all_domains_text = 'Todos los dominios' if current_language == 'es' else 'All domains'
+            all_collections_text = 'Todas las colecciones' if current_language == 'es' else 'All collections'
 
             filtered_df = files_df.copy()
             filtered_df = apply_filter(filtered_df, selected_domain, 'domain', all_domains_text)
             filtered_df = apply_filter(filtered_df, selected_collection, 'collection', all_collections_text)
 
-            # Show filter status
+            # Estado de filtros
             active_filters = []
             if selected_domain != all_domains_text:
                 active_filters.append(f"dominio '{selected_domain}'")
@@ -448,151 +529,133 @@ if INGEST_AVAILABLE:
                 active_filters.append(f"colección '{selected_collection}'")
 
             if active_filters:
-                filter_text = " y ".join(active_filters) if st.session_state.language == 'es' else " and ".join(active_filters)
-                st.info(f"📊 Mostrando {len(filtered_df)} archivos de {filter_text}" if st.session_state.language == 'es' else f"📊 Showing {len(filtered_df)} files from {filter_text}")
+                filter_text = " y ".join(active_filters) if current_language == 'es' else " and ".join(active_filters)
+                st.info(f"📊 Mostrando {len(filtered_df)} archivos de {filter_text}" if current_language == 'es' else f"📊 Showing {len(filtered_df)} files from {filter_text}")
             else:
-                st.info(f"📊 Mostrando todos los {len(filtered_df)} archivos" if st.session_state.language == 'es' else f"📊 Showing all {len(filtered_df)} files")
+                st.info(f"📊 Mostrando todos los {len(filtered_df)} archivos" if current_language == 'es' else f"📊 Showing all {len(filtered_df)} files")
 
-            # Display statistics
-            if (selected_domain == ('Todos los dominios' if st.session_state.language == 'es' else 'All domains') and
-                selected_collection == ('Todas las colecciones' if st.session_state.language == 'es' else 'All collections')):
-
-                st.subheader("📈 Estadísticas por dominio y colección" if st.session_state.language == 'es' else "📈 Domain and collection statistics")
+            # Estadísticas (solo cuando no hay filtros activos)
+            if (selected_domain == all_domains_text and selected_collection == all_collections_text):
+                st.subheader("📈 Estadísticas por dominio y colección" if current_language == 'es' else "📈 Domain and collection statistics")
 
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    st.markdown("**Por Dominio:**" if st.session_state.language == 'es' else "**By Domain:**")
-                    # Create domain statistics dataframe
-                    domain_stats = files_df.groupby('domain').size().reset_index(name='count')
-                    domain_stats.columns = ['Dominio', 'Archivos'] if st.session_state.language == 'es' else ['Domain', 'Files']
-                    domain_stats = domain_stats.sort_values('Archivos', ascending=False)
-
-                    # Display domain statistics
+                    st.markdown("**Por Dominio:**" if current_language == 'es' else "**By Domain:**")
+                    domain_stats = files_df.groupby('domain', dropna=True).size().reset_index(name='count')
+                    domain_stats.columns = ['Dominio', 'Archivos'] if current_language == 'es' else ['Domain', 'Files']
+                    domain_stats = domain_stats.sort_values(domain_stats.columns[-1], ascending=False)
                     for _, row in domain_stats.iterrows():
                         show_metric(
-                            label=row['Dominio'] if st.session_state.language == 'es' else row['Domain'],
-                            value=row['Archivos'] if st.session_state.language == 'es' else row['Files']
+                            label=row[0],
+                            value=row[1]
                         )
 
                 with col2:
-                    st.markdown("**Por Colección:**" if st.session_state.language == 'es' else "**By Collection:**")
-                    # Create collection statistics dataframe
-                    collection_stats = files_df.groupby('collection').size().reset_index(name='count')
-                    collection_stats.columns = ['Colección', 'Archivos'] if st.session_state.language == 'es' else ['Collection', 'Files']
-                    collection_stats = collection_stats.sort_values('Archivos', ascending=False)
-
-                    # Display collection statistics
+                    st.markdown("**Por Colección:**" if current_language == 'es' else "**By Collection:**")
+                    collection_stats = files_df.groupby('collection', dropna=True).size().reset_index(name='count')
+                    collection_stats.columns = ['Colección', 'Archivos'] if current_language == 'es' else ['Collection', 'Files']
+                    collection_stats = collection_stats.sort_values(collection_stats.columns[-1], ascending=False)
                     for _, row in collection_stats.iterrows():
                         show_metric(
-                            label=row['Colección'] if st.session_state.language == 'es' else row['Collection'],
-                            value=row['Archivos'] if st.session_state.language == 'es' else row['Files']
+                            label=row[0],
+                            value=row[1]
                         )
 
-            # Search within filtered results
+            # Búsqueda
             search_query = get_text_input(
-                "🔍 Buscar archivos:" if st.session_state.language == 'es' else "🔍 Search files:",
-                placeholder="Escribe para buscar..." if st.session_state.language == 'es' else "Type to search...",
+                "🔍 Buscar archivos:" if current_language == 'es' else "🔍 Search files:",
+                placeholder="Escribe para buscar..." if current_language == 'es' else "Type to search...",
                 key="file_search",
-                help="Busca por nombre de archivo, dominio o colección" if st.session_state.language == 'es' else "Search by filename, domain, or collection"
+                help="Busca por nombre de archivo, dominio o colección" if current_language == 'es' else "Search by filename, domain, or collection"
             )
 
-            # Apply search filter with improved logic
             if search_query and search_query.strip():
-                search_query = search_query.strip()
-                # Use regex for more flexible matching
+                sq = search_query.strip()
                 import re
-                search_pattern = re.compile(re.escape(search_query), re.IGNORECASE)
-
+                pat = re.compile(re.escape(sq), re.IGNORECASE)
                 search_df = filtered_df[
-                    filtered_df['uploaded_file_name'].astype(str).str.contains(search_pattern, na=False, regex=True) |
-                    filtered_df['domain'].astype(str).str.contains(search_pattern, na=False, regex=True) |
-                    filtered_df['collection'].astype(str).str.contains(search_pattern, na=False, regex=True)
+                    filtered_df['uploaded_file_name'].astype(str).str.contains(pat, na=False, regex=True) |
+                    filtered_df['domain'].astype(str).str.contains(pat, na=False, regex=True) |
+                    filtered_df['collection'].astype(str).str.contains(pat, na=False, regex=True)
                 ].copy()
-
                 if len(search_df) == 0:
-                    st.warning(f"⚠️ No se encontraron archivos que coincidan con '{search_query}'" if st.session_state.language == 'es' else f"⚠️ No files found matching '{search_query}'")
+                    st.warning(f"⚠️ No se encontraron archivos que coincidan con '{sq}'" if current_language == 'es' else f"⚠️ No files found matching '{sq}'")
                 else:
-                    st.info(f"🔍 Encontrados {len(search_df)} archivos que coinciden con '{search_query}'" if st.session_state.language == 'es' else f"🔍 Found {len(search_df)} files matching '{search_query}'")
+                    st.info(f"🔍 Encontrados {len(search_df)} archivos que coinciden con '{sq}'" if current_language == 'es' else f"🔍 Found {len(search_df)} files matching '{sq}'")
             else:
                 search_df = filtered_df.copy()
 
-            # Display files table with performance optimizations
+            # Tabla
             display_df = search_df[['uploaded_file_name', 'domain', 'collection']].copy()
-            display_df.columns = ['Archivo', 'Dominio', 'Colección'] if st.session_state.language == 'es' else ['File', 'Domain', 'Collection']
+            display_df.columns = ['Archivo', 'Dominio', 'Colección'] if current_language == 'es' else ['File', 'Domain', 'Collection']
 
-            # Add pagination for large datasets
             if len(display_df) > 50:
-                st.info(f"📊 Mostrando {len(display_df)} archivos. Considera usar los filtros para reducir el número de resultados." if st.session_state.language == 'es' else f"📊 Showing {len(display_df)} files. Consider using filters to reduce the number of results.")
+                st.info(f"📊 Mostrando {len(display_df)} archivos. Considera usar los filtros para reducir el número de resultados." if current_language == 'es' else f"📊 Showing {len(display_df)} files. Consider using filters to reduce the number of results.")
 
-            # Use pagination for better performance
             page_size = 25
             total_pages = (len(display_df) + page_size - 1) // page_size
 
             if total_pages > 1:
                 page_number = st.selectbox(
-                    "Página:" if st.session_state.language == 'es' else "Page:",
+                    "Página:" if current_language == 'es' else "Page:",
                     options=list(range(1, total_pages + 1)),
                     index=0,
                     key="files_page"
                 )
-
                 start_idx = (page_number - 1) * page_size
                 end_idx = min(start_idx + page_size, len(display_df))
                 display_page_df = display_df.iloc[start_idx:end_idx].copy()
-
-                st.dataframe(display_page_df, width='stretch')
-                show_caption(f"Mostrando {start_idx + 1}-{end_idx} de {len(display_df)} archivos" if st.session_state.language == 'es' else f"Showing {start_idx + 1}-{end_idx} of {len(display_df)} files")
+                st.dataframe(display_page_df, use_container_width=True, hide_index=True)
+                show_caption(f"Mostrando {start_idx + 1}-{end_idx} de {len(display_df)} archivos" if current_language == 'es' else f"Showing {start_idx + 1}-{end_idx} of {len(display_df)} files")
             else:
-                st.dataframe(display_df, width='stretch')
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-            # Delete file functionality
-            st.subheader("🗑️ Eliminar archivo" if st.session_state.language == 'es' else "🗑️ Delete file")
+            # Eliminar archivo
+            st.subheader("🗑️ Eliminar archivo" if current_language == 'es' else "🗑️ Delete file")
+            if not filtered_df.empty:
+                file_to_delete = st.selectbox(
+                    "Seleccionar archivo para eliminar:" if current_language == 'es' else "Select file to delete:",
+                    options=sorted(filtered_df['uploaded_file_name'].dropna().unique().tolist()),
+                    key="file_to_delete"
+                )
 
-            file_to_delete = st.selectbox(
-                "Seleccionar archivo para eliminar:" if st.session_state.language == 'es' else "Select file to delete:",
-                options=filtered_df['uploaded_file_name'].tolist(),
-                key="file_to_delete"
-            )
+                if file_to_delete:
+                    st.warning(f"⚠️ **Atención:** Se eliminará permanentemente el archivo '{file_to_delete}' de la base de datos." if current_language == 'es' else f"⚠️ **Warning:** The file '{file_to_delete}' will be permanently deleted from the database.")
 
-            # Add confirmation dialog for file deletion
-            if file_to_delete:
-                st.warning(f"⚠️ **Atención:** Se eliminará permanentemente el archivo '{file_to_delete}' de la base de datos." if st.session_state.language == 'es' else f"⚠️ **Warning:** The file '{file_to_delete}' will be permanently deleted from the database.")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        confirm_delete = st.button(
+                            "✅ Confirmar eliminación" if current_language == 'es' else "✅ Confirm deletion",
+                            type="primary",
+                            help="Eliminar permanentemente el archivo" if current_language == 'es' else "Permanently delete the file"
+                        )
+                    with col2:
+                        cancel_delete = st.button(
+                            "❌ Cancelar" if current_language == 'es' else "❌ Cancel",
+                            type="secondary",
+                            help="Cancelar la eliminación" if current_language == 'es' else "Cancel deletion"
+                        )
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    confirm_delete = st.button(
-                        "✅ Confirmar eliminación" if st.session_state.language == 'es' else "✅ Confirm deletion",
-                        type="primary",
-                        help="Eliminar permanentemente el archivo" if st.session_state.language == 'es' else "Permanently delete the file"
-                    )
-                with col2:
-                    cancel_delete = st.button(
-                        "❌ Cancelar" if st.session_state.language == 'es' else "❌ Cancel",
-                        type="secondary",
-                        help="Cancelar la eliminación" if st.session_state.language == 'es' else "Cancel deletion"
-                    )
+                    if confirm_delete:
+                        with st.spinner("Eliminando archivo..." if current_language == 'es' else "Deleting file..."):
+                            try:
+                                success = delete_file_from_vectordb(file_to_delete)
+                                if success:
+                                    st.success(f"✅ Archivo eliminado exitosamente: {file_to_delete}" if current_language == 'es' else f"✅ File successfully deleted: {file_to_delete}")
+                                    # Forzar refresco
+                                    _get_files_df.clear()
+                                    current_nonce = get_session_state_value('files_refresh_nonce', 0)
+                                    set_session_state_value('files_refresh_nonce', current_nonce + 1)
+                                else:
+                                    st.error(f"❌ No se pudo eliminar el archivo: {file_to_delete}" if current_language == 'es' else f"❌ Could not delete file: {file_to_delete}")
+                            except Exception as e:
+                                st.error(f"❌ Error al eliminar archivo: {str(e)}" if current_language == 'es' else f"❌ Error deleting file: {str(e)}")
 
-                if confirm_delete:
-                    with st.spinner("Eliminando archivo..." if st.session_state.language == 'es' else "Deleting file..."):
-                        try:
-                            success = delete_file_from_vectordb(file_to_delete)
-                            if success:
-                                st.success(f"✅ Archivo eliminado exitosamente: {file_to_delete}" if st.session_state.language == 'es' else f"✅ File successfully deleted: {file_to_delete}")
-                                # Trigger refresh by updating a session state variable
-                                if 'files_refresh_trigger' not in st.session_state:
-                                    st.session_state.files_refresh_trigger = 0
-                                st.session_state.files_refresh_trigger += 1
-                            else:
-                                st.error(f"❌ No se pudo eliminar el archivo: {file_to_delete}" if st.session_state.language == 'es' else f"❌ Could not delete file: {file_to_delete}")
-                        except Exception as e:
-                            st.error(f"❌ Error al eliminar archivo: {str(e)}" if st.session_state.language == 'es' else f"❌ Error deleting file: {str(e)}")
-
-                if cancel_delete:
-                    st.info("✅ Eliminación cancelada" if st.session_state.language == 'es' else "✅ Deletion cancelled")
+                    if cancel_delete:
+                        st.info("✅ Eliminación cancelada" if current_language == 'es' else "✅ Deletion cancelled")
         else:
             st.info(f"📂 {no_files_message}")
-
     except Exception as e:
         st.error(f"❌ Error al obtener archivos: {str(e)}")
         st.info(f"📂 {no_files_message}")
