@@ -1,4 +1,7 @@
-import os, sys, types
+import logging
+import os
+import sys
+import types
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,16 +18,83 @@ _stub.identify = _noop # type: ignore[attr-defined]
 sys.modules.setdefault("analytics", _stub)
 sys.modules.setdefault("posthog", _stub)
 
-# ChromaDB (local, sin server HTTP)
+logger = logging.getLogger(__name__)
+
+# ChromaDB client selection (local persistent by default, HTTP when configured)
 try:
     import chromadb
 except ImportError:
     CHROMA_CLIENT = None
+    CHROMA_DIR = None
 else:
-    CHROMA_DIR = Path(__file__).resolve().parents[2] / "data" / "chroma"
-    CHROMA_DIR.mkdir(parents=True, exist_ok=True)
-    # 0.5.x: usar PersistentClient con path; no pasar Settings aquí
-    CHROMA_CLIENT = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    def _is_truthy(value: str | None) -> bool:
+        if value is None:
+            return False
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+
+    def _resolve_persist_dir(path_value: str | None) -> Path:
+        base_dir = Path(__file__).resolve().parents[2]
+        if not path_value:
+            resolved = base_dir / "data" / "chroma"
+        else:
+            candidate = Path(path_value)
+            resolved = candidate if candidate.is_absolute() else (base_dir / candidate).resolve()
+        resolved.mkdir(parents=True, exist_ok=True)
+        return resolved
+
+    def _build_http_client() -> object | None:
+        host = os.environ.get("CHROMA_HOST")
+        url = os.environ.get("CHROMA_HTTP_URL") or os.environ.get("CHROMA_SERVER_URL")
+        port_value = os.environ.get("CHROMA_PORT")
+        ssl_value = os.environ.get("CHROMA_SSL") or os.environ.get("CHROMA_USE_SSL")
+
+        if url and not host:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(url)
+            host = parsed.hostname or host
+            if parsed.port and not port_value:
+                port_value = str(parsed.port)
+            if parsed.scheme and not ssl_value:
+                ssl_value = "true" if parsed.scheme.lower() == "https" else "false"
+
+        if not host:
+            return None
+
+        try:
+            port = int(port_value) if port_value else 8000
+        except ValueError:
+            port = 8000
+
+        ssl_enabled = _is_truthy(ssl_value)
+        headers: dict[str, str] = {}
+        auth_token = os.environ.get("CHROMA_HTTP_AUTH_TOKEN") or os.environ.get("CHROMA_AUTH_TOKEN")
+        if auth_token:
+            headers["Authorization"] = f"Bearer {auth_token}"
+
+        client_kwargs: dict[str, object] = {
+            "host": host,
+            "port": port,
+            "ssl": ssl_enabled,
+        }
+        if headers:
+            client_kwargs["headers"] = headers
+
+        return chromadb.HttpClient(**client_kwargs)
+
+    client = None
+    try:
+        client = _build_http_client()
+    except Exception as exc:
+        logger.warning("Falling back to local Chroma client: %s", exc)
+        client = None
+
+    if client is not None:
+        CHROMA_CLIENT = client
+        CHROMA_DIR = None
+    else:
+        CHROMA_DIR = _resolve_persist_dir(os.environ.get("CHROMA_PERSIST_DIR"))
+        CHROMA_CLIENT = chromadb.PersistentClient(path=str(CHROMA_DIR))
 
 # ChromaDB Collections with domain information
 
@@ -126,3 +196,4 @@ SUCCESS_MESSAGES = {
 CHROMA_SETTINGS = CHROMA_CLIENT  # alias temporal para módulos antiguos
 def get_chroma_client():
     return CHROMA_CLIENT
+
