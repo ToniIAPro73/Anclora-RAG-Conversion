@@ -5,6 +5,7 @@ Cliente Python para que agentes IA accedan al sistema Anclora RAG
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import json
 
 import requests
 
@@ -54,6 +55,19 @@ class AncloraRAGClient:
             self.set_auth_token(api_key, auth_scheme=self.auth_scheme)
 
         self._conversion_advisor = ConversionAdvisor()
+
+    def close(self) -> None:
+        """Cerrar la sesión HTTP para liberar recursos."""
+        if hasattr(self, 'session'):
+            self.session.close()
+
+    def __enter__(self):
+        """Soporte para context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Cerrar sesión al salir del context manager."""
+        self.close()
 
     @staticmethod
     def _normalize_languages(languages: Optional[List[str]]) -> Optional[List[str]]:
@@ -127,9 +141,18 @@ class AncloraRAGClient:
             raise ValueError("No se ha configurado un token de autenticación válido.")
 
     @staticmethod
-    def _ensure_utf8(response: requests.Response) -> None:
-        if not response.encoding:
-            response.encoding = response.apparent_encoding or 'utf-8'
+    def _safe_json_loads(response: requests.Response) -> Dict[str, Any]:
+        """
+        Safely parse JSON response with proper encoding handling.
+
+        Args:
+            response: The HTTP response object
+
+        Returns:
+            Parsed JSON data as dictionary
+        """
+        # Use response.text which handles encoding automatically and properly
+        return response.json()
 
     def _add_language_to_payload(self, payload: Dict[str, Any], language: Optional[str]) -> None:
         selected_language = language or self.language
@@ -146,8 +169,11 @@ class AncloraRAGClient:
         try:
             response = self.session.get(f"{self.base_url}/health")
             response.raise_for_status()
-            self._ensure_utf8(response)
-            return response.json()
+            return self._safe_json_loads(response)
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response else "unknown"
+            self.logger.error(f"Error HTTP en health check ({status_code}): {e}")
+            return {"status": "error", "message": f"HTTP {status_code}: {str(e)}"}
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error en health check: {e}")
             return {"status": "error", "message": str(e)}
@@ -160,16 +186,20 @@ class AncloraRAGClient:
     ) -> Dict[str, Any]:
         """
         Realizar consulta al sistema RAG
-        
+
         Args:
             message (str): Pregunta o consulta
-            max_length (int): Longitud máxima del mensaje
+            max_length (int): Longitud máxima del mensaje (debe ser > 0)
             language (Optional[str]): Idioma a utilizar en la consulta
 
         Returns:
             Dict con la respuesta del RAG
         """
         try:
+            # Input validation
+            if not isinstance(max_length, int) or max_length <= 0:
+                raise ValueError("max_length debe ser un entero positivo")
+
             self._ensure_authenticated()
 
             payload = {
@@ -181,32 +211,38 @@ class AncloraRAGClient:
             response = self.session.post(f"{self.base_url}/chat", json=payload)
             response.raise_for_status()
 
-            self._ensure_utf8(response)
-            result = response.json()
+            result = self._safe_json_loads(response)
             self.logger.info(f"Consulta exitosa: {message[:50]}...")
             return result
-            
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response else "unknown"
+            self.logger.error(f"Error HTTP en consulta ({status_code}): {e}")
+            return {"status": "error", "message": f"HTTP {status_code}: {str(e)}"}
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error en consulta: {e}")
+            return {"status": "error", "message": str(e)}
+        except ValueError as e:
+            self.logger.error(f"Error de validación: {e}")
             return {"status": "error", "message": str(e)}
     
     def upload_document(self, file_path: str) -> Dict[str, Any]:
         """
         Subir documento al sistema RAG
-        
+
         Args:
             file_path (str): Ruta al archivo a subir
-            
+
         Returns:
             Dict con resultado de la operación
         """
         try:
-            file_path = Path(file_path)
-            if not file_path.exists():
+            file_path_obj = Path(file_path)
+            if not file_path_obj.exists():
                 return {"status": "error", "message": "Archivo no encontrado"}
 
-            with open(file_path, 'rb') as f:
-                files = {'file': (file_path.name, f, 'application/octet-stream')}
+            with open(file_path_obj, 'rb') as f:
+                files = {'file': (file_path_obj.name, f, 'application/octet-stream')}
                 # Remover Content-Type header para multipart
                 self._ensure_authenticated()
                 auth_header = self.session.headers.get('Authorization')
@@ -219,11 +255,14 @@ class AncloraRAGClient:
                 )
                 response.raise_for_status()
 
-            self._ensure_utf8(response)
-            result = response.json()
-            self.logger.info(f"Documento subido: {file_path.name}")
+            result = self._safe_json_loads(response)
+            self.logger.info(f"Documento subido: {file_path_obj.name}")
             return result
-            
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response else "unknown"
+            self.logger.error(f"Error HTTP al subir documento ({status_code}): {e}")
+            return {"status": "error", "message": f"HTTP {status_code}: {str(e)}"}
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error al subir documento: {e}")
             return {"status": "error", "message": str(e)}
@@ -239,9 +278,12 @@ class AncloraRAGClient:
             self._ensure_authenticated()
             response = self.session.get(f"{self.base_url}/documents")
             response.raise_for_status()
-            self._ensure_utf8(response)
-            return response.json()
-            
+            return self._safe_json_loads(response)
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response else "unknown"
+            self.logger.error(f"Error HTTP al listar documentos ({status_code}): {e}")
+            return {"status": "error", "message": f"HTTP {status_code}: {str(e)}"}
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error al listar documentos: {e}")
             return {"status": "error", "message": str(e)}
@@ -261,11 +303,14 @@ class AncloraRAGClient:
             response = self.session.delete(f"{self.base_url}/documents/{filename}")
             response.raise_for_status()
 
-            self._ensure_utf8(response)
-            result = response.json()
+            result = self._safe_json_loads(response)
             self.logger.info(f"Documento eliminado: {filename}")
             return result
-            
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response else "unknown"
+            self.logger.error(f"Error HTTP al eliminar documento ({status_code}): {e}")
+            return {"status": "error", "message": f"HTTP {status_code}: {str(e)}"}
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error al eliminar documento: {e}")
             return {"status": "error", "message": str(e)}
