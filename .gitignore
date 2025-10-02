@@ -24,3 +24,6 @@ volumes/
 *.temp
 .DS_Store
 Thumbs.db
+
+# Captura PNG files
+Captura*.png
