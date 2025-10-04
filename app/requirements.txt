@@ -41,3 +41,4 @@ nltk>=3.8
 unstructured>=0.10.0
 GitPython>=3.1.40
 fnmatch2>=0.0.8
+markdown
