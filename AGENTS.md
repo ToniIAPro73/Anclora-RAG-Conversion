@@ -1,38 +1,33 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `app/` hosts the Streamlit UI (`Inicio.py`), FastAPI API (`api_endpoints.py`), and domain packages (`rag_core`, `ingestion`, `agents`, etc.).
-- `config/` centralizes embeddings and environment presets; mirror changes in `.env` or Compose files.
-- `tests/` mirrors production boundaries (api, client, converter, regression, etc.); fixtures live in `tests/fixtures/`.
-- `scripts/` contains evaluation utilities (`evaluate_responses.py`, `eval_embeddings.py`) plus setup/testing helpers.
-- `docker/` and top-level Compose files describe the Ollama, Chroma, UI, and API stack; use `docs/` for extended architecture notes.
+- `app/` hosts the Streamlit UI (`Inicio.py`), FastAPI API (`api_endpoints.py`), and shared domains such as `rag_core`, `ingestion`, and `agents`.
+- `config/` centralizes embedding presets and environment defaults; mirror updates in `.env` and Docker Compose files.
+- `tests/` tracks production boundaries (api, client, converter, regression) with fixtures under `tests/fixtures/`.
+- `scripts/` aggregates evaluation utilities (`evaluate_responses.py`, `eval_embeddings.py`) plus setup helpers; `docs/` captures architecture notes; `docker/` and top-level Compose files define the Ollama, Chroma, UI, and API services.
 
 ## Build, Test & Development Commands
-```bash
-make test              # full pytest suite
-make test-converter    # focused converter checks
-make eval              # BLEU/ROUGE evaluation on sample datasets
-make regression-agents # latency/quality regression harness
-docker compose up -d   # start UI, API, Chroma, Ollama stack
-```
-Use `open_rag.sh` or `open_rag.bat` for scripted startups; update the project path before running.
+- `make test`  Run the complete pytest suite enforced by CI.
+- `make test-converter`  Exercise converter-specific checks before shipping ingestion updates.
+- `make eval`  Compute BLEU/ROUGE over sample datasets after tuning prompts or embeddings.
+- `make regression-agents`  Validate latency and quality for agent flows.
+- `docker compose up -d`  Launch UI, API, Chroma, and Ollama locally; pair with `open_rag.sh` (or `.bat`) after adjusting paths.
 
 ## Coding Style & Naming Conventions
-- Target Python 3.11, 4-space indentation, and type hints where practical; keep modules snake_case and classes PascalCase.
-- Align with PEP 8; run `pyright` (basic mode) to keep types clean and respect `app/stubs` for missing SDKs.
-- Prefer dependency-free helpers in `app/common/`; reuse `app/components/` widgets before adding new UI code.
+- Target Python 3.11 with 4-space indentation, PEP 8 compliance, and practical type hints; consult `app/stubs/` for missing SDKs.
+- Keep modules `snake_case`, classes `PascalCase`, and reuse helpers in `app/common/` or widgets in `app/components/` before authoring new utilities.
+- Run `pyright` in basic mode pre-commit to catch typing drift.
 
 ## Testing Guidelines
-- Write pytest files under `tests/<domain>/test_*.py`; co-locate fixtures in `tests/fixtures/`.
-- Mark long-running flows with `@pytest.mark.slow`; default CI calls `make test`, so guard external calls with mocks.
-- For embedding or agent regressions, extend the datasets in `tests/fixtures/sample_responses_*.json` and rerun `make eval`.
+- Add pytest modules under `tests/<domain>/test_*.py`; co-locate data builders in `tests/fixtures/`.
+- Guard external services with mocks, and flag long-running flows using `@pytest.mark.slow`.
+- Execute `make test` (or targeted `pytest tests/<domain>`) before raising a PR.
 
 ## Commit & Pull Request Guidelines
-- Follow the existing log: short, imperative subjects (English or Spanish) without trailing punctuation (e.g., `Fix missing imports in chroma utils`).
-- Reference relevant issues in the description and note configuration updates (`.env`, Compose) explicitly.
-- PRs should describe the test surface (`make test`, targeted pytest markers) and include screenshots for UI-facing changes.
-- Request review from an agent familiar with the touched area (`app/pages`, `tests/agents`, etc.) and wait for green status checks before merging.
+- Compose short, imperative commit subjects without trailing punctuation; reference relevant issues and call out configuration changes.
+- PRs should summarize the affected area, list executed commands (e.g., `make test`), and include screenshots for UI deltas.
+- Request review from domain owners (`app/pages`, `tests/agents`, etc.) and wait for passing checks prior to merge.
 
-## Configuration Tips
-- Copy `.env.example` to `.env` and adjust service URLs (`CHROMA_HOST`, `EMBEDDINGS_*`) before running locally.
-- After tweaking embeddings or dependency versions, rebuild services with `docker compose build --no-cache ui api`.
+## Configuration & Environment Tips
+- Copy `.env.example` to `.env`, then set `CHROMA_HOST`, `EMBEDDINGS_*`, and other integration secrets before running locally.
+- After modifying embedding providers or dependencies, rebuild with `docker compose build --no-cache ui api` to refresh images.

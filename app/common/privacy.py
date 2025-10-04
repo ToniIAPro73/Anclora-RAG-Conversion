@@ -6,6 +6,7 @@ import logging
 import re
 import tempfile
 import uuid
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +15,9 @@ from typing import Any, Iterable, Mapping, Sequence
 from .constants import CHROMA_COLLECTIONS, CHROMA_SETTINGS
 
 logger = logging.getLogger(__name__)
+
+
+_CHROMA_DELETE_BATCH_SIZE = 5000
 
 
 ANONYMIZED_VALUE = "***REDACTED***"
@@ -285,7 +289,7 @@ class PrivacyManager:
         if not filename or not filename.strip():
             raise ValueError("filename must be a non-empty string")
 
-        filename = filename.strip()
+        filename = self._normalize_filename(filename) or filename
         audit_id = uuid.uuid4().hex
 
         deleted_collections = self._delete_from_collections(filename)
@@ -330,9 +334,29 @@ class PrivacyManager:
             metadata=metadata,
         )
 
+    @staticmethod
+    def _normalize_filename(value: str | None) -> str | None:
+        if not value:
+            return None
+        return unicodedata.normalize("NFC", str(value)).strip()
+
     # Internal helpers -------------------------------------------------
+
     def _delete_from_collections(self, filename: str) -> list[str]:
         affected: list[str] = []
+        normalized_target = self._normalize_filename(filename)
+        candidate_values = {filename}
+        if normalized_target:
+            candidate_values.add(normalized_target)
+        basename = Path(filename).name if filename else ""
+        if basename:
+            candidate_values.add(basename)
+            normalized_basename = self._normalize_filename(basename)
+            if normalized_basename:
+                candidate_values.add(normalized_basename)
+
+        candidates = [value for value in candidate_values if value]
+
         for collection_name in self._collections:
             try:
                 collection = self._chroma_client.get_or_create_collection(collection_name)
@@ -340,17 +364,56 @@ class PrivacyManager:
                 logger.error("No se pudo obtener la colección %s: %s", collection_name, exc)
                 continue
 
+            def _delete_ids(ids: Sequence[str]) -> bool:
+                deleted_any = False
+                filtered_ids = [doc_id for doc_id in ids if isinstance(doc_id, str) and doc_id]
+                for start_index in range(0, len(filtered_ids), _CHROMA_DELETE_BATCH_SIZE):
+                    batch = filtered_ids[start_index:start_index + _CHROMA_DELETE_BATCH_SIZE]
+                    if not batch:
+                        continue
+                    try:
+                        collection.delete(ids=list(batch))
+                        deleted_any = True
+                    except Exception as exc:  # pragma: no cover - delete may fail
+                        logger.error(
+                            "No se pudo eliminar %s de la colección %s (lote de %s ids): %s",
+                            filename,
+                            collection_name,
+                            len(batch),
+                            exc,
+                        )
+                        break
+                return deleted_any
+
+            deleted = False
             ids_to_delete = self._find_matching_ids(collection, filename)
-            if not ids_to_delete:
-                continue
+            if ids_to_delete:
+                deleted = _delete_ids(ids_to_delete)
 
-            try:
-                collection.delete(ids=list(ids_to_delete))
-            except Exception as exc:  # pragma: no cover - delete may fail
-                logger.error("No se pudo eliminar %s de la colección %s: %s", filename, collection_name, exc)
-                continue
+            if not deleted:
+                for candidate in candidates:
+                    try:
+                        response = collection.get(where={"uploaded_file_name": candidate})
+                    except Exception:
+                        continue
+                    extra_ids = self._extract_matching_ids(response, candidate)
+                    if extra_ids and _delete_ids(extra_ids):
+                        deleted = True
+                        break
 
-            affected.append(collection_name)
+            if not deleted:
+                for candidate in candidates:
+                    try:
+                        response = collection.get(where={"source": candidate})
+                    except Exception:
+                        continue
+                    extra_ids = self._extract_matching_ids(response, candidate)
+                    if extra_ids and _delete_ids(extra_ids):
+                        deleted = True
+                        break
+
+            if deleted:
+                affected.append(collection_name)
 
         return affected
 
@@ -391,22 +454,77 @@ class PrivacyManager:
 
     @staticmethod
     def _extract_matching_ids(response: Any, filename: str) -> list[str]:
-        if not isinstance(response, Mapping):
+        def _normalize_entries(entries: Any) -> list[Any]:
+            if entries is None:
+                return []
+            if isinstance(entries, Mapping):
+                return list(entries.values())
+            if isinstance(entries, Sequence) and not isinstance(entries, (str, bytes)):
+                if entries and isinstance(entries[0], Sequence) and not isinstance(entries[0], (str, bytes)):
+                    return list(entries[0])
+                return list(entries)
+            if hasattr(entries, "__iter__") and not isinstance(entries, (str, bytes)):
+                return list(entries)
             return []
 
-        raw_ids = response.get("ids") or []
-        metadatas = response.get("metadatas") or []
+        normalized_target = PrivacyManager._normalize_filename(filename)
+
+        if isinstance(response, Mapping):
+            raw_ids = _normalize_entries(response.get("ids"))
+            metadatas = _normalize_entries(response.get("metadatas"))
+        else:
+            raw_ids = _normalize_entries(getattr(response, "ids", None))
+            metadatas = _normalize_entries(getattr(response, "metadatas", None))
 
         matched: list[str] = []
         for doc_id, metadata in zip(raw_ids, metadatas):
-            if not isinstance(doc_id, str) or not isinstance(metadata, Mapping):
+            if not isinstance(doc_id, str):
                 continue
-            uploaded_name = metadata.get("uploaded_file_name")
-            source = metadata.get("source")
-            if uploaded_name == filename:
+
+            uploaded_name = None
+            source = None
+
+            if isinstance(metadata, Mapping):
+                uploaded_name = metadata.get("uploaded_file_name")
+                source = metadata.get("source")
+            else:
+                uploaded_name = getattr(metadata, "uploaded_file_name", None)
+                source = getattr(metadata, "source", None)
+
+                if (uploaded_name is None or source is None) and hasattr(metadata, "dict"):
+                    try:
+                        meta_dict = metadata.dict()
+                    except Exception:
+                        meta_dict = None
+                    if isinstance(meta_dict, Mapping):
+                        uploaded_name = meta_dict.get("uploaded_file_name", uploaded_name)
+                        source = meta_dict.get("source", source)
+
+                if (uploaded_name is None or source is None) and hasattr(metadata, "to_dict"):
+                    try:
+                        meta_dict = metadata.to_dict()
+                    except Exception:
+                        meta_dict = None
+                    if isinstance(meta_dict, Mapping):
+                        uploaded_name = meta_dict.get("uploaded_file_name", uploaded_name)
+                        source = meta_dict.get("source", source)
+
+            normalized_uploaded = PrivacyManager._normalize_filename(uploaded_name)
+            normalized_source = PrivacyManager._normalize_filename(source)
+            normalized_source_name = None
+            if isinstance(source, str):
+                try:
+                    normalized_source_name = PrivacyManager._normalize_filename(Path(source).name)
+                except Exception:
+                    normalized_source_name = None
+
+            if normalized_target and normalized_uploaded == normalized_target:
                 matched.append(doc_id)
                 continue
-            if isinstance(source, str) and source.endswith(filename):
+            if normalized_target and normalized_source_name == normalized_target:
+                matched.append(doc_id)
+                continue
+            if normalized_target and normalized_source and normalized_source.endswith(normalized_target):
                 matched.append(doc_id)
 
         return matched

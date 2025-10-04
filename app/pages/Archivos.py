@@ -545,10 +545,10 @@ if INGEST_AVAILABLE:
                     domain_stats = files_df.groupby('domain', dropna=True).size().reset_index(name='count')
                     domain_stats.columns = ['Dominio', 'Archivos'] if current_language == 'es' else ['Domain', 'Files']
                     domain_stats = domain_stats.sort_values(domain_stats.columns[-1], ascending=False)
-                    for _, row in domain_stats.iterrows():
+                    for domain_label, domain_count in domain_stats.itertuples(index=False, name=None):
                         show_metric(
-                            label=row[0],
-                            value=row[1]
+                            label=domain_label,
+                            value=domain_count
                         )
 
                 with col2:
@@ -556,10 +556,10 @@ if INGEST_AVAILABLE:
                     collection_stats = files_df.groupby('collection', dropna=True).size().reset_index(name='count')
                     collection_stats.columns = ['Colección', 'Archivos'] if current_language == 'es' else ['Collection', 'Files']
                     collection_stats = collection_stats.sort_values(collection_stats.columns[-1], ascending=False)
-                    for _, row in collection_stats.iterrows():
+                    for collection_label, collection_count in collection_stats.itertuples(index=False, name=None):
                         show_metric(
-                            label=row[0],
-                            value=row[1]
+                            label=collection_label,
+                            value=collection_count
                         )
 
             # Búsqueda
@@ -606,10 +606,10 @@ if INGEST_AVAILABLE:
                 start_idx = (page_number - 1) * page_size
                 end_idx = min(start_idx + page_size, len(display_df))
                 display_page_df = display_df.iloc[start_idx:end_idx].copy()
-                st.dataframe(display_page_df, use_container_width=True, hide_index=True)
+                st.dataframe(display_page_df, width='stretch', hide_index=True)
                 show_caption(f"Mostrando {start_idx + 1}-{end_idx} de {len(display_df)} archivos" if current_language == 'es' else f"Showing {start_idx + 1}-{end_idx} of {len(display_df)} files")
             else:
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                st.dataframe(display_df, width='stretch', hide_index=True)
 
             # Eliminar archivo
             st.subheader("🗑️ Eliminar archivo" if current_language == 'es' else "🗑️ Delete file")
