@@ -33,10 +33,12 @@ Anclora AI RAG es un sistema de Generación Aumentada por Recuperación (RAG) qu
 ### ⚠️ Estado Actual y Problemas Conocidos
 
 #### ✅ Problema Reciente Solucionado
+
 - **Módulo `markdown` agregado**: Se solucionó el error `No module named 'markdown'` agregando la dependencia faltante a `app/requirements.txt`
 - **Instalación global**: El módulo también se instaló globalmente en el sistema
 
 #### 🚧 Problema Actual - Conectividad Docker
+
 - **Problema de red**: Actualmente hay problemas de conectividad con Docker Hub que impiden reconstruir automáticamente los contenedores
 - **Solución pendiente**: Requiere intervención manual del usuario para reconstruir los contenedores Docker
 - **Estado**: Los cambios de código están listos, pero los contenedores necesitan reconstrucción manual
@@ -149,6 +151,7 @@ También puedes ajustar `CHROMA_HOST` y `CHROMA_PORT` a los valores de cualquier
 Si experimentas problemas de conectividad con Docker Hub al reconstruir contenedores:
 
 #### Problema Común: Error de conexión con Docker Hub
+
 ```text
 failed to copy: httpReadSeeker: failed open: failed to do request
 ```
@@ -156,6 +159,7 @@ failed to copy: httpReadSeeker: failed open: failed to do request
 **Soluciones:**
 
 1. **Reiniciar Docker Desktop:**
+
    ```bash
    # Cerrar Docker Desktop completamente y volverlo a abrir
    docker compose build --no-cache ui api
@@ -163,6 +167,7 @@ failed to copy: httpReadSeeker: failed open: failed to do request
    ```
 
 2. **Limpiar caché de Docker:**
+
    ```bash
    docker system prune -f
    docker compose down -v
@@ -170,6 +175,7 @@ failed to copy: httpReadSeeker: failed open: failed to do request
    ```
 
 3. **Configurar proxy (si usas VPN corporativa):**
+
    ```bash
    set HTTP_PROXY=http://tu-proxy:puerto
    set HTTPS_PROXY=http://tu-proxy:puerto
@@ -177,6 +183,7 @@ failed to copy: httpReadSeeker: failed open: failed to do request
    ```
 
 4. **Ejecución alternativa sin Docker:**
+
    ```bash
    # Instalar dependencias
    pip install -r requirements_complete.txt
