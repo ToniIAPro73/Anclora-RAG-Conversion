@@ -2,7 +2,9 @@
 Streamlit stub file for Pylance.
 This file helps Pylance understand the structure of the streamlit module.
 """
-from typing import Optional, Dict, Any, List, Callable, Union, Iterator, ContextManager
+from typing import Optional, Dict, Any, List, Callable, Union, Iterator, ContextManager, TypeVar
+
+T = TypeVar('T')
 
 __version__: str = "1.49.1"
 
@@ -11,15 +13,70 @@ class Sidebar:
     def __enter__(self) -> 'Sidebar':
         """Return self to enable use as a context manager with 'with' statements."""
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit the context manager."""
         pass
-    
+
     def title(self, text: str) -> None:
         """Display text in title formatting in the sidebar."""
         pass
-    
+
+    def header(self, text: str) -> None:
+        """Display a header in the sidebar."""
+        pass
+
+    def subheader(self, text: str) -> None:
+        """Display a subheader in the sidebar."""
+        pass
+
+    def button(
+        self,
+        label: str,
+        key: Optional[str] = None,
+        help: Optional[str] = None,
+        on_click: Optional[Callable[[], None]] = None,
+        args: Optional[tuple] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
+        type: str = 'secondary',
+        disabled: bool = False,
+        use_container_width: bool = False,
+    ) -> bool:
+        """Display a button in the sidebar."""
+        return False
+
+    def checkbox(
+        self,
+        label: str,
+        value: bool = False,
+        key: Optional[str] = None,
+        help: Optional[str] = None,
+        on_change: Optional[Callable[[], None]] = None,
+        args: Optional[tuple] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
+        disabled: bool = False,
+        label_visibility: str = 'visible',
+    ) -> bool:
+        """Display a checkbox in the sidebar."""
+        return value
+
+    def multiselect(
+        self,
+        label: str,
+        options: List[Any],
+        default: Optional[List[Any]] = None,
+        key: Optional[str] = None,
+        help: Optional[str] = None,
+        on_change: Optional[Callable[[], None]] = None,
+        args: Optional[tuple] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
+        max_selections: Optional[int] = None,
+        disabled: bool = False,
+        label_visibility: str = 'visible',
+    ) -> List[Any]:
+        """Display a multiselect widget in the sidebar."""
+        return default or []
+
     def selectbox(
         self,
         label: str,
@@ -32,12 +89,37 @@ class Sidebar:
         args: Optional[tuple] = None,
         kwargs: Optional[Dict[str, Any]] = None,
         disabled: bool = False,
-        label_visibility: str = "visible",
+        label_visibility: str = 'visible',
     ) -> Any:
         """Display a selectbox widget in the sidebar."""
         pass
 
+    def expander(self, label: str, expanded: bool = False, key: Optional[str] = None) -> ContextManager[Any]:
+        """Return a context manager for an expandable sidebar section."""
+        class _SidebarExpander(ContextManager[Any]):
+            def __enter__(self) -> Any:
+                return self
+            def __exit__(self, exc_type, exc, tb) -> None:
+                return None
+        return _SidebarExpander()
+
 # Sidebar instance - can be used both as an object with methods and as a context manager
+
+
+class _CacheResource:
+    def __call__(self, func: Optional[Callable[..., T]] = None, **kwargs: Any) -> Optional[Callable[..., T]]:
+        """Decorator placeholder for cached resources."""
+        if func is None:
+            def decorator(inner_func: Callable[..., T]) -> Callable[..., T]:
+                return inner_func  # type: ignore
+            return decorator  # type: ignore
+        return func
+
+    def clear(self) -> None:
+        """Clear cached resources."""
+        return None
+
+cache_resource = _CacheResource()
 sidebar: Sidebar = Sidebar()
 
 def set_page_config(
@@ -249,6 +331,52 @@ def plotly_chart(
         on_change: An optional callback invoked when this chart's value changes.
         args: Optional tuple of args to pass to the callback.
         kwargs: Optional dict of kwargs to pass to the callback.
+
+    Returns:
+        Any: The chart object.
+    """
+    pass
+
+def line_chart(
+    data: Any,
+    x: Optional[str] = None,
+    y: Optional[Union[str, List[str]]] = None,
+    width: Optional[Union[int, str]] = None,
+    height: Optional[Union[int, str]] = None,
+    use_container_width: bool = False,
+) -> Any:
+    """Display a line chart.
+
+    Args:
+        data: Data to be plotted.
+        x: Column name to use for x-axis.
+        y: Column name(s) to use for y-axis.
+        width: Width of the chart.
+        height: Height of the chart.
+        use_container_width: Whether to use the full container width.
+
+    Returns:
+        Any: The chart object.
+    """
+    pass
+
+def bar_chart(
+    data: Any,
+    x: Optional[str] = None,
+    y: Optional[Union[str, List[str]]] = None,
+    width: Optional[Union[int, str]] = None,
+    height: Optional[Union[int, str]] = None,
+    use_container_width: bool = False,
+) -> Any:
+    """Display a bar chart.
+
+    Args:
+        data: Data to be plotted.
+        x: Column name to use for x-axis.
+        y: Column name(s) to use for y-axis.
+        width: Width of the chart.
+        height: Height of the chart.
+        use_container_width: Whether to use the full container width.
 
     Returns:
         Any: The chart object.

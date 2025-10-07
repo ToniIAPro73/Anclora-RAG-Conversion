@@ -1,0 +1,200 @@
+"""Dashboard de Inteligencia Empresarial para Conversión Documental - Anclora RAG."""
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+import json
+import time
+
+# Try to import plotly, fallback to basic charts if not available
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    # Don't show warning here, show it only when actually trying to use plotly
+
+# Try to import dashboard service, fallback to mock data if not available
+try:
+    import sys
+    import os
+
+    # Add the app directory to the path if not already there
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    app_dir = os.path.dirname(current_dir)
+    if app_dir not in sys.path:
+        sys.path.insert(0, app_dir)
+
+    from analytics.conversion_dashboard_service import ConversionDashboardService
+    dashboard_service = ConversionDashboardService()
+    DASHBOARD_SERVICE_AVAILABLE = True
+except ImportError as e:
+    DASHBOARD_SERVICE_AVAILABLE = False
+    dashboard_service = None
+    st.info(f"ℹ️ Servicio de dashboard no disponible: {e}. Usando datos simulados de conversión.")
+
+# Set page config
+st.set_page_config(layout='wide', page_title='Intelligence Dashboard', page_icon='📈')
+
+# Simple CSS to hide Streamlit elements
+hide_st_style = """
+    <style>
+        #MainMenu {visibility: hidden;}
+        .stDeployButton {display:none;}
+        footer {visibility: hidden;}
+        #stDecoration {display:none;}
+    </style>
+"""
+st.markdown(f"<style>{hide_st_style}</style>")
+
+# Initialize language in session state
+if 'language' not in st.session_state:
+    st.session_state.language = 'es'
+
+# Sidebar for language selection
+with st.sidebar:
+    st.header("Idioma")
+    language_options = {
+        'es': 'Español',
+        'en': 'English'
+    }
+    
+    selected_language = st.selectbox(
+        "Selecciona idioma:",
+        options=list(language_options.keys()),
+        format_func=lambda x: language_options[x],
+        index=0 if st.session_state.language == 'es' else 1,
+        key="language_selector"
+    )
+    
+    # Update session state if language changed
+    if selected_language != st.session_state.language:
+        st.session_state.language = selected_language
+        st.rerun()
+
+# Translations
+translations = {
+    'es': {
+        'title': '📊 Dashboard de Conversión Documental',
+        'subtitle': 'Análisis avanzado del sistema de conversión orquestada por agentes',
+        'conversion_metrics': 'Métricas de Conversión',
+        'agent_performance': 'Rendimiento de Agentes',
+        'security_analysis': 'Análisis de Seguridad',
+        'quality_insights': 'Insights de Calidad',
+        'predictive_analytics': 'Análisis Predictivo',
+        'optimization_recommendations': 'Recomendaciones de Optimización',
+        'conversion_volume': 'Volumen de Conversiones',
+        'conversion_time': 'Tiempo de Conversión',
+        'success_rate': 'Tasa de Éxito',
+        'user_satisfaction': 'Satisfacción del Usuario',
+        'complex_conversions': 'Conversiones Complejas',
+        'batch_conversions': 'Conversiones por Lotes',
+        'format_distribution': 'Distribución por Formato',
+        'agent_utilization': 'Utilización de Agentes',
+        'security_events': 'Eventos de Seguridad',
+        'malware_detected': 'Malware Detectado',
+        'files_quarantined': 'Archivos en Cuarentena',
+        'threat_level': 'Nivel de Amenaza',
+        'conversion_trend': 'Tendencia de Conversiones',
+        'quality_score': 'Puntuación de Calidad',
+        'error_analysis': 'Análisis de Errores',
+        'usage_forecast': 'Pronóstico de Uso',
+        'optimization_impact': 'Impacto de Optimizaciones',
+        'recommendations': 'Recomendaciones',
+        'last_24h': 'Últimas 24 horas',
+        'last_7d': 'Últimos 7 días',
+        'last_30d': 'Últimos 30 días',
+        'real_time': 'Tiempo Real',
+        'peak_hours': 'Horas Pico',
+        'performance_trend': 'Tendencia de Rendimiento'
+    },
+    'en': {
+        'title': '📊 Document Conversion Dashboard',
+        'subtitle': 'Advanced analysis of agent-orchestrated conversion system',
+        'conversion_metrics': 'Conversion Metrics',
+        'agent_performance': 'Agent Performance',
+        'security_analysis': 'Security Analysis',
+        'quality_insights': 'Quality Insights',
+        'predictive_analytics': 'Predictive Analytics',
+        'optimization_recommendations': 'Optimization Recommendations',
+        'conversion_volume': 'Conversion Volume',
+        'conversion_time': 'Conversion Time',
+        'success_rate': 'Success Rate',
+        'user_satisfaction': 'User Satisfaction',
+        'complex_conversions': 'Complex Conversions',
+        'batch_conversions': 'Batch Conversions',
+        'format_distribution': 'Format Distribution',
+        'agent_utilization': 'Agent Utilization',
+        'security_events': 'Security Events',
+        'malware_detected': 'Malware Detected',
+        'files_quarantined': 'Files Quarantined',
+        'threat_level': 'Threat Level',
+        'conversion_trend': 'Conversion Trend',
+        'quality_score': 'Quality Score',
+        'error_analysis': 'Error Analysis',
+        'usage_forecast': 'Usage Forecast',
+        'optimization_impact': 'Optimization Impact',
+        'recommendations': 'Recommendations',
+        'last_24h': 'Last 24 hours',
+        'last_7d': 'Last 7 days',
+        'last_30d': 'Last 30 days',
+        'real_time': 'Real Time',
+        'peak_hours': 'Peak Hours',
+        'performance_trend': 'Performance Trend',
+        'security_overview': 'Security Overview'
+    }
+}
+
+def get_text(key: str) -> str:
+    # Ensure language is set in session state
+    if 'language' not in st.session_state:
+        st.session_state.language = 'es'
+
+    # Get the language, fallback to 'es' if not found
+    language = st.session_state.get('language', 'es')
+
+    # Get the language dictionary, ensuring we always have a fallback
+    lang_dict = translations.get(language, translations.get('es', {}))
+
+    # Return translation or key if not found, ensuring we never return None
+    return lang_dict.get(key, key) if lang_dict else key
+
+# Get real data from dashboard service
+@st.cache_data(ttl=300) if hasattr(st, 'cache_data') else st.cache(ttl=300)  # Cache for 5 minutes
+def get_dashboard_data(time_range: str):
+    """Get real data from the dashboard service."""
+
+    # Check if dashboard service is available
+    if not DASHBOARD_SERVICE_AVAILABLE or dashboard_service is None:
+        return get_fallback_data()
+
+    try:
+        # Get real metrics from conversion dashboard service
+        conversion_metrics = dashboard_service.get_conversion_metrics(time_range)
+        agent_performance = dashboard_service.get_agent_performance()
+        security_analysis = dashboard_service.get_security_analysis()
+        predictive_insights = dashboard_service.get_predictive_insights()
+
+        # Get time series data for conversion metrics
+        time_series_data = {}
+        for metric in ['conversion_time', 'conversion_volume', 'success_rate', 'user_satisfaction', 'quality_score']:
+            time_series_data[metric] = dashboard_service.get_time_series_data(metric, time_range)
+
+        return {
+            'conversion_metrics': conversion_metrics,
+            'agent_performance': agent_performance,
+            'security_analysis': security_analysis,
+            'predictive_insights': predictive_insights,
+            'time_series_data': time_series_data
+        }
+
+    except Exception as e:
+        st.error(f"Error loading dashboard data: {e}")
+        # Fallback to mock data
+        return get_fallback_data()
+
+
+def get_fallback_data():

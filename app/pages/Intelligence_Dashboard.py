@@ -387,6 +387,11 @@ with col3:
 # Conversion Trends
 st.subheader(get_text('conversion_trend'))
 
+conversion_time_data = time_series_data.get('conversion_time', [])
+conversion_volume_data = time_series_data.get('conversion_volume', [])
+success_rate_data = time_series_data.get('success_rate', [])
+quality_score_data = time_series_data.get('quality_score', [])
+
 if PLOTLY_AVAILABLE and 'make_subplots' in globals():
     fig_performance = make_subplots(
         rows=2, cols=2,
@@ -397,80 +402,81 @@ if PLOTLY_AVAILABLE and 'make_subplots' in globals():
             get_text('quality_score')
         ]
     )
-    USE_PLOTLY = True
-else:
-    st.info("ℹ️ Usando gráficos básicos de Streamlit (Plotly no disponible para gráficos avanzados)")
-    USE_PLOTLY = False
 
-# Conversion time trend
-conversion_time_data = time_series_data.get('conversion_time', [])
-if conversion_time_data:
-    timestamps = [d['timestamp'] for d in conversion_time_data]
-    values = [d['value'] for d in conversion_time_data]
-    fig_performance.add_trace(
-        go.Scatter(
-            x=timestamps,
-            y=values,
-            mode='lines',
-            name=get_text('conversion_time'),
-            line=dict(color='#B8A9FF')  # Lavanda pastel suave
-        ),
-        row=1, col=1
-    )
+    if conversion_time_data:
+        timestamps = [d['timestamp'] for d in conversion_time_data]
+        values = [d['value'] for d in conversion_time_data]
+        fig_performance.add_trace(
+            go.Scatter(
+                x=timestamps,
+                y=values,
+                mode='lines',
+                name=get_text('conversion_time'),
+                line=dict(color='#B8A9FF')
+            ),
+            row=1, col=1
+        )
 
-# Conversion volume trend
-conversion_volume_data = time_series_data.get('conversion_volume', [])
-if conversion_volume_data:
-    timestamps = [d['timestamp'] for d in conversion_volume_data]
-    values = [d['value'] for d in conversion_volume_data]
-    fig_performance.add_trace(
-        go.Scatter(
-            x=timestamps,
-            y=values,
-            mode='lines',
-            name=get_text('conversion_volume'),
-            line=dict(color='#4ECDC4')
-        ),
-        row=1, col=2
-    )
+    if conversion_volume_data:
+        timestamps = [d['timestamp'] for d in conversion_volume_data]
+        values = [d['value'] for d in conversion_volume_data]
+        fig_performance.add_trace(
+            go.Scatter(
+                x=timestamps,
+                y=values,
+                mode='lines',
+                name=get_text('conversion_volume'),
+                line=dict(color='#4ECDC4')
+            ),
+            row=1, col=2
+        )
 
-# Success rate trend
-success_rate_data = time_series_data.get('success_rate', [])
-if success_rate_data:
-    timestamps = [d['timestamp'] for d in success_rate_data]
-    values = [d['value'] for d in success_rate_data]
-    fig_performance.add_trace(
-        go.Scatter(
-            x=timestamps,
-            y=values,
-            mode='lines',
-            name=get_text('success_rate'),
-            line=dict(color='#45B7D1')
-        ),
-        row=2, col=1
-    )
+    if success_rate_data:
+        timestamps = [d['timestamp'] for d in success_rate_data]
+        values = [d['value'] for d in success_rate_data]
+        fig_performance.add_trace(
+            go.Scatter(
+                x=timestamps,
+                y=values,
+                mode='lines',
+                name=get_text('success_rate'),
+                line=dict(color='#45B7D1')
+            ),
+            row=2, col=1
+        )
 
-# Quality score trend
-quality_score_data = time_series_data.get('quality_score', [])
-if quality_score_data:
-    timestamps = [d['timestamp'] for d in quality_score_data]
-    values = [d['value'] for d in quality_score_data]
-    fig_performance.add_trace(
-        go.Scatter(
-            x=timestamps,
-            y=values,
-            mode='lines',
-            name=get_text('quality_score'),
-            line=dict(color='#A8E6CF')  # Verde pastel suave
-        ),
-        row=2, col=2
-    )
+    if quality_score_data:
+        timestamps = [d['timestamp'] for d in quality_score_data]
+        values = [d['value'] for d in quality_score_data]
+        fig_performance.add_trace(
+            go.Scatter(
+                x=timestamps,
+                y=values,
+                mode='lines',
+                name=get_text('quality_score'),
+                line=dict(color='#A8E6CF')
+            ),
+            row=2, col=2
+        )
 
-fig_performance.update_layout(height=600, showlegend=False)
-if USE_PLOTLY:
+    fig_performance.update_layout(height=600, showlegend=False)
     st.plotly_chart(fig_performance, use_container_width=True)
 else:
-    st.info("📊 Gráfico avanzado no disponible - Plotly no está instalado")
+    st.info('ℹ️ Usando gráficos básicos de Streamlit (Plotly no disponible para gráficos avanzados)')
+    fallback_series = [
+        (get_text('conversion_time'), conversion_time_data),
+        (get_text('conversion_volume'), conversion_volume_data),
+        (get_text('success_rate'), success_rate_data),
+        (get_text('quality_score'), quality_score_data),
+    ]
+
+    for label, dataset in fallback_series:
+        if not dataset:
+            continue
+        fallback_df = pd.DataFrame(dataset).rename(columns={'value': label})
+        fallback_df = fallback_df.set_index('timestamp')
+        st.line_chart(fallback_df, use_container_width=True)
+
 
 # Agent Performance Section
 st.header(get_text('agent_performance'))
@@ -485,17 +491,19 @@ with col1:
         columns=['Agent', 'Utilization']
     )
 
-    fig_agents = px.pie(
-        agent_util_df,
-        values='Utilization',
-        names='Agent',
-        color_discrete_sequence=px.colors.qualitative.Set3
-    )
-    fig_agents.update_layout(height=400)
-    if USE_PLOTLY:
+    if PLOTLY_AVAILABLE:
+        fig_agents = px.pie(
+            agent_util_df,
+            values='Utilization',
+            names='Agent',
+            color_discrete_sequence=px.colors.qualitative.Set3
+        )
+        fig_agents.update_layout(height=400)
         st.plotly_chart(fig_agents, use_container_width=True)
     else:
-        st.info("📊 Gráfico de agentes no disponible - Plotly no está instalado")
+        fallback_agents = agent_util_df.set_index('Agent')
+        st.bar_chart(fallback_agents, use_container_width=True)
+        st.info('📊 Plotly no está instalado; se muestra un gráfico básico.')
 
 with col2:
     st.subheader(get_text('format_distribution'))
@@ -505,18 +513,20 @@ with col2:
         columns=['Conversion Type', 'Count']
     )
 
-    fig_formats = px.bar(
-        format_df,
-        x='Conversion Type',
-        y='Count',
-        color='Count',
-        color_discrete_sequence=px.colors.qualitative.Pastel
-    )
-    fig_formats.update_layout(height=400, xaxis_tickangle=-45)
-    if USE_PLOTLY:
+    if PLOTLY_AVAILABLE:
+        fig_formats = px.bar(
+            format_df,
+            x='Conversion Type',
+            y='Count',
+            color='Count',
+            color_discrete_sequence=px.colors.qualitative.Pastel
+        )
+        fig_formats.update_layout(height=400, xaxis_tickangle=-45)
         st.plotly_chart(fig_formats, use_container_width=True)
     else:
-        st.info("📊 Gráfico de formatos no disponible - Plotly no está instalado")
+        fallback_formats = format_df.set_index('Conversion Type')
+        st.bar_chart(fallback_formats, use_container_width=True)
+        st.info('📊 Plotly no está instalado; se muestra un gráfico básico.')
 
 # Peak Hours Analysis
 st.subheader(get_text('peak_hours'))
@@ -524,18 +534,20 @@ st.subheader(get_text('peak_hours'))
 hours = list(range(24))
 hourly_activity = [50 if h in agent_performance['peak_hours'] else np.random.randint(10, 30) for h in hours]
 
-fig_peak = px.bar(
-    x=hours,
-    y=hourly_activity,
-    labels={'x': 'Hora del día', 'y': 'Actividad'},
-    color=hourly_activity,
-    color_continuous_scale='Viridis'
-)
-fig_peak.update_layout(height=300)
-if USE_PLOTLY:
+if PLOTLY_AVAILABLE:
+    fig_peak = px.bar(
+        x=hours,
+        y=hourly_activity,
+        labels={'x': 'Hora del día', 'y': 'Actividad'},
+        color=hourly_activity,
+        color_continuous_scale='Viridis'
+    )
+    fig_peak.update_layout(height=300)
     st.plotly_chart(fig_peak, use_container_width=True)
 else:
-    st.info("📊 Gráfico de horas pico no disponible - Plotly no está instalado")
+    fallback_peak = pd.DataFrame({'Hora del día': hours, 'Actividad': hourly_activity}).set_index('Hora del día')
+    st.bar_chart(fallback_peak, use_container_width=True)
+    st.info('📊 Plotly no está instalado; se muestra un gráfico básico.')
 
 # Security Overview Section
 st.header(get_text('security_analysis'))
@@ -576,21 +588,23 @@ with col1:
         columns=['Resultado', 'Cantidad']
     )
 
-    fig_scan = px.bar(
-        scan_df,
-        x='Resultado',
-        y='Cantidad',
-        color='Resultado',
-        color_discrete_map={
-            'Archivos Limpios': '#A8E6CF',    # Verde pastel suave
-            'Archivos Sospechosos': '#FFE4B5', # Amarillo pastel suave
-            'Archivos Bloqueados': '#F8BBD9'   # Rosa pastel suave
-        }
-    )
-    if USE_PLOTLY:
+    if PLOTLY_AVAILABLE:
+        fig_scan = px.bar(
+            scan_df,
+            x='Resultado',
+            y='Cantidad',
+            color='Resultado',
+            color_discrete_map={
+                'Archivos Limpios': '#A8E6CF',
+                'Archivos Sospechosos': '#FFE4B5',
+                'Archivos Bloqueados': '#F8BBD9'
+            }
+        )
         st.plotly_chart(fig_scan, use_container_width=True)
     else:
-        st.info("📊 Gráfico de escaneo no disponible - Plotly no está instalado")
+        fallback_scan = scan_df.set_index('Resultado')
+        st.bar_chart(fallback_scan, use_container_width=True)
+        st.info('📊 Plotly no está instalado; se muestra un gráfico básico.')
 
 with col2:
     st.subheader("Tipos de Eventos de Seguridad")
@@ -600,16 +614,18 @@ with col2:
         columns=['Tipo', 'Cantidad']
     )
 
-    fig_events = px.pie(
-        events_df,
-        values='Cantidad',
-        names='Tipo',
-        color_discrete_sequence=px.colors.qualitative.Set2
-    )
-    if USE_PLOTLY:
+    if PLOTLY_AVAILABLE:
+        fig_events = px.pie(
+            events_df,
+            values='Cantidad',
+            names='Tipo',
+            color_discrete_sequence=px.colors.qualitative.Set2
+        )
         st.plotly_chart(fig_events, use_container_width=True)
     else:
-        st.info("📊 Gráfico de eventos no disponible - Plotly no está instalado")
+        fallback_events = events_df.set_index('Tipo')
+        st.bar_chart(fallback_events, use_container_width=True)
+        st.info('📊 Plotly no está instalado; se muestra un gráfico básico.')
 
 # Predictive Analytics Section
 st.header(get_text('predictive_analytics'))
@@ -622,10 +638,7 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader(get_text('usage_forecast'))
-    
-    fig_forecast = go.Figure()
-    
-    # Historical data
+
     historical_timestamps = pd.date_range(
         start=datetime.now() - timedelta(hours=48),
         end=datetime.now(),
@@ -633,57 +646,64 @@ with col1:
     )
     historical_queries = np.random.poisson(15, len(historical_timestamps))
 
-    fig_forecast.add_trace(go.Scatter(
-        x=historical_timestamps,
-        y=historical_queries,
-        mode='lines',
-        name='Histórico',
-        line=dict(color='#45B7D1')
-    ))
-    
-    # Forecast
-    fig_forecast.add_trace(go.Scatter(
-        x=future_dates,
-        y=forecast_queries,
-        mode='lines',
-        name='Pronóstico',
-        line=dict(color='#B8A9FF', dash='dash')  # Lavanda pastel suave
-    ))
-    
-    fig_forecast.update_layout(height=400)
-    if USE_PLOTLY:
+    if PLOTLY_AVAILABLE:
+        fig_forecast = go.Figure()
+        fig_forecast.add_trace(go.Scatter(
+            x=historical_timestamps,
+            y=historical_queries,
+            mode='lines',
+            name='Histórico',
+            line=dict(color='#45B7D1')
+        ))
+
+        fig_forecast.add_trace(go.Scatter(
+            x=future_dates,
+            y=forecast_queries,
+            mode='lines',
+            name='Pronóstico',
+            line=dict(color='#B8A9FF', dash='dash')
+        ))
+
+        fig_forecast.update_layout(height=400)
         st.plotly_chart(fig_forecast, use_container_width=True)
     else:
-        st.info("📊 Gráfico de pronóstico no disponible - Plotly no está instalado")
+        hist_df = pd.DataFrame({'Consultas': historical_queries}, index=historical_timestamps)
+        forecast_df = pd.DataFrame({'Consultas estimadas': forecast_queries}, index=future_dates)
+        st.line_chart(hist_df, use_container_width=True)
+        st.line_chart(forecast_df, use_container_width=True)
+        st.info('📊 Plotly no está instalado; se muestran gráficos básicos.')
+
 
 with col2:
     st.subheader(get_text('optimization_impact'))
-    
-    # Simulated optimization impact
+
     optimization_scenarios = {
         'Actual': 2.5,
         'Optimización Básica': 2.1,
         'Optimización Avanzada': 1.8,
         'Optimización Completa': 1.5
     }
-    
+
     opt_df = pd.DataFrame(
         list(optimization_scenarios.items()),
         columns=['Escenario', 'Tiempo de Respuesta (s)']
     )
-    
-    fig_optimization = px.bar(
-        opt_df,
-        x='Escenario',
-        y='Tiempo de Respuesta (s)',
-        color='Tiempo de Respuesta (s)',
-        color_continuous_scale='RdYlGn_r'
-    )
-    fig_optimization.update_layout(height=400)
-    if USE_PLOTLY:
+
+    if PLOTLY_AVAILABLE:
+        fig_optimization = px.bar(
+            opt_df,
+            x='Escenario',
+            y='Tiempo de Respuesta (s)',
+            color='Tiempo de Respuesta (s)',
+            color_continuous_scale='RdYlGn_r'
+        )
+        fig_optimization.update_layout(height=400)
         st.plotly_chart(fig_optimization, use_container_width=True)
     else:
-        st.info("📊 Gráfico de optimización no disponible - Plotly no está instalado")
+        fallback_opt = opt_df.set_index('Escenario')
+        st.bar_chart(fallback_opt, use_container_width=True)
+        st.info('📊 Plotly no está instalado; se muestra un gráfico básico.')
+
 
 # Recommendations Section
 st.header(get_text('optimization_recommendations'))

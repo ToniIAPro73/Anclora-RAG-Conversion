@@ -305,26 +305,23 @@ with col1:
     st.metric(
         "⚡ Docs Simples",
         f"{avg_simple:.1f}s",
-        delta=f"{np.random.uniform(-1, 1):.1f}s vs ayer",
-        help="Documentos PDF/TXT < 5MB sin imágenes"
+        delta=f"{np.random.uniform(-1, 1):.1f}s vs ayer"
     )
 
 with col2:
     avg_medium = np.mean(data['processing_times']['medium_docs'])
     st.metric(
-        "📄 Docs Medianos", 
+        "📄 Docs Medianos",
         f"{avg_medium:.1f}s",
-        delta=f"{np.random.uniform(-2, 2):.1f}s vs ayer",
-        help="Documentos 5-20MB con estructura simple"
+        delta=f"{np.random.uniform(-2, 2):.1f}s vs ayer"
     )
 
 with col3:
     avg_complex = np.mean(data['processing_times']['complex_docs'])
     st.metric(
         "📊 Docs Complejos",
-        f"{avg_complex:.1f}s", 
-        delta=f"{np.random.uniform(-5, 3):.1f}s vs ayer",
-        help="Documentos >20MB con imágenes y tablas"
+        f"{avg_complex:.1f}s",
+        delta=f"{np.random.uniform(-5, 3):.1f}s vs ayer"
     )
 
 with col4:
@@ -343,47 +340,57 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("⏱️ Tiempos de Procesamiento por Hora")
-    
-    fig_times = go.Figure()
-    
-    fig_times.add_trace(go.Scatter(
-        x=data['hours'],
-        y=data['processing_times']['simple_docs'],
-        mode='lines+markers',
-        name='Documentos Simples',
-        line=dict(color=ANCLORA_RAG_COLORS['success_deep'], width=3),
-        marker=dict(size=6)
-    ))
-    
-    fig_times.add_trace(go.Scatter(
-        x=data['hours'],
-        y=data['processing_times']['medium_docs'],
-        mode='lines+markers',
-        name='Documentos Medianos',
-        line=dict(color=ANCLORA_RAG_COLORS['warning_deep'], width=3),
-        marker=dict(size=6)
-    ))
-    
-    fig_times.add_trace(go.Scatter(
-        x=data['hours'],
-        y=data['processing_times']['complex_docs'],
-        mode='lines+markers',
-        name='Documentos Complejos',
-        line=dict(color=ANCLORA_RAG_COLORS['error_deep'], width=3),  # Rosa coral suave
-        marker=dict(size=6)
-    ))
-    
-    fig_times.update_layout(
-        xaxis_title="Hora del día",
-        yaxis_title="Tiempo (segundos)",
-        height=400,
-        showlegend=True
-    )
-    
-    if USE_PLOTLY:
+
+    if PLOTLY_AVAILABLE:
+        fig_times = go.Figure()
+
+        fig_times.add_trace(go.Scatter(
+            x=data['hours'],
+            y=data['processing_times']['simple_docs'],
+            mode='lines+markers',
+            name='Documentos Simples',
+            line=dict(color=ANCLORA_RAG_COLORS['success_deep'], width=3),
+            marker=dict(size=6)
+        ))
+
+        fig_times.add_trace(go.Scatter(
+            x=data['hours'],
+            y=data['processing_times']['medium_docs'],
+            mode='lines+markers',
+            name='Documentos Medianos',
+            line=dict(color=ANCLORA_RAG_COLORS['warning_deep'], width=3),
+            marker=dict(size=6)
+        ))
+
+        fig_times.add_trace(go.Scatter(
+            x=data['hours'],
+            y=data['processing_times']['complex_docs'],
+            mode='lines+markers',
+            name='Documentos Complejos',
+            line=dict(color=ANCLORA_RAG_COLORS['error_deep'], width=3),
+            marker=dict(size=6)
+        ))
+
+        fig_times.update_layout(
+            xaxis_title='Hora del día',
+            yaxis_title='Tiempo (segundos)',
+            height=400,
+            showlegend=True
+        )
+
         st.plotly_chart(fig_times, use_container_width=True)
     else:
-        st.info("📊 Gráfico de tiempos no disponible - Plotly no está instalado")
+        fallback_times = pd.DataFrame(
+            {
+                'Hora': data['hours'],
+                'Documentos Simples': data['processing_times']['simple_docs'],
+                'Documentos Medianos': data['processing_times']['medium_docs'],
+                'Documentos Complejos': data['processing_times']['complex_docs'],
+            }
+        ).set_index('Hora')
+        st.line_chart(fallback_times, use_container_width=True)
+        st.info('📊 Plotly no está instalado; se muestra un gráfico básico.')
+
 
 with col2:
     st.subheader("📈 Tasa de Éxito y Volumen")
@@ -394,44 +401,47 @@ with col2:
             subplot_titles=('Tasa de Éxito (%)', 'Documentos Procesados'),
             vertical_spacing=0.1
         )
-        USE_PLOTLY = True
-    else:
-        st.info("ℹ️ Usando gráficos básicos de Streamlit (Plotly no disponible para gráficos avanzados)")
-        USE_PLOTLY = False
-    
-    # Tasa de éxito
-    fig_success.add_trace(
-        go.Scatter(
-            x=data['hours'],
-            y=data['success_rates'],
-            mode='lines+markers',
-            name='Tasa de Éxito',
-            line=dict(color=ANCLORA_RAG_COLORS['success_deep'], width=3),
-            marker=dict(size=6)
-        ),
-        row=1, col=1
-    )
-    
-    # Volumen de documentos
-    fig_success.add_trace(
-        go.Bar(
-            x=data['hours'],
-            y=data['doc_volumes'],
-            name='Docs Procesados',
-            marker_color=ANCLORA_RAG_COLORS['primary_medium']
-        ),
-        row=2, col=1
-    )
-    
-    fig_success.update_layout(height=400, showlegend=False)
-    fig_success.update_xaxes(title_text="Hora del día", row=2, col=1)
-    fig_success.update_yaxes(title_text="Tasa (%)", row=1, col=1)
-    fig_success.update_yaxes(title_text="Cantidad", row=2, col=1)
-    
-    if USE_PLOTLY:
+
+        fig_success.add_trace(
+            go.Scatter(
+                x=data['hours'],
+                y=data['success_rates'],
+                mode='lines+markers',
+                name='Tasa de Éxito',
+                line=dict(color=ANCLORA_RAG_COLORS['success_deep'], width=3),
+                marker=dict(size=6)
+            ),
+            row=1, col=1
+        )
+
+        fig_success.add_trace(
+            go.Bar(
+                x=data['hours'],
+                y=data['doc_volumes'],
+                name='Docs Procesados',
+                marker_color=ANCLORA_RAG_COLORS['primary_medium']
+            ),
+            row=2, col=1
+        )
+
+        fig_success.update_layout(height=400, showlegend=False)
+        fig_success.update_xaxes(title_text='Hora del día', row=2, col=1)
+        fig_success.update_yaxes(title_text='Tasa (%)', row=1, col=1)
+        fig_success.update_yaxes(title_text='Cantidad', row=2, col=1)
+
         st.plotly_chart(fig_success, use_container_width=True)
     else:
-        st.info("📊 Gráfico de éxito no disponible - Plotly no está instalado")
+        st.info('ℹ️ Usando gráficos básicos de Streamlit (Plotly no disponible para gráficos avanzados)')
+        fallback_rates = pd.DataFrame(
+            {'Hora': data['hours'], 'Tasa de Éxito (%)': np.array(data['success_rates'])}
+        ).set_index('Hora') * 100
+        st.line_chart(fallback_rates, use_container_width=True)
+
+        fallback_volume = pd.DataFrame(
+            {'Hora': data['hours'], 'Documentos Procesados': data['doc_volumes']}
+        ).set_index('Hora')
+        st.bar_chart(fallback_volume, use_container_width=True)
+
 
 # Tabla de benchmarks comparativos
 st.subheader("🏆 Comparación con Competidores")
