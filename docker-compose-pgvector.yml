@@ -1,8 +1,8 @@
 # =============================================================================
-# Anclora RAG - Configuración Mínima para RAG
+# Anclora RAG - Configuración con Pgvector
 # =============================================================================
-# Configuración simplificada enfocada únicamente en funcionalidades RAG básicas
-# Sin monitoreo ni servicios adicionales para facilitar el inicio
+# Configuración avanzada con PostgreSQL + pgvector para almacenamiento vectorial
+# Incluye optimizaciones de rendimiento y configuración de seguridad
 # =============================================================================
 
 version: '3.8'
@@ -13,15 +13,15 @@ x-environment: &default-environment
   EMBEDDINGS_MODEL_NAME: sentence-transformers/all-mpnet-base-v2
   TARGET_SOURCE_CHUNKS: 5
   # Docker network configuration
-  CHROMA_HOST: chroma
-  CHROMA_PORT: 8000
+  PG_HOST: postgres
+  PG_PORT: 5432
+  PG_DB: anclora_rag
+  PG_USER: anclora_user
+  PG_PASSWORD: ${PG_PASSWORD:-anclora_secure_password_2024}
   OLLAMA_HOST: ollama
   OLLAMA_PORT: 11434
   # Telemetry disabled
   ANONYMIZED_TELEMETRY: false
-  CHROMA_TELEMETRY: false
-  CHROMA_SERVER_NO_ANALYTICS: true
-  CHROMA_TELEMETRY_DISABLED: true
 
 # Resource limits for services
 x-resource-limits: &resource-limits
@@ -66,24 +66,46 @@ services:
       retries: 3
       start_period: 60s
 
-  # Vector Database - ChromaDB
-  chroma:
-    <<: [*restart-policy, *resource-limits]
-    image: chromadb/chroma:0.5.15
+  # Vector Database - PostgreSQL with pgvector
+  postgres:
+    <<: *restart-policy
+    image: pgvector/pgvector:pg16
     volumes:
-      - chroma_data:/chroma/.chroma/index
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-pgvector.sql:/docker-entrypoint-initdb.d/01-init-pgvector.sql:ro
     ports:
-      - "8000:8000"
+      - "5432:5432"
     networks:
       - anclora-network
     environment:
       <<: *default-environment
+      POSTGRES_DB: ${PG_DB}
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      # Configuración de rendimiento PostgreSQL
+      POSTGRES_SHARED_BUFFERS: 256MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 1GB
+      POSTGRES_WORK_MEM: 64MB
+      POSTGRES_MAINTENANCE_WORK_MEM: 128MB
+      POSTGRES_CHECKPOINT_COMPLETION_TARGET: 0.9
+      POSTGRES_WAL_BUFFERS: 16MB
+      POSTGRES_DEFAULT_STATISTICS_TARGET: 100
+      POSTGRES_RANDOM_PAGE_COST: 1.1
+      POSTGRES_EFFECTIVE_IO_CONCURRENCY: 200
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
+      - "-c"
+      - "log_statement=all"
+      - "-c"
+      - "log_min_duration_statement=1000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # User Interface - Streamlit Application
   ui:
@@ -101,13 +123,18 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
-      chroma:
+      postgres:
         condition: service_healthy
     environment:
       <<: *default-environment
-      ANCLORA_API_TOKENS: ${ANCLORA_API_TOKENS:-}
-      ANCLORA_API_TOKEN: ${ANCLORA_API_TOKEN:-}
-      ANCLORA_JWT_SECRET: ${ANCLORA_JWT_SECRET:-}
+      # Configuración de base de datos
+      DB_TYPE: postgres
+      # Configuración de seguridad mejorada
+      ANCLORA_JWT_SECRET: ${ANCLORA_JWT_SECRET:-your-super-secret-jwt-key-change-this}
+      ANCLORA_JWT_ALGORITHMS: ${ANCLORA_JWT_ALGORITHMS:-HS256}
+      # Configuración de métricas
+      PROMETHEUS_METRICS_PORT: 9000
+      PROMETHEUS_METRICS_HOST: 0.0.0.0
       # Disable Streamlit telemetry
       STREAMLIT_BROWSER_GATHER_USAGE_STATS: false
     healthcheck:
@@ -115,7 +142,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   # REST API Service - FastAPI Application
   api:
@@ -133,22 +160,52 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
-      chroma:
+      postgres:
         condition: service_healthy
     environment:
       <<: *default-environment
+      DB_TYPE: postgres
       PYTHONPATH: /app
-      # API Authentication tokens
+      # Configuración de seguridad mejorada
       ANCLORA_API_TOKENS: ${ANCLORA_API_TOKENS:-}
       ANCLORA_API_TOKEN: ${ANCLORA_API_TOKEN:-}
-      ANCLORA_DEFAULT_API_TOKEN: ${ANCLORA_DEFAULT_API_TOKEN:-}
-      ANCLORA_JWT_SECRET: ${ANCLORA_JWT_SECRET:-}
+      ANCLORA_JWT_SECRET: ${ANCLORA_JWT_SECRET:-your-super-secret-jwt-key-change-this}
+      ANCLORA_JWT_ALGORITHMS: ${ANCLORA_JWT_ALGORITHMS:-HS256}
+      ANCLORA_JWT_AUDIENCE: ${ANCLORA_JWT_AUDIENCE:-}
+      ANCLORA_JWT_ISSUER: ${ANCLORA_JWT_ISSUER:-}
+      # Configuración de métricas
+      PROMETHEUS_METRICS_PORT: 9001
+      PROMETHEUS_METRICS_HOST: 0.0.0.0
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
+
+  # =============================================================================
+  # Servicio de Migración (Temporal)
+  # =============================================================================
+  migration:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      target: api-service
+    volumes:
+      - ./app:/app
+      - ./scripts:/scripts
+    networks:
+      - anclora-network
+    environment:
+      <<: *default-environment
+      CHROMA_HOST: ${CHROMA_HOST:-chroma}
+      CHROMA_PORT: ${CHROMA_PORT:-8000}
+    command: ["python", "/scripts/migrate_to_pgvector.py"]
+    depends_on:
+      - postgres
+      - chroma
+    profiles: ["migration"]
+    restart: "no"
 
 # Volumes Configuration
 volumes:
@@ -156,8 +213,8 @@ volumes:
   ollama_models:
     driver: local
 
-  # ChromaDB vector database storage
-  chroma_data:
+  # PostgreSQL data storage
+  postgres_data:
     driver: local
 
 # Networks Configuration

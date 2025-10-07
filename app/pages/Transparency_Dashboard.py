@@ -5,14 +5,21 @@ Métricas reales y verificables del sistema
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import numpy as np
 from datetime import datetime, timedelta
 import time
 import sys
 import os
+
+# Try to import plotly, fallback to basic charts if not available
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.warning("⚠️ Plotly no está instalado. Usando gráficos básicos de Streamlit.")
 
 # Add the parent directory to Python path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -373,16 +380,24 @@ with col1:
         showlegend=True
     )
     
-    st.plotly_chart(fig_times, width='stretch')
+    if USE_PLOTLY:
+        st.plotly_chart(fig_times, use_container_width=True)
+    else:
+        st.info("📊 Gráfico de tiempos no disponible - Plotly no está instalado")
 
 with col2:
     st.subheader("📈 Tasa de Éxito y Volumen")
-    
-    fig_success = make_subplots(
-        rows=2, cols=1,
-        subplot_titles=('Tasa de Éxito (%)', 'Documentos Procesados'),
-        vertical_spacing=0.1
-    )
+
+    if PLOTLY_AVAILABLE and 'make_subplots' in globals():
+        fig_success = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=('Tasa de Éxito (%)', 'Documentos Procesados'),
+            vertical_spacing=0.1
+        )
+        USE_PLOTLY = True
+    else:
+        st.info("ℹ️ Usando gráficos básicos de Streamlit (Plotly no disponible para gráficos avanzados)")
+        USE_PLOTLY = False
     
     # Tasa de éxito
     fig_success.add_trace(
@@ -413,7 +428,10 @@ with col2:
     fig_success.update_yaxes(title_text="Tasa (%)", row=1, col=1)
     fig_success.update_yaxes(title_text="Cantidad", row=2, col=1)
     
-    st.plotly_chart(fig_success, width='stretch')
+    if USE_PLOTLY:
+        st.plotly_chart(fig_success, use_container_width=True)
+    else:
+        st.info("📊 Gráfico de éxito no disponible - Plotly no está instalado")
 
 # Tabla de benchmarks comparativos
 st.subheader("🏆 Comparación con Competidores")

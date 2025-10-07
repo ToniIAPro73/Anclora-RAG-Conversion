@@ -20,6 +20,20 @@ ANCLORA_RAG_COLORS = {
     "accent_orange": "#fd7e14"
 }
 
+# Chart colors for consistent theming across all visualizations
+CHART_COLORS = {
+    "primary": ANCLORA_RAG_COLORS["primary_medium"],
+    "secondary": ANCLORA_RAG_COLORS["secondary"],
+    "success": ANCLORA_RAG_COLORS["success"],
+    "warning": ANCLORA_RAG_COLORS["warning"],
+    "error": ANCLORA_RAG_COLORS["error"],
+    "accent_blue": ANCLORA_RAG_COLORS["accent_blue"],
+    "accent_green": ANCLORA_RAG_COLORS["accent_green"],
+    "text_primary": ANCLORA_RAG_COLORS["text_primary"],
+    "grid_lines": "#e0e0e0",
+    "background": ANCLORA_RAG_COLORS["neutral_light"]
+}
+
 GRADIENTS = {
     "primary": f"linear-gradient(135deg, {ANCLORA_RAG_COLORS['primary_medium']}, {ANCLORA_RAG_COLORS['primary_deep']})",
     "secondary": f"linear-gradient(135deg, {ANCLORA_RAG_COLORS['secondary']}, {ANCLORA_RAG_COLORS['neutral_dark']})",

@@ -15,7 +15,7 @@ try:
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
-    st.warning("⚠️ Plotly no está instalado. Usando gráficos básicos de Streamlit.")
+    # Don't show warning here, show it only when actually trying to use plotly
 
 # Try to import dashboard service, fallback to mock data if not available
 try:
@@ -387,15 +387,20 @@ with col3:
 # Conversion Trends
 st.subheader(get_text('conversion_trend'))
 
-fig_performance = make_subplots(
-    rows=2, cols=2,
-    subplot_titles=[
-        get_text('conversion_time'),
-        get_text('conversion_volume'),
-        get_text('success_rate'),
-        get_text('quality_score')
-    ]
-)
+if PLOTLY_AVAILABLE and 'make_subplots' in globals():
+    fig_performance = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=[
+            get_text('conversion_time'),
+            get_text('conversion_volume'),
+            get_text('success_rate'),
+            get_text('quality_score')
+        ]
+    )
+    USE_PLOTLY = True
+else:
+    st.info("ℹ️ Usando gráficos básicos de Streamlit (Plotly no disponible para gráficos avanzados)")
+    USE_PLOTLY = False
 
 # Conversion time trend
 conversion_time_data = time_series_data.get('conversion_time', [])
@@ -462,10 +467,10 @@ if quality_score_data:
     )
 
 fig_performance.update_layout(height=600, showlegend=False)
-if PLOTLY_AVAILABLE:
+if USE_PLOTLY:
     st.plotly_chart(fig_performance, use_container_width=True)
 else:
-    st.error("Plotly no está disponible para mostrar gráficos avanzados.")
+    st.info("📊 Gráfico avanzado no disponible - Plotly no está instalado")
 
 # Agent Performance Section
 st.header(get_text('agent_performance'))
@@ -487,10 +492,10 @@ with col1:
         color_discrete_sequence=px.colors.qualitative.Set3
     )
     fig_agents.update_layout(height=400)
-    if PLOTLY_AVAILABLE:
+    if USE_PLOTLY:
         st.plotly_chart(fig_agents, use_container_width=True)
     else:
-        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
+        st.info("📊 Gráfico de agentes no disponible - Plotly no está instalado")
 
 with col2:
     st.subheader(get_text('format_distribution'))
@@ -508,10 +513,10 @@ with col2:
         color_discrete_sequence=px.colors.qualitative.Pastel
     )
     fig_formats.update_layout(height=400, xaxis_tickangle=-45)
-    if PLOTLY_AVAILABLE:
+    if USE_PLOTLY:
         st.plotly_chart(fig_formats, use_container_width=True)
     else:
-        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
+        st.info("📊 Gráfico de formatos no disponible - Plotly no está instalado")
 
 # Peak Hours Analysis
 st.subheader(get_text('peak_hours'))
@@ -527,10 +532,10 @@ fig_peak = px.bar(
     color_continuous_scale='Viridis'
 )
 fig_peak.update_layout(height=300)
-if PLOTLY_AVAILABLE:
+if USE_PLOTLY:
     st.plotly_chart(fig_peak, use_container_width=True)
 else:
-    st.error("Plotly no está disponible para mostrar gráficos avanzados.")
+    st.info("📊 Gráfico de horas pico no disponible - Plotly no está instalado")
 
 # Security Overview Section
 st.header(get_text('security_analysis'))
@@ -582,10 +587,10 @@ with col1:
             'Archivos Bloqueados': '#F8BBD9'   # Rosa pastel suave
         }
     )
-    if PLOTLY_AVAILABLE:
+    if USE_PLOTLY:
         st.plotly_chart(fig_scan, use_container_width=True)
     else:
-        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
+        st.info("📊 Gráfico de escaneo no disponible - Plotly no está instalado")
 
 with col2:
     st.subheader("Tipos de Eventos de Seguridad")
@@ -601,10 +606,10 @@ with col2:
         names='Tipo',
         color_discrete_sequence=px.colors.qualitative.Set2
     )
-    if PLOTLY_AVAILABLE:
+    if USE_PLOTLY:
         st.plotly_chart(fig_events, use_container_width=True)
     else:
-        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
+        st.info("📊 Gráfico de eventos no disponible - Plotly no está instalado")
 
 # Predictive Analytics Section
 st.header(get_text('predictive_analytics'))
@@ -646,10 +651,10 @@ with col1:
     ))
     
     fig_forecast.update_layout(height=400)
-    if PLOTLY_AVAILABLE:
+    if USE_PLOTLY:
         st.plotly_chart(fig_forecast, use_container_width=True)
     else:
-        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
+        st.info("📊 Gráfico de pronóstico no disponible - Plotly no está instalado")
 
 with col2:
     st.subheader(get_text('optimization_impact'))
@@ -675,10 +680,10 @@ with col2:
         color_continuous_scale='RdYlGn_r'
     )
     fig_optimization.update_layout(height=400)
-    if PLOTLY_AVAILABLE:
+    if USE_PLOTLY:
         st.plotly_chart(fig_optimization, use_container_width=True)
     else:
-        st.error("Plotly no está disponible para mostrar gráficos avanzados.")
+        st.info("📊 Gráfico de optimización no disponible - Plotly no está instalado")
 
 # Recommendations Section
 st.header(get_text('optimization_recommendations'))

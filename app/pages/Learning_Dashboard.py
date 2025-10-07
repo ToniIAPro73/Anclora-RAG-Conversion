@@ -5,13 +5,20 @@ Monitoreo y análisis del sistema de aprendizaje de conversiones
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import numpy as np
 from datetime import datetime, timedelta
 import sys
 import os
+
+# Try to import plotly, fallback to basic charts if not available
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.warning("⚠️ Plotly no está instalado. Usando gráficos básicos de Streamlit.")
 
 # Agregar el directorio raíz al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -117,7 +124,10 @@ with col1:
             }
         )
         fig_complexity.update_traces(textposition='inside', textinfo='percent+label')
-        st.plotly_chart(fig_complexity, width='stretch')
+        if USE_PLOTLY:
+            st.plotly_chart(fig_complexity, use_container_width=True)
+        else:
+            st.info("📊 Gráfico de complejidad no disponible - Plotly no está instalado")
     else:
         st.info("No hay datos de complejidad disponibles")
 
@@ -139,7 +149,10 @@ with col2:
             hover_data=['avg_processing_time', 'complexity']
         )
         fig_patterns.update_layout(yaxis={'categoryorder': 'total ascending'})
-        st.plotly_chart(fig_patterns, width='stretch')
+        if USE_PLOTLY:
+            st.plotly_chart(fig_patterns, use_container_width=True)
+        else:
+            st.info("📊 Gráfico de patrones no disponible - Plotly no está instalado")
     else:
         st.info("No hay patrones suficientes para mostrar")
 
@@ -192,11 +205,16 @@ trends_df = pd.DataFrame({
     'tiempo_procesamiento': np.clip(processing_times, 10, 120)
 })
 
-fig_trends = make_subplots(
-    rows=2, cols=1,
-    subplot_titles=('Tasa de Éxito (%)', 'Tiempo de Procesamiento (s)'),
-    vertical_spacing=0.1
-)
+if PLOTLY_AVAILABLE and 'make_subplots' in globals():
+    fig_trends = make_subplots(
+        rows=2, cols=1,
+        subplot_titles=('Tasa de Éxito (%)', 'Tiempo de Procesamiento (s)'),
+        vertical_spacing=0.1
+    )
+    USE_PLOTLY = True
+else:
+    st.info("ℹ️ Usando gráficos básicos de Streamlit (Plotly no disponible para gráficos avanzados)")
+    USE_PLOTLY = False
 
 # Tasa de éxito
 fig_trends.add_trace(
@@ -234,7 +252,10 @@ fig_trends.update_xaxes(title_text="Fecha", row=2, col=1)
 fig_trends.update_yaxes(title_text="Tasa de Éxito (%)", row=1, col=1)
 fig_trends.update_yaxes(title_text="Tiempo (segundos)", row=2, col=1)
 
-st.plotly_chart(fig_trends, width='stretch')
+if USE_PLOTLY:
+    st.plotly_chart(fig_trends, use_container_width=True)
+else:
+    st.info("📊 Gráfico de tendencias no disponible - Plotly no está instalado")
 
 # Tabla de patrones detallada
 st.subheader("📋 Análisis Detallado de Patrones")
