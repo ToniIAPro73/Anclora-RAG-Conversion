@@ -464,7 +464,7 @@ def highlight_anclora(row):
     return [''] * len(row)
 
 styled_benchmark = benchmark_df.style.apply(highlight_anclora, axis=1)
-st.dataframe(styled_benchmark, width='stretch')
+st.dataframe(styled_benchmark, use_container_width=True)
 
 st.caption("📊 Datos actualizados semanalmente basados en tests independientes")
 
@@ -542,8 +542,6 @@ with col2:
 with col3:
     st.metric("⏱️ Tiempo Promedio Hoy", f"{np.mean([np.mean(times) for times in data['processing_times'].values()]):.1f}s")
 
-# Auto-refresh cada 30 segundos
-time.sleep(30)
 st.rerun()
 
 # Mensaje final de transparencia

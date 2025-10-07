@@ -48,7 +48,7 @@ hide_st_style = """
         #stDecoration {display:none;}
     </style>
 """
-st.markdown(f"<style>{hide_st_style}</style>")
+st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # Initialize language in session state
 if 'language' not in st.session_state:
