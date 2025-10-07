@@ -7,7 +7,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-import time
 import sys
 import os
 
@@ -82,12 +81,16 @@ st.markdown("**Métricas reales y verificables del sistema Anclora RAG**")
 
 # Disclaimer de transparencia
 st.info("""
-🎯 **Compromiso de Transparencia**: Todas las métricas mostradas son datos reales del sistema. 
-Actualizamos esta información cada 5 minutos para mantener la máxima transparencia con nuestros usuarios.
+🎯 **Compromiso de Transparencia**: Todas las métricas mostradas corresponden a la última captura registrada.
+Usa el botón de la barra lateral para refrescar el dashboard cuando necesites información reciente.
 """)
 
 # Sidebar con filtros avanzados
 st.sidebar.header("🔍 Filtros y Configuración")
+refresh_requested = st.sidebar.button("Actualizar dashboard", help="Recarga los datos con la última captura disponible")
+
+if refresh_requested:
+    st.rerun()
 
 # Selector de período
 time_range = st.sidebar.selectbox(
@@ -460,7 +463,7 @@ benchmark_df = pd.DataFrame(benchmark_data)
 # Aplicar estilos
 def highlight_anclora(row):
     if row['Servicio'] == 'Anclora RAG':
-        return [f'background-color: {ANCLORA_RAG_COLORS["success_light"]}; font-weight: bold'] * len(row)
+        return [f'background-color: {ANCLORA_RAG_COLORS["success_light"]}; color: {ANCLORA_RAG_COLORS["text_primary"]}; font-weight: bold'] * len(row)
     return [''] * len(row)
 
 styled_benchmark = benchmark_df.style.apply(highlight_anclora, axis=1)
@@ -542,7 +545,6 @@ with col2:
 with col3:
     st.metric("⏱️ Tiempo Promedio Hoy", f"{np.mean([np.mean(times) for times in data['processing_times'].values()]):.1f}s")
 
-st.rerun()
 
 # Mensaje final de transparencia
 st.info("""
