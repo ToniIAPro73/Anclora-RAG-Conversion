@@ -553,12 +553,12 @@ por favor contáctanos inmediatamente. Nuestro objetivo es la máxima transparen
 """)
 
 st.markdown(
-    """
+    f"""
     <div style='text-align: center; color: {ANCLORA_RAG_COLORS["text_secondary"]}; font-size: 0.9em; margin-top: 2rem;'>
         📊 Dashboard de Transparencia Anclora RAG v1.0<br>
         Datos verificables • Actualizaciones en tiempo real • Compromiso con la honestidad<br>
-        Última verificación: {}<br>
+        Última verificación: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}<br>
     </div>
-    """.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+    """,
     unsafe_allow_html=True
 )
